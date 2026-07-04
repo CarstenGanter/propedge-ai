@@ -1,26 +1,113 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------ */
+/*  PropEdge AI — dark-first premium sports analytics theme            */
+/* ------------------------------------------------------------------ */
+
+@theme {
+  --color-background: #070b14;
+  --color-surface: #0d1320;
+  --color-card: #111827;
+  --color-card-foreground: #e6eaf2;
+  --color-foreground: #e6eaf2;
+  --color-muted: #1a2233;
+  --color-muted-foreground: #8a93a6;
+  --color-border: #212a3b;
+  --color-input: #1a2233;
+  --color-ring: #2dd4bf;
+
+  --color-primary: #2dd4bf;
+  --color-primary-foreground: #06231f;
+  --color-secondary: #7c8cf8;
+  --color-secondary-foreground: #0a0f1e;
+  --color-accent: #a855f7;
+
+  --color-success: #34d399;
+  --color-danger: #f87171;
+  --color-warning: #fbbf24;
+  --color-info: #60a5fa;
+
+  --radius-lg: 1rem;
+  --radius-md: 0.75rem;
+  --radius-sm: 0.5rem;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--color-border);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(45, 212, 191, 0.08), transparent 60%),
+    radial-gradient(1000px 500px at 100% 0%, rgba(168, 85, 247, 0.07), transparent 55%),
+    var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+/* Glassmorphism card */
+.glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015));
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.glass-hover {
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.glass-hover:hover {
+  border-color: rgba(45, 212, 191, 0.35);
+  box-shadow: 0 10px 40px -20px rgba(45, 212, 191, 0.5);
+}
+
+.gradient-text {
+  background: linear-gradient(90deg, #2dd4bf, #7c8cf8 55%, #a855f7);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.gradient-primary {
+  background: linear-gradient(135deg, #2dd4bf, #22d3ee);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #263149;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #33415f;
+  background-clip: content-box;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-in {
+  animation: fade-in-up 0.35s ease both;
 }

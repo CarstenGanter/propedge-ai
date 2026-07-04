@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PropEdge AI — daily refresh LaunchAgent (macOS).
+  Runs scripts/daily-refresh.sh every day at 9:00 AM.
+
+  Install:
+    cp "scripts/com.propedge.daily.plist" ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.propedge.daily.plist
+  Run once now to test:
+    launchctl start com.propedge.daily
+  Uninstall:
+    launchctl unload ~/Library/LaunchAgents/com.propedge.daily.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.propedge.daily</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/Users/carstenganter/Documents/For Fucks/Vibe Code/propedge-ai/scripts/daily-refresh.sh</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>9</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/carstenganter/Documents/For Fucks/Vibe Code/propedge-ai/daily-refresh.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/carstenganter/Documents/For Fucks/Vibe Code/propedge-ai/daily-refresh.log</string>
+</dict>
+</plist>

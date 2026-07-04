@@ -1,0 +1,266 @@
+// PropEdge AI — Prisma schema (SQLite, local-first)
+// Note: SQLite does not support Prisma enums, so status/direction/etc. are stored as
+// Strings and validated in the app layer (see src/types/index.ts for the allowed unions).
+// JSON payloads are stored as String (JSON.stringify) for portability.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model PlayerProp {
+  id              String    @id @default(cuid())
+  date            String // slate date, "YYYY-MM-DD"
+  sport           String
+  league          String
+  playerName      String
+  team            String
+  opponent        String
+  gameId          String?
+  gameStartTime   DateTime?
+  propType        String
+  line            Float // sharp-market consensus line (from The Odds API)
+  underdogLine    Float? // the line Underdog actually offers (user-entered)
+  direction       String // OVER | UNDER
+  source          String
+  projection      Float?
+  payoutMultiplier Float?
+  injuryStatus    String?
+  notes           String?
+  marketDataJson  String? // The Odds API snapshot: no-vig prob, book lines, book count
+  status          String    @default("pending") // pending | hit | miss | push | void
+  actualResult    Float?
+  isDemo          Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  picks         Pick[]
+  lineSnapshots LineSnapshot[]
+
+  @@index([date])
+  @@index([sport])
+}
+
+model Pick {
+  id                 String   @id @default(cuid())
+  playerPropId       String
+  playerProp         PlayerProp @relation(fields: [playerPropId], references: [id], onDelete: Cascade)
+  date               String
+  confidenceScore    Float
+  edgeScore          Float
+  riskLevel          String // Low | Medium | High
+  rank               Int
+  recommendedStake   Float
+  reasoningSummary   String
+  deepDiveAnalysis   String
+  verdict            String   @default("")
+  scoreBreakdownJson String   @default("{}")
+  evidenceJson       String   @default("[]")
+  warningsJson       String   @default("[]")
+  reasonsForJson     String   @default("[]")
+  reasonsAgainstJson String   @default("[]")
+  tagsJson           String   @default("[]")
+  userNote           String?
+  modelVersion       String   @default("v1.0.0")
+  status             String   @default("pending") // pending | hit | miss | push | void
+  actualResult       Float?
+  placedReal         Boolean  @default(false)
+  isDemo             Boolean  @default(false)
+  // Closing-line value: no-vig probability of the chosen side at pick time (entry)
+  // and near game start (closing). CLV = closingProb − entryProb.
+  entryProb          Float?
+  closingProb        Float?
+  closingCapturedAt  DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  evidence        Evidence[]
+  bankrollEntries BankrollEntry[]
+  parlayLegs      ParlayLeg[]
+
+  @@index([date])
+  @@index([status])
+}
+
+model Evidence {
+  id               String   @id @default(cuid())
+  pickId           String
+  pick             Pick     @relation(fields: [pickId], references: [id], onDelete: Cascade)
+  category         String
+  title            String
+  summary          String
+  sourceUrl        String?
+  sourceName       String?
+  confidenceImpact Float    @default(0) // -100..100, effect on confidence
+  createdAt        DateTime @default(now())
+}
+
+model BankrollEntry {
+  id         String   @id @default(cuid())
+  date       String
+  pickId       String?
+  pick         Pick?    @relation(fields: [pickId], references: [id], onDelete: SetNull)
+  parlayId     String?
+  teamPickId   String?
+  teamParlayId String?
+  entryType  String // single | parlay | manual_adjustment | moneyline | team_parlay
+  stake      Float    @default(0)
+  payout     Float    @default(0)
+  profitLoss Float    @default(0)
+  status     String   @default("pending") // pending | won | lost | push | void
+  placedReal Boolean  @default(false)
+  notes      String?
+  isDemo     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([date])
+}
+
+model Parlay {
+  id              String   @id @default(cuid())
+  date            String
+  name            String
+  stake           Float    @default(5)
+  payoutMultiplier Float   @default(1)
+  projectedPayout Float    @default(0)
+  actualPayout    Float?
+  profitLoss      Float?
+  status          String   @default("pending") // pending | won | lost | void
+  placedReal      Boolean  @default(false)
+  isDemo          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  legs ParlayLeg[]
+
+  @@index([date])
+}
+
+model ParlayLeg {
+  id       String @id @default(cuid())
+  parlayId String
+  parlay   Parlay @relation(fields: [parlayId], references: [id], onDelete: Cascade)
+  pickId   String
+  pick     Pick   @relation(fields: [pickId], references: [id], onDelete: Cascade)
+  status   String @default("pending") // pending | hit | miss | push | void
+}
+
+model AppSettings {
+  id                     String   @id @default("singleton")
+  defaultStake           Float    @default(5)
+  bankrollStartingAmount Float    @default(100)
+  sportsEnabledJson      String   @default("[\"NFL\",\"NBA\",\"NCAAB\",\"MLB\",\"WNBA\",\"NHL\",\"Soccer\"]")
+  minConfidenceThreshold Int      @default(65)
+  maxDailyPicks          Int      @default(10)
+  demoMode               Boolean  @default(true)
+  enableWebResearch      Boolean  @default(false)
+  scoringProfile         String   @default("balanced") // balanced | market
+  leaguesEnabledJson     String   @default("[\"NFL\",\"MLB\",\"CBB\",\"WNBA\",\"EPL\",\"Bundesliga\",\"UCL\",\"WorldCup\"]")
+  minTeamConfidence      Int      @default(55)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+// Team (moneyline / game-winner) recommendation.
+model TeamPick {
+  id                 String   @id @default(cuid())
+  date               String // slate date "YYYY-MM-DD"
+  league             String // NFL | MLB | CBB | WNBA | EPL | Bundesliga | UCL | WorldCup
+  homeTeam           String
+  awayTeam           String
+  gameId             String?
+  gameStartTime      DateTime?
+  recommendedSide    String // HOME | AWAY | DRAW
+  recommendedTeam    String
+  winProbability     Float // model, 0..1
+  marketWinProb      Float // de-vig market, 0..1
+  valueEdge          Float // model - market
+  priceAmerican      Float?
+  confidenceScore    Float
+  edgeScore          Float    @default(0)
+  riskLevel          String // Low | Medium | High
+  rank               Int      @default(0)
+  reasoningSummary   String   @default("")
+  deepDiveAnalysis   String   @default("")
+  verdict            String   @default("")
+  scoreBreakdownJson String   @default("{}")
+  evidenceJson       String   @default("[]")
+  warningsJson       String   @default("[]")
+  reasonsForJson     String   @default("[]")
+  reasonsAgainstJson String   @default("[]")
+  tagsJson           String   @default("[]")
+  userNote           String?
+  modelVersion       String   @default("v1.0.0")
+  status             String   @default("pending") // pending | win | loss | push | void
+  actualWinner       String? // HOME | AWAY | DRAW
+  placedReal         Boolean  @default(false)
+  isDemo             Boolean  @default(false)
+  // Closing-line value: de-vig win prob of the recommended side near game start.
+  // Entry = marketWinProb (above). CLV = closingWinProb − marketWinProb.
+  closingWinProb     Float?
+  closingPrice       Float?
+  closingCapturedAt  DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  parlayLegs TeamParlayLeg[]
+
+  @@index([date])
+  @@index([league])
+  @@index([status])
+}
+
+// Moneyline parlay: combine multiple team-to-win picks. Payout is derived from
+// the legs' American prices (product of decimal odds), not a manual multiplier.
+model TeamParlay {
+  id              String   @id @default(cuid())
+  date            String
+  name            String
+  stake           Float    @default(5)
+  combinedDecimal Float    @default(1) // product of leg decimal odds
+  combinedAmerican Int     @default(100)
+  projectedPayout Float    @default(0) // total return incl. stake if all legs win
+  actualPayout    Float?
+  profitLoss      Float?
+  status          String   @default("pending") // pending | won | lost | push | void
+  placedReal      Boolean  @default(false)
+  isDemo          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  legs TeamParlayLeg[]
+
+  @@index([date])
+}
+
+model TeamParlayLeg {
+  id            String     @id @default(cuid())
+  teamParlayId  String
+  teamParlay    TeamParlay @relation(fields: [teamParlayId], references: [id], onDelete: Cascade)
+  teamPickId    String
+  teamPick      TeamPick   @relation(fields: [teamPickId], references: [id], onDelete: Cascade)
+  priceAmerican Float? // snapshot of the leg's moneyline price at build time
+  status        String     @default("pending") // pending | win | loss | push | void
+}
+
+// Reserved for future line-movement tracking (multiple snapshots per prop).
+model LineSnapshot {
+  id           String   @id @default(cuid())
+  playerPropId String
+  playerProp   PlayerProp @relation(fields: [playerPropId], references: [id], onDelete: Cascade)
+  line         Float
+  capturedAt   DateTime @default(now())
+}
+
+// "Avoid list": players / prop types the model has performed poorly on.
+model AvoidListItem {
+  id        String   @id @default(cuid())
+  type      String // player | propType
+  value     String
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([type, value])
+}
