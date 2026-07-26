@@ -54,13 +54,13 @@ export function DemoDataBadge({ className }: { className?: string }) {
 }
 
 const SPORT_COLORS: Record<string, string> = {
-  NFL: "bg-amber-500/15 text-amber-300",
-  NBA: "bg-orange-500/15 text-orange-300",
-  NCAAB: "bg-blue-500/15 text-blue-300",
-  MLB: "bg-red-500/15 text-red-300",
-  WNBA: "bg-fuchsia-500/15 text-fuchsia-300",
-  NHL: "bg-cyan-500/15 text-cyan-300",
-  Soccer: "bg-emerald-500/15 text-emerald-300",
+  NFL: "bg-amber-500/10 text-amber-400",
+  NBA: "bg-orange-500/10 text-orange-400",
+  NCAAB: "bg-blue-500/10 text-blue-400",
+  MLB: "bg-red-500/10 text-red-400",
+  WNBA: "bg-fuchsia-500/10 text-fuchsia-400",
+  NHL: "bg-cyan-500/10 text-cyan-400",
+  Soccer: "bg-emerald-500/10 text-emerald-400",
 };
 
 export function SportBadge({ sport }: { sport: string }) {
@@ -77,14 +77,14 @@ export function SportBadge({ sport }: { sport: string }) {
 }
 
 const LEAGUE_COLORS: Record<string, string> = {
-  NFL: "bg-amber-500/15 text-amber-300",
-  MLB: "bg-red-500/15 text-red-300",
-  CBB: "bg-blue-500/15 text-blue-300",
-  WNBA: "bg-fuchsia-500/15 text-fuchsia-300",
-  EPL: "bg-violet-500/15 text-violet-300",
-  Bundesliga: "bg-rose-500/15 text-rose-300",
-  UCL: "bg-indigo-500/15 text-indigo-300",
-  WorldCup: "bg-emerald-500/15 text-emerald-300",
+  NFL: "bg-amber-500/10 text-amber-400",
+  MLB: "bg-red-500/10 text-red-400",
+  CBB: "bg-blue-500/10 text-blue-400",
+  WNBA: "bg-fuchsia-500/10 text-fuchsia-400",
+  EPL: "bg-violet-500/10 text-violet-400",
+  Bundesliga: "bg-rose-500/10 text-rose-400",
+  UCL: "bg-indigo-500/10 text-indigo-400",
+  WorldCup: "bg-emerald-500/10 text-emerald-400",
 };
 
 export function LeagueBadge({ league }: { league: string }) {

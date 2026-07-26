@@ -9,14 +9,14 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "gradient-primary text-primary-foreground shadow-lg shadow-primary/20 hover:brightness-110",
+          "bg-primary text-primary-foreground shadow-sm hover:brightness-110",
         secondary:
           "bg-muted text-foreground hover:bg-muted/70 border border-border",
         outline:
           "border border-border bg-transparent hover:bg-muted/50 text-foreground",
         ghost: "hover:bg-muted/60 text-foreground",
         danger: "bg-danger/90 text-white hover:bg-danger",
-        success: "bg-success/90 text-[#06231f] hover:bg-success",
+        success: "bg-success/90 text-primary-foreground hover:bg-success",
       },
       size: {
         default: "h-10 px-4 py-2",

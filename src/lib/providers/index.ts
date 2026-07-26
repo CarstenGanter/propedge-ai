@@ -5,6 +5,7 @@ import { getNewsProvider } from "./newsProvider";
 import { getOddsProvider } from "./oddsProvider";
 import { getSentimentProvider } from "./sentimentProvider";
 import { getResultsProvider, type ResultLookup } from "./resultsProvider";
+import { getLiveHistorical } from "./historicalProvider";
 import type { ProviderContext } from "./config";
 
 export * from "./config";
@@ -32,15 +33,16 @@ export async function buildResearchBundle(
   const odds = getOddsProvider(ctx);
   const sentiment = getSentimentProvider(ctx);
 
-  const [playerStats, matchup, newsCtx, market, sentimentCtx] = await Promise.all([
+  const [playerStats, matchup, newsCtx, market, sentimentCtx, historicalLive] = await Promise.all([
     stats.getPlayerStats(prop).catch(() => undefined),
     stats.getMatchup(prop).catch(() => undefined),
     news.getNews(prop).catch(() => undefined),
     odds.getMarket(prop).catch(() => undefined),
     sentiment.getSentiment(prop).catch(() => undefined),
+    ctx.demo ? Promise.resolve(undefined) : getLiveHistorical(prop).catch(() => undefined),
   ]);
 
-  const historical = ctx.demo ? demoHistorical(prop) : undefined;
+  const historical = ctx.demo ? demoHistorical(prop) : historicalLive;
 
   return {
     playerStats,

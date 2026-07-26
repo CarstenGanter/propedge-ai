@@ -6,15 +6,16 @@ import type {
 import { demoMatchup, demoPlayerStats } from "./demoData";
 import { getMlbPlayerStats } from "./live/mlbStats";
 import { getMlbMatchup } from "./live/mlbMatchup";
+import { getEspnPlayerStats } from "./live/espnPlayerStats";
+import { getEspnMatchup } from "./live/espnMatchup";
 import type { ProviderContext } from "./config";
 
 /**
  * Player stats & matchup provider.
  *
  * - Demo mode returns deterministic labeled demo data.
- * - Live mode is a documented seam: resolving player game logs across sports
- *   requires athlete-id lookups that vary by source. Until wired to a keyed
- *   provider (e.g. SportsDataIO/balldontlie), live enrichment returns undefined
+ * - Live mode uses free public game logs: MLB Stats API for MLB, ESPN athlete
+ *   gamelogs for NBA/WNBA/NFL/NHL/NCAAB. Anything unresolved returns undefined
  *   so the scoring engine transparently records "insufficient data".
  */
 export interface SportsStatsProvider {
@@ -33,17 +34,17 @@ export const demoStatsProvider: SportsStatsProvider = {
 
 export const liveStatsProvider: SportsStatsProvider = {
   async getPlayerStats(prop) {
-    // MLB: free MLB Stats API game logs. Other sports: not wired yet.
+    // MLB: MLB Stats API game logs. Other sports: ESPN athlete gamelogs.
     if (prop.sport === "MLB") {
       return getMlbPlayerStats(prop.playerName, prop.propType);
     }
-    return undefined;
+    return getEspnPlayerStats(prop.sport, prop.playerName, prop.team, prop.opponent, prop.propType);
   },
   async getMatchup(prop) {
     if (prop.sport === "MLB" && prop.date) {
       return getMlbMatchup(prop.playerName, prop.propType, prop.date);
     }
-    return undefined;
+    return getEspnMatchup(prop);
   },
 };
 

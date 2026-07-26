@@ -1,35 +1,35 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------ */
-/*  PropEdge AI — dark-first premium sports analytics theme            */
+/*  PropEdge AI — minimal dark theme, neutral zinc + finance emerald   */
 /* ------------------------------------------------------------------ */
 
 @theme {
-  --color-background: #070b14;
-  --color-surface: #0d1320;
-  --color-card: #111827;
-  --color-card-foreground: #e6eaf2;
-  --color-foreground: #e6eaf2;
-  --color-muted: #1a2233;
-  --color-muted-foreground: #8a93a6;
-  --color-border: #212a3b;
-  --color-input: #1a2233;
-  --color-ring: #2dd4bf;
+  --color-background: #09090b;
+  --color-surface: #0e0e11;
+  --color-card: #131316;
+  --color-card-foreground: #ededf0;
+  --color-foreground: #ededf0;
+  --color-muted: #1a1a1f;
+  --color-muted-foreground: #9b9ba4;
+  --color-border: #232329;
+  --color-input: #1a1a1f;
+  --color-ring: #10b981;
 
-  --color-primary: #2dd4bf;
-  --color-primary-foreground: #06231f;
-  --color-secondary: #7c8cf8;
-  --color-secondary-foreground: #0a0f1e;
-  --color-accent: #a855f7;
+  --color-primary: #10b981;
+  --color-primary-foreground: #03130d;
+  --color-secondary: #a1a1aa;
+  --color-secondary-foreground: #0b0b0d;
+  --color-accent: #34d399;
 
   --color-success: #34d399;
   --color-danger: #f87171;
   --color-warning: #fbbf24;
-  --color-info: #60a5fa;
+  --color-info: #93c5fd;
 
-  --radius-lg: 1rem;
-  --radius-md: 0.75rem;
-  --radius-sm: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-md: 0.5rem;
+  --radius-sm: 0.375rem;
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
@@ -44,40 +44,32 @@
 }
 
 body {
-  background:
-    radial-gradient(1200px 600px at 15% -10%, rgba(45, 212, 191, 0.08), transparent 60%),
-    radial-gradient(1000px 500px at 100% 0%, rgba(168, 85, 247, 0.07), transparent 55%),
-    var(--color-background);
+  background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
   min-height: 100vh;
 }
 
-/* Glassmorphism card */
+/* Card surface (legacy class name kept so every Card restyles automatically) */
 .glass {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015));
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
 }
 
 .glass-hover {
-  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.15s ease;
 }
 .glass-hover:hover {
-  border-color: rgba(45, 212, 191, 0.35);
-  box-shadow: 0 10px 40px -20px rgba(45, 212, 191, 0.5);
+  border-color: #3f3f46;
 }
 
+/* Legacy brand classes — now flat (no gradients, no glow) */
 .gradient-text {
-  background: linear-gradient(90deg, #2dd4bf, #7c8cf8 55%, #a855f7);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--color-foreground);
 }
 
 .gradient-primary {
-  background: linear-gradient(135deg, #2dd4bf, #22d3ee);
+  background: var(--color-primary);
 }
 
 ::-webkit-scrollbar {
@@ -88,13 +80,13 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #263149;
+  background: #2a2a31;
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #33415f;
+  background: #3f3f46;
   background-clip: content-box;
 }
 

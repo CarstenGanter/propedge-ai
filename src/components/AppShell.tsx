@@ -41,13 +41,13 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             href={href}
             onClick={onNavigate}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
               active
-                ? "bg-primary/12 text-primary"
+                ? "bg-muted text-foreground before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary"
                 : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
             )}
           >
-            <Icon className="h-4 w-4" />
+            <Icon className={cn("h-4 w-4", active && "text-primary")} />
             {label}
           </Link>
         );
@@ -59,11 +59,11 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 function Brand() {
   return (
     <Link href="/" className="flex items-center gap-2.5">
-      <div className="flex h-9 w-9 items-center justify-center rounded-lg gradient-primary shadow-lg shadow-primary/30">
+      <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary">
         <Target className="h-5 w-5 text-primary-foreground" />
       </div>
       <div className="leading-tight">
-        <p className="text-sm font-bold gradient-text">PropEdge AI</p>
+        <p className="text-sm font-semibold text-foreground">PropEdge AI</p>
         <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
           Prop Research
         </p>
@@ -78,7 +78,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen">
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border/60 bg-surface/40 px-4 py-6 backdrop-blur-xl lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-surface px-4 py-6 lg:flex">
         <Brand />
         <div className="mt-8 flex-1">
           <NavLinks />
@@ -108,7 +108,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Main */}
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border/60 bg-background/70 px-4 py-3 backdrop-blur-xl lg:hidden">
+        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-surface px-4 py-3 lg:hidden">
           <button onClick={() => setOpen(true)} className="text-foreground">
             <Menu className="h-5 w-5" />
           </button>

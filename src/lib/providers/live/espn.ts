@@ -36,6 +36,14 @@ export function espnSupportsSport(sport: string): boolean {
   return sport in SPORT_PATH;
 }
 
+/** Exported path resolver so other live modules share one sport→{sport,league} map. */
+export function espnPathForSport(
+  sport: string,
+  league?: string,
+): { sport: string; league: string } | null {
+  return pathFor(sport, league);
+}
+
 async function fetchJson<T = unknown>(
   url: string,
   timeoutMs = 6000,
@@ -60,7 +68,7 @@ async function fetchJson<T = unknown>(
 
 const COMBINING_MARKS = new RegExp("[\\u0300-\\u036f]", "g");
 
-function normalizeName(name: string): string {
+export function normalizeName(name: string): string {
   return name
     .toLowerCase()
     .normalize("NFD")
@@ -69,7 +77,7 @@ function normalizeName(name: string): string {
     .trim();
 }
 
-function nameMatches(a: string, b: string): boolean {
+export function nameMatches(a: string, b: string): boolean {
   const na = normalizeName(a);
   const nb = normalizeName(b);
   if (na === nb) return true;
@@ -120,6 +128,70 @@ export async function findEvent(
       const completed =
         comp?.status?.type?.completed ?? ev.status?.type?.completed ?? false;
       return { eventId: ev.id, completed };
+    }
+  }
+  return null;
+}
+
+export interface EspnEventMeta {
+  eventId: string;
+  dateISO: string | null;
+  homeTeamName: string | null;
+  awayTeamName: string | null;
+  homeTeamId: string | null;
+  awayTeamId: string | null;
+}
+
+interface EspnScoreboardEvent {
+  id: string;
+  date?: string;
+  competitions?: {
+    competitors?: {
+      homeAway?: string;
+      team?: { id?: string; displayName?: string; name?: string };
+    }[];
+  }[];
+}
+
+/**
+ * Full event metadata (home/away team names + ids + start time) for a game on a
+ * date involving both teams. Used to derive home/away splits & rest days.
+ */
+export async function findEventMeta(
+  sport: string,
+  dateYYYYMMDD: string,
+  team: string,
+  opponent: string,
+  league?: string,
+): Promise<EspnEventMeta | null> {
+  const path = pathFor(sport, league);
+  if (!path) return null;
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${path.sport}/${path.league}/scoreboard?dates=${dateYYYYMMDD}`;
+  const data = await fetchJson<{ events?: EspnScoreboardEvent[] }>(url);
+  if (!data?.events) return null;
+
+  const teamMatches = (name: string | undefined, target: string) => {
+    if (!name) return false;
+    const n = normalizeName(name);
+    const t = normalizeName(target);
+    return n.includes(t) || t.includes(n) || n.split(/\s+/).some((w) => t.includes(w) && w.length > 3);
+  };
+
+  for (const ev of data.events) {
+    const comp = ev.competitions?.[0];
+    const competitors = comp?.competitors ?? [];
+    const home = competitors.find((c) => c.homeAway === "home");
+    const away = competitors.find((c) => c.homeAway === "away");
+    const names = competitors.map((c) => c.team?.displayName ?? c.team?.name ?? "");
+    if (names.some((n) => teamMatches(n, team)) && names.some((n) => teamMatches(n, opponent))) {
+      return {
+        eventId: ev.id,
+        dateISO: ev.date ?? null,
+        homeTeamName: home?.team?.displayName ?? home?.team?.name ?? null,
+        awayTeamName: away?.team?.displayName ?? away?.team?.name ?? null,
+        homeTeamId: home?.team?.id ?? null,
+        awayTeamId: away?.team?.id ?? null,
+      };
     }
   }
   return null;

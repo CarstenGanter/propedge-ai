@@ -14,6 +14,16 @@ export interface TeamInjuryInfo {
   notes: { summary: string; sourceName: string }[];
 }
 
+export type InjuryStatus = "out" | "doubtful" | "questionable" | "active";
+
+/** One player's injury entry, for the player-props news path. */
+export interface PlayerInjuryEntry {
+  playerName: string;
+  status: InjuryStatus;
+  detail: string; // e.g. "Out — Achilles"
+  teamName: string;
+}
+
 interface EspnInjuryItem {
   status?: { name?: string };
   type?: { description?: string; abbreviation?: string };
@@ -42,25 +52,46 @@ async function fetchJson<T>(url: string, timeoutMs = 7000): Promise<T | null> {
   }
 }
 
-/** A player counts as "out" for IL/Out designations, not day-to-day/questionable. */
-function isOut(it: EspnInjuryItem): boolean {
-  const status = (it.status?.name ?? "").toLowerCase();
-  const desc = (it.type?.description ?? "").toLowerCase();
-  const abbr = (it.type?.abbreviation ?? "").toLowerCase();
-  if (status.includes("day-to-day") || status.includes("questionable") || status.includes("probable")) {
-    return false;
+/** Map an ESPN injury item's raw status text to our status enum (exported for tests). */
+export function mapInjuryStatus(raw: {
+  statusName?: string;
+  typeDescription?: string;
+  typeAbbreviation?: string;
+}): InjuryStatus {
+  const status = (raw.statusName ?? "").toLowerCase();
+  const desc = (raw.typeDescription ?? "").toLowerCase();
+  const abbr = (raw.typeAbbreviation ?? "").toLowerCase();
+  if (status.includes("day-to-day") || status.includes("questionable") || status.includes("gtd")) {
+    return "questionable";
   }
-  return (
+  if (status.includes("probable") || status.includes("active")) return "active";
+  if (status.includes("doubtful") || abbr === "d") return "doubtful";
+  if (
     status.includes("out") ||
     status.includes("injured") ||
-    status.includes("doubtful") ||
     status.includes("suspension") ||
     desc.includes("il") ||
     desc.includes("out") ||
     abbr.startsWith("il") ||
-    abbr === "o" ||
-    abbr === "d"
-  );
+    abbr === "o"
+  ) {
+    return "out";
+  }
+  return "questionable";
+}
+
+function statusOf(it: EspnInjuryItem): InjuryStatus {
+  return mapInjuryStatus({
+    statusName: it.status?.name,
+    typeDescription: it.type?.description,
+    typeAbbreviation: it.type?.abbreviation,
+  });
+}
+
+/** A player counts toward a team's "key out" tally when out or doubtful. */
+function isOut(it: EspnInjuryItem): boolean {
+  const s = statusOf(it);
+  return s === "out" || s === "doubtful";
 }
 
 function playerName(it: EspnInjuryItem): string {
@@ -75,21 +106,27 @@ function noteSummary(it: EspnInjuryItem): string {
   return `${playerName(it)}${pos ? ` (${pos})` : ""} — ${label}`;
 }
 
-const cache = new Map<string, { at: number; data: Map<string, TeamInjuryInfo> }>();
+const rawCache = new Map<string, { at: number; teams: EspnInjuryTeam[] }>();
 const TTL = 30 * 60 * 1000;
 
-/** Injuries keyed by normalized team name for a league (empty if unavailable). */
+/** Fetch the league-wide injury feed once (cached), shared by both views below. */
+async function fetchRawInjuries(espnSport: string, espnLeague: string): Promise<EspnInjuryTeam[]> {
+  const cacheKey = `${espnSport}/${espnLeague}`;
+  const cached = rawCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < TTL) return cached.teams;
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${espnSport}/${espnLeague}/injuries`;
+  const data = await fetchJson<EspnInjuriesResponse>(url);
+  const teams = data?.injuries ?? [];
+  rawCache.set(cacheKey, { at: Date.now(), teams });
+  return teams;
+}
+
+/** Team-vertical view: OUT counts + notes keyed by normalized team name. */
 export async function fetchInjuries(league: League): Promise<Map<string, TeamInjuryInfo>> {
   const cfg = LEAGUE_CONFIG[league];
-  const cacheKey = `${cfg.espnSport}/${cfg.espnLeague}`;
-  const cached = cache.get(cacheKey);
-  if (cached && Date.now() - cached.at < TTL) return cached.data;
-
-  const url = `https://site.api.espn.com/apis/site/v2/sports/${cfg.espnSport}/${cfg.espnLeague}/injuries`;
-  const data = await fetchJson<EspnInjuriesResponse>(url);
-
+  const teams = await fetchRawInjuries(cfg.espnSport, cfg.espnLeague);
   const map = new Map<string, TeamInjuryInfo>();
-  for (const team of data?.injuries ?? []) {
+  for (const team of teams) {
     const name = team.displayName;
     if (!name) continue;
     const out = (team.injuries ?? []).filter(isOut);
@@ -98,6 +135,24 @@ export async function fetchInjuries(league: League): Promise<Map<string, TeamInj
       notes: out.slice(0, 4).map((it) => ({ summary: noteSummary(it), sourceName: "ESPN" })),
     });
   }
-  cache.set(cacheKey, { at: Date.now(), data: map });
   return map;
+}
+
+/** Player-props view: flat list of injured players (out/doubtful/questionable). */
+export async function fetchLeagueInjuries(espnSport: string, espnLeague: string): Promise<PlayerInjuryEntry[]> {
+  const teams = await fetchRawInjuries(espnSport, espnLeague);
+  const out: PlayerInjuryEntry[] = [];
+  for (const team of teams) {
+    for (const it of team.injuries ?? []) {
+      const name = playerName(it);
+      if (name === "A player") continue;
+      out.push({
+        playerName: name,
+        status: statusOf(it),
+        detail: noteSummary(it),
+        teamName: team.displayName ?? "",
+      });
+    }
+  }
+  return out;
 }

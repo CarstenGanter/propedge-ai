@@ -6,7 +6,10 @@ import { analyzeProp, SCORING_MODEL_VERSION } from "@/lib/analysis/scoringEngine
 import { recommendedStake } from "@/lib/analysis/confidenceModel";
 import { buildResearchBundle, resolveProviderContext } from "@/lib/providers";
 import { prewarmMlb } from "@/lib/providers/live/mlbStats";
+import { prewarmEspn } from "@/lib/providers/live/espnPlayerStats";
 import type { Direction, ScorablePropInput } from "@/types";
+
+const ESPN_STAT_SPORTS = new Set(["NBA", "WNBA", "NCAAB", "NFL", "NHL"]);
 
 export function propToScorable(p: PlayerProp): ScorablePropInput {
   return {
@@ -50,13 +53,26 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
   // Drop existing pending picks for the date so we can re-rank cleanly.
   await prisma.pick.deleteMany({ where: { date, status: "pending" } });
 
-  // Pre-warm live MLB game logs concurrently so the scoring loop hits cache.
+  // Pre-warm live game logs concurrently so the scoring loop hits cache.
   if (!settings.demoMode && settings.enableWebResearch) {
     const mlb = props.filter((p) => p.sport === "MLB");
     if (mlb.length > 0) {
       await prewarmMlb(
         mlb.map((p) => p.playerName),
         [...new Set(mlb.map((p) => p.propType))],
+      );
+    }
+    const espn = props.filter((p) => ESPN_STAT_SPORTS.has(p.sport));
+    if (espn.length > 0) {
+      await prewarmEspn(
+        espn.map((p) => ({
+          sport: p.sport,
+          league: p.league,
+          playerName: p.playerName,
+          team: p.team,
+          opponent: p.opponent,
+          propType: p.propType,
+        })),
       );
     }
   }

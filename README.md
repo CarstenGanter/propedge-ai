@@ -104,16 +104,21 @@ no-key public endpoints** (ESPN) for schedules and box-score auto-settlement —
 **Settings → Enable live web research** (or set `ENABLE_WEB_RESEARCH=true`). Every provider is a
 typed adapter with a demo implementation and a documented seam for keyed APIs:
 
-| Provider | Offline default | Wire later via |
+| Provider | Live (free, no key) | Wire later via |
 | --- | --- | --- |
-| `sportsStatsProvider` | **MLB: live MLB Stats API (free)**; other sports: demo/none | SportsDataIO / balldontlie (`*_API_KEY`) |
-| `oddsProvider` | manual projection | The Odds API (`ODDS_API_KEY`) |
-| `newsProvider` | manual injury note | News API (`NEWS_API_KEY`) |
+| `sportsStatsProvider` | **Game logs**: MLB Stats API (MLB) · **ESPN athlete gamelogs** (NBA/WNBA/NFL/NHL/NCAAB). **Matchup**: MLB probable-pitcher hittability · ESPN opponent-defense rank (pts/goals props) | SportsDataIO / balldontlie (`*_API_KEY`) |
+| `newsProvider` | MLB injured-list + probable-starter confirmation · **ESPN injury feed** (NBA/WNBA/NFL/NHL) matched to the player | News API (`NEWS_API_KEY`) |
+| `historicalProvider` | **home/away + rest days / back-to-back** (from ESPN game dates) · **MLB park factors** (static) | — |
+| `oddsProvider` | The Odds API snapshot (`ODDS_API_KEY`) — all sports | The Odds API |
 | `sentimentProvider` | demo summary | Tavily/SerpAPI/Reddit (`SEARCH_API_KEY`) |
-| `resultsProvider` | ESPN box scores / manual | any final-stats API |
+| `resultsProvider` | ESPN box scores / MLB Stats API | any final-stats API |
 
-When a source is missing, the model **discloses it** ("insufficient data", "no market comparison
-available", etc.) and tempers confidence — it never fabricates stats, sources, or quotes.
+**Live scoring coverage** (with **Settings → Enable live web research** on): MLB fills recent form,
+season baseline, matchup, role/usage, injuries, and market; NBA/WNBA/NFL/NHL/NCAAB now fill **recent
+form, season baseline, matchup (points/goals props), role/usage, injuries, home/away & rest, and
+market** — up from market-only. All of this is **free** and spends **no Odds API credits** (ESPN +
+statsapi). When a source is missing, the model **discloses it** ("insufficient data", "no market
+comparison available", etc.) and tempers confidence — it never fabricates stats, sources, or quotes.
 
 ---
 
@@ -227,7 +232,7 @@ src/
   lib/
     analysis/     # scoringEngine, teamScoringEngine, confidenceModel, parlayCorrelation, teamParlay, calibration, modelQuality (Brier/log-loss/CLV), stats
     captureLines.ts                                 # closing-line capture for CLV (team + prop)
-    providers/    # stats/news/odds/results adapters + live/ (ESPN scores + injuries, MLB Stats API, The Odds API) + demo
+    providers/    # stats/news/odds/results/historical adapters + live/ (ESPN scores/injuries/gamelogs/matchup, park factors, MLB Stats API, The Odds API) + demo
     ingest/       # CSV parsing & validation
     db/           # Prisma client singleton
     utils/        # csv, dates, format, cn, teamName (shared normalization/matching)

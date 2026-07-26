@@ -1,5 +1,4 @@
 import {
-  MODEL_VERSION,
   weightsForProfile,
   type Direction,
   type EvidenceItem,
@@ -16,7 +15,9 @@ type PlayerStatus = NonNullable<NewsContext["playerStatus"]>;
 import { clamp, hitCount, marginToScore, mean, median, stdDev } from "./stats";
 import { deriveRiskLevel } from "./confidenceModel";
 
-export const SCORING_MODEL_VERSION = MODEL_VERSION;
+// v1.1.0: live non-MLB game logs (ESPN), cross-league prop injuries, and live
+// historical splits (home/away, rest, park factors) + defense-rank matchups.
+export const SCORING_MODEL_VERSION = "v1.1.0";
 
 interface CategoryResult {
   score: number; // 0..100, 50 = neutral
