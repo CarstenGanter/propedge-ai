@@ -13,9 +13,20 @@ import { getSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
-export default async function ParlaysPage() {
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export default async function ParlaysPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ legs?: string; mult?: string; date?: string }>;
+}) {
+  const params = await searchParams;
+  const initialSelected = (params.legs ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const initialMultiplier = params.mult != null && Number.isFinite(Number(params.mult)) ? Number(params.mult) : undefined;
+  const slateDate = params.date && DATE_RE.test(params.date) ? params.date : undefined;
+
   const [picks, parlays, teamPicks, teamParlays, settings] = await Promise.all([
-    getPicksForParlayBuilder(),
+    getPicksForParlayBuilder({ includeDate: slateDate }),
     getParlays(),
     getTeamPicksForParlayBuilder(),
     getTeamParlays(),
@@ -38,7 +49,13 @@ export default async function ParlaysPage() {
           title="Player prop parlays"
           description="Combine Over/Under props. Enter the payout multiplier manually."
         />
-        <ParlayBuilder picks={picks} defaultStake={settings.defaultStake} />
+        <ParlayBuilder
+          picks={picks}
+          defaultStake={settings.defaultStake}
+          initialSelected={initialSelected}
+          initialMultiplier={initialMultiplier}
+          date={slateDate}
+        />
         <div className="space-y-3">
           <SectionHeading title="Your prop parlays" description="Settled automatically as their legs settle." />
           <ParlaysList parlays={parlays} />

@@ -160,8 +160,22 @@ model AppSettings {
   scoringProfile         String   @default("balanced") // balanced | market
   leaguesEnabledJson     String   @default("[\"NFL\",\"MLB\",\"CBB\",\"WNBA\",\"EPL\",\"Bundesliga\",\"UCL\",\"WorldCup\"]")
   minTeamConfidence      Int      @default(55)
+  // NFL gameday: which Odds API prop markets to pull (each costs 1 credit per game),
+  // how many games per slate at most, and the credit balance we refuse to go below.
+  nflMarketsJson         String   @default("[\"Passing Yards\",\"Rushing Yards\",\"Receiving Yards\",\"Receptions\",\"Pass TDs\",\"Rush+Rec Yards\"]")
+  nflMaxGames            Int      @default(16)
+  oddsCreditFloor        Int      @default(25)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
+}
+
+// Persistent key/value cache for free-provider payloads (ESPN game summaries,
+// weather, aggregated defense stats, last-known Odds API credit balance). Shared
+// between the web app and the headless daily job, which run as separate processes.
+model ProviderCache {
+  key       String   @id
+  json      String
+  updatedAt DateTime @updatedAt
 }
 
 // Team (moneyline / game-winner) recommendation.

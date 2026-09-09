@@ -12,6 +12,7 @@ import {
   type ProbableStarter,
 } from "@/lib/providers/live/mlbStats";
 import { hasKey } from "@/lib/providers/config";
+import { recordOddsCredits } from "@/lib/providerCache";
 import { toSlateDate } from "@/lib/utils/dates";
 import { teamsMatch, lookupTeam } from "@/lib/utils/teamName";
 import { LEAGUE_CONFIG, isLeague, type League } from "@/lib/teamLeagues";
@@ -110,8 +111,19 @@ export async function generateTeamPicksForDate(date: string): Promise<TeamGenera
   }
 
   for (const league of leagues) {
+    // NFL plays weekly: check the free ESPN scoreboard first so non-game days
+    // don't spend a moneyline credit (~30/month on a 500-credit budget).
+    if (league === "NFL") {
+      const { getNflSlate } = await import("@/lib/nfl/schedule");
+      const slate = await getNflSlate(date).catch(() => []);
+      if (slate.length === 0) {
+        byLeague.push({ league, created: 0, error: `No NFL games on ${date} — skipped (0 credits)` });
+        continue;
+      }
+    }
     const ml = await fetchMoneylines(league, process.env.ODDS_API_KEY!);
     if (ml.creditsRemaining != null) creditsRemaining = ml.creditsRemaining;
+    await recordOddsCredits(ml.creditsRemaining, null);
     if (!ml.ok || ml.games.length === 0) {
       byLeague.push({ league, created: 0, error: ml.error ?? "No games (out of season?)" });
       continue;

@@ -216,11 +216,12 @@ const STAT_MATCHERS: Record<string, string[]> = {
   rbis: ["rbi", "rbis"],
 };
 
-interface EspnBoxAthlete {
+export interface EspnBoxAthlete {
   athlete?: { displayName?: string };
   stats?: string[];
 }
-interface EspnStatGroup {
+export interface EspnStatGroup {
+  name?: string;
   labels?: string[];
   names?: string[];
   keys?: string[];
@@ -231,6 +232,74 @@ interface EspnTeamPlayers {
 }
 interface EspnSummary {
   boxscore?: { players?: EspnTeamPlayers[] };
+}
+
+/**
+ * NFL box scores: labels are generic ("YDS", "REC", "TD") and repeat across the
+ * passing/rushing/receiving groups, so football settlement matches on the
+ * group's `name` and its machine `keys` instead. A compound key like
+ * "completions/passingAttempts" is split with `part`.
+ */
+interface FootballBoxKey {
+  group: string;
+  key: string;
+  part?: "first" | "second";
+}
+const FOOTBALL_BOX_KEYS: Record<string, FootballBoxKey[]> = {
+  "passing yards": [{ group: "passing", key: "passingYards" }],
+  "rushing yards": [{ group: "rushing", key: "rushingYards" }],
+  "receiving yards": [{ group: "receiving", key: "receivingYards" }],
+  receptions: [{ group: "receiving", key: "receptions" }],
+  "pass tds": [{ group: "passing", key: "passingTouchdowns" }],
+  completions: [{ group: "passing", key: "completions/passingAttempts", part: "first" }],
+  "pass attempts": [{ group: "passing", key: "completions/passingAttempts", part: "second" }],
+  "rush attempts": [{ group: "rushing", key: "rushingAttempts" }],
+  "rush+rec yards": [
+    { group: "rushing", key: "rushingYards" },
+    { group: "receiving", key: "receivingYards" },
+  ],
+};
+
+function parsePart(raw: string, part?: "first" | "second"): number | null {
+  const pieces = String(raw).split("/");
+  const piece = part === "second" ? pieces[1] : pieces[0];
+  if (piece == null) return null;
+  const n = Number(piece.split("-")[0]);
+  return Number.isNaN(n) ? null : n;
+}
+
+/**
+ * Pure football box-score extractor (exported for tests). Returns null when the
+ * player appears in none of the relevant groups (DNP → manual settlement). For
+ * summed props, a player present in one group but not the other counts 0 there.
+ */
+export function extractFootballBoxStat(
+  groups: EspnStatGroup[],
+  playerName: string,
+  propType: string,
+): number | null {
+  const spec = FOOTBALL_BOX_KEYS[propType.toLowerCase()];
+  if (!spec) return null;
+  let total = 0;
+  let found = false;
+  for (const { group, key, part } of spec) {
+    for (const g of groups) {
+      if ((g.name ?? "").toLowerCase() !== group) continue;
+      const idx = (g.keys ?? []).indexOf(key);
+      if (idx < 0) continue;
+      const ath = (g.athletes ?? []).find(
+        (a) => a.athlete?.displayName && nameMatches(a.athlete.displayName, playerName),
+      );
+      if (!ath) continue;
+      const raw = ath.stats?.[idx];
+      if (raw == null) continue;
+      const n = parsePart(raw, part);
+      if (n == null) continue;
+      total += n;
+      found = true;
+    }
+  }
+  return found ? total : null;
 }
 
 /** Pull a single completed-game stat for a player from the box score. */
@@ -247,6 +316,11 @@ export async function fetchPlayerGameStat(
   const data = await fetchJson<EspnSummary>(url);
   const teams = data?.boxscore?.players;
   if (!teams) return null;
+
+  if (path.sport === "football") {
+    const groups = teams.flatMap((t) => t.statistics ?? []);
+    return extractFootballBoxStat(groups, playerName, propType);
+  }
 
   const matchers = STAT_MATCHERS[propType.toLowerCase()];
   if (!matchers) return null;

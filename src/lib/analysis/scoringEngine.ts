@@ -17,7 +17,13 @@ import { deriveRiskLevel } from "./confidenceModel";
 
 // v1.1.0: live non-MLB game logs (ESPN), cross-league prop injuries, and live
 // historical splits (home/away, rest, park factors) + defense-rank matchups.
-export const SCORING_MODEL_VERSION = "v1.1.0";
+// v1.2.0: NFL depth — prior-season sample blending with an early-season form
+// gate, box-score defense ranks, game injury reports, kickoff weather, and
+// source URLs on evidence.
+export const SCORING_MODEL_VERSION = "v1.2.0";
+
+/** NFL: full recent-form weight needs at least this many current-season games. */
+const NFL_FULL_FORM_GAMES = 4;
 
 interface CategoryResult {
   score: number; // 0..100, 50 = neutral
@@ -84,17 +90,32 @@ function scoreRecentForm(
 
   const base = 50 + (blended - 0.5) * 90; // hit-rate is the dominant driver
   const trendAdj = clamp(trendFavor / Math.max(1, line * 0.15), -1, 1) * 8;
-  res.score = clamp(base + trendAdj, 0, 100);
+  let score = clamp(base + trendAdj, 0, 100);
+
+  // NFL early season: "recent form" is mostly last year's games until ~4 have
+  // been played, so shrink the signal toward neutral and say so.
+  if (prop.sport === "NFL" && ps.currentSeasonGames != null && ps.currentSeasonGames < NFL_FULL_FORM_GAMES) {
+    const n = ps.currentSeasonGames;
+    const shrink = 0.5 + 0.5 * (n / NFL_FULL_FORM_GAMES);
+    score = 50 + (score - 50) * shrink;
+    res.warnings.push(
+      n === 0
+        ? "No games played yet this NFL season — recent form comes entirely from last season and is weighted down."
+        : `Only ${n} game${n === 1 ? "" : "s"} played this NFL season — recent form is blended with last season and weighted down.`,
+    );
+  }
+  res.score = score;
 
   const window = h10.total >= 10 ? "10" : String(h10.total);
   res.evidence.push({
     category: "recentForm",
     title: `Cleared the ${dir.toLowerCase()} in ${h10.hits} of last ${window} games`,
-    summary: `Over the last ${window} games this player finished on the ${overUnderWord(
-      dir,
-    )} side of ${line} in ${h10.hits} of them (${Math.round(rate(h10) * 100)}%).`,
+    summary:
+      `Over the last ${window} games this player finished on the ${overUnderWord(dir)} side of ${line} in ${h10.hits} of them (${Math.round(rate(h10) * 100)}%).` +
+      (ps.note ? ` ${ps.note}` : ""),
     confidenceImpact: Math.round((res.score - 50) / 3),
     sourceName: ps.source,
+    sourceUrl: ps.sourceUrl,
   });
 
   if (rate(h3) >= 0.66) {
@@ -147,9 +168,10 @@ function scoreSeasonBaseline(
       1,
     )}, ~${Math.round(pctClearing * 100)}% of games on the ${overUnderWord(
       prop.direction,
-    )}). Standard deviation ~${sd.toFixed(1)}.`,
+    )}). Standard deviation ~${sd.toFixed(1)}.` + (ps.note ? ` ${ps.note}` : ""),
     confidenceImpact: Math.round((res.score - 50) / 3),
     sourceName: ps.source,
+    sourceUrl: ps.sourceUrl,
   });
 
   if (favorMargin > scale * 0.4) {
@@ -207,6 +229,7 @@ function scoreMatchup(
     summary: parts.join(" ") || "Limited matchup detail available.",
     confidenceImpact: Math.round((res.score - 50) / 3),
     sourceName: m.source,
+    sourceUrl: m.sourceUrl,
   });
   if (res.score >= 60) res.reasonsFor.push("Favorable defensive matchup for this stat.");
   if (res.score <= 40) res.reasonsAgainst.push("Tough defensive matchup for this stat.");
@@ -253,6 +276,7 @@ function scoreRoleUsage(
     summary: parts.join(" "),
     confidenceImpact: Math.round((res.score - 50) / 3),
     sourceName: ps?.source ?? news?.source ?? "manual/demo data",
+    sourceUrl: ps?.sourceUrl ?? news?.notes?.find((n) => n.sourceUrl)?.sourceUrl,
   });
   if (res.score >= 60 && prop.direction === "OVER")
     res.reasonsFor.push("Strong/expanding role supports volume.");
@@ -467,10 +491,14 @@ function scoreHistoricalSplits(
     acc += prop.direction === "OVER" ? 3 : -3;
     parts.push(`${h.restDays} days rest.`);
   }
+  if (h.homeAway) parts.push(h.homeAway === "home" ? "Playing at home." : "Playing on the road.");
   if (h.weatherConcern) {
     acc += prop.direction === "OVER" ? -8 : 6;
-    parts.push("Weather could suppress output.");
+    parts.push(h.weatherNote ?? "Weather could suppress output.");
     res.warnings.push("Weather flagged as a potential factor for this outdoor game.");
+    if (prop.direction === "OVER") res.reasonsAgainst.push("Kickoff weather works against the passing game.");
+  } else if (h.weatherNote) {
+    parts.push(h.weatherNote);
   }
   if (h.ballparkFactor != null) {
     const bp = (h.ballparkFactor - 1) * 100;
@@ -480,10 +508,11 @@ function scoreHistoricalSplits(
   res.score = clamp(acc, 0, 100);
   res.evidence.push({
     category: "historicalSplits",
-    title: "Historical splits",
+    title: h.weatherNote ? "Splits, rest & kickoff weather" : "Historical splits",
     summary: parts.join(" ") || "Limited historical detail.",
     confidenceImpact: Math.round((res.score - 50) / 4),
     sourceName: h.source,
+    sourceUrl: h.sourceUrl,
   });
   return res;
 }

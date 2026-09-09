@@ -29,6 +29,13 @@ export const liveNewsProvider: NewsProvider = {
       if (mlb) return mlb;
     }
 
+    // NFL: official game injury report + RotoWire note + headlines (free, sourced).
+    if (prop.sport === "NFL") {
+      const { getNflNews } = await import("./live/nflNews"); // server-only deps → lazy
+      const nfl = await getNflNews(prop).catch(() => undefined);
+      if (nfl) return nfl;
+    }
+
     // Non-MLB: match the player against ESPN's league injury feed (free).
     const path = espnPathForSport(prop.sport, prop.league);
     if (path && prop.sport !== "MLB") {

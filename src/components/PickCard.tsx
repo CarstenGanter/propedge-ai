@@ -20,8 +20,17 @@ import { formatSignedNumber } from "@/lib/utils/format";
 import { formatGameDateTime } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
 import type { SerializedPick } from "@/lib/dto";
+import type { ScoringProfile } from "@/types";
 
-export function PickCard({ pick, defaultOpen = false }: { pick: SerializedPick; defaultOpen?: boolean }) {
+export function PickCard({
+  pick,
+  defaultOpen = false,
+  profile = "balanced",
+}: {
+  pick: SerializedPick;
+  defaultOpen?: boolean;
+  profile?: ScoringProfile;
+}) {
   const [open, setOpen] = React.useState(defaultOpen);
   const p = pick.prop;
 
@@ -96,7 +105,7 @@ export function PickCard({ pick, defaultOpen = false }: { pick: SerializedPick; 
                 <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Score breakdown
                 </h4>
-                <ScoreBreakdown breakdown={pick.scoreBreakdown} />
+                <ScoreBreakdown breakdown={pick.scoreBreakdown} profile={profile} />
               </div>
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>

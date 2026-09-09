@@ -1,6 +1,10 @@
 import type { HistoricalSplitsContext, ScorablePropInput } from "@/types";
 import { getParkFactor } from "./live/parkFactors";
 import { getEspnGameRows, resolveEspnAthlete } from "./live/espnPlayerStats";
+import { isPassOrRecProp } from "@/lib/nfl/slate";
+
+/** Rest gaps longer than this are a season opener / bye artifact, not a rest edge. */
+const MAX_MEANINGFUL_REST_DAYS = 30;
 
 /**
  * Live historical-splits builder (free sources). Each piece is independently
@@ -46,6 +50,9 @@ export async function getLiveHistorical(
   let restDays: number | undefined;
   let backToBack: boolean | undefined;
   let ballparkFactor: number | undefined;
+  let weatherConcern: boolean | undefined;
+  let weatherNote: string | undefined;
+  let sourceUrl: string | undefined;
   let source = "ESPN";
 
   if (prop.sport === "MLB") {
@@ -65,24 +72,42 @@ export async function getLiveHistorical(
         prop.team,
         prop.opponent,
         prop.propType,
+        prop.date,
       ).catch(() => undefined);
       if (rows && rows.length > 0) {
         const rest = restFromDates(
           rows.map((r) => r.date),
           prop.date,
         );
-        if (rest) {
+        if (rest && rest.restDays <= MAX_MEANINGFUL_REST_DAYS) {
           restDays = rest.restDays;
           backToBack = rest.backToBack;
         }
+      }
+    }
+    // NFL: kickoff weather for outdoor venues (Open-Meteo), flagged only for the passing game.
+    if (prop.sport === "NFL") {
+      // Lazy import: the game-context module is server-only (Prisma-backed cache).
+      const { getNflGameContextForProp } = await import("@/lib/nfl/gameContext");
+      const { context } = await getNflGameContextForProp(prop).catch(() => ({ context: null }));
+      if (context?.assessment) {
+        weatherNote = context.assessment.note;
+        weatherConcern = context.assessment.concern && isPassOrRecProp(prop.propType) ? true : undefined;
+        sourceUrl = context.assessment.sourceUrl ?? context.sourceUrl;
+        source = context.assessment.sourceName === "Open-Meteo" ? "ESPN gamelog + Open-Meteo" : "ESPN";
       }
     }
   } else {
     return undefined; // soccer / unknown
   }
 
-  if (homeAway === undefined && restDays === undefined && ballparkFactor === undefined) {
+  if (
+    homeAway === undefined &&
+    restDays === undefined &&
+    ballparkFactor === undefined &&
+    weatherNote === undefined
+  ) {
     return undefined;
   }
-  return { homeAway, restDays, backToBack, ballparkFactor, source };
+  return { homeAway, restDays, backToBack, ballparkFactor, weatherConcern, weatherNote, source, sourceUrl };
 }

@@ -63,6 +63,9 @@ const MARKET_KEYS: Record<string, Record<string, string>> = {
     Receptions: "player_receptions",
     "Pass TDs": "player_pass_tds",
     Completions: "player_pass_completions",
+    "Rush+Rec Yards": "player_rush_reception_yds",
+    "Pass Attempts": "player_pass_attempts",
+    "Rush Attempts": "player_rush_attempts",
   },
   baseball: {
     "Total Bases": "batter_total_bases",
@@ -100,6 +103,36 @@ function propTypeForMarket(sportKey: string, marketKey: string): string | null {
 
 export function oddsApiSupportsSport(sport: string): boolean {
   return sport in SPORT_KEY;
+}
+
+/** Odds API market keys for a subset of a sport's prop types (unknown labels dropped). */
+export function marketKeysForPropTypes(sport: Sport, propTypes: string[]): string[] {
+  const comps = competitionsForSport(sport);
+  if (comps.length === 0) return [];
+  const fam = MARKET_KEYS[sportFamily(comps[0].sportKey)] ?? {};
+  const keys: string[] = [];
+  for (const label of propTypes) {
+    const key = fam[label];
+    if (key && !keys.includes(key)) keys.push(key);
+  }
+  return keys;
+}
+
+/**
+ * Credit cost of pulling player props: The Odds API charges one credit per
+ * market per region for each event-odds call (the events listing is free).
+ */
+export function estimateCredits(games: number, markets: number, regions = 1): number {
+  return Math.max(0, games) * Math.max(0, markets) * Math.max(1, regions);
+}
+
+/** Keep only events that kick off on the given slate date (per the supplied date mapper). */
+export function filterEventsForSlate<T extends { commence_time: string }>(
+  events: T[],
+  slateDate: string,
+  toSlate: (iso: string) => string,
+): T[] {
+  return events.filter((e) => toSlate(e.commence_time) === slateDate);
 }
 
 // ---- odds math ----
@@ -210,6 +243,34 @@ async function getEvents(apiKey: string, sportKey: string): Promise<OddsEvent[]>
   return r.data ?? [];
 }
 
+export interface OddsEventSummary {
+  id: string;
+  commenceTime: string;
+  homeTeam: string;
+  awayTeam: string;
+}
+
+/** Free (0-credit) listing of upcoming events for a sport — used for credit estimates. */
+export async function listEvents(
+  apiKey: string,
+  sport: Sport,
+): Promise<{ status: OddsApiStatus; events: OddsEventSummary[] }> {
+  const comps = competitionsForSport(sport);
+  if (comps.length === 0) {
+    return { status: { ok: false, remaining: null, used: null, error: "Unsupported sport" }, events: [] };
+  }
+  const events: OddsEventSummary[] = [];
+  let status: OddsApiStatus = { ok: true, remaining: null, used: null };
+  for (const comp of comps) {
+    const r = await fetchJson<OddsEvent[]>(`${BASE}/sports/${comp.sportKey}/events/?apiKey=${apiKey}`);
+    status = { ok: r.status === 200, remaining: r.remaining, used: r.used, error: r.error };
+    for (const e of r.data ?? []) {
+      events.push({ id: e.id, commenceTime: e.commence_time, homeTeam: e.home_team, awayTeam: e.away_team });
+    }
+  }
+  return { status, events };
+}
+
 async function getEventProps(
   apiKey: string,
   sportKey: string,
@@ -315,6 +376,28 @@ export interface FetchPropsResult {
   sportKey: string;
 }
 
+export interface FetchPropsOptions {
+  /** Max events (games) to pull; each costs `markets × regions` credits. */
+  maxEvents?: number;
+  /**
+   * Only pull events kicking off on this slate date, as mapped by `toSlate`
+   * (defaults to the machine-local day). Without it, the next N upcoming events
+   * are pulled regardless of date — a credit leak for weekly sports like NFL.
+   */
+  slateDate?: string;
+  toSlate?: (iso: string) => string;
+  /** Restrict to these prop types (labels from PROP_TYPES); default = every market for the sport. */
+  propTypes?: string[];
+}
+
+function defaultToSlate(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 /**
  * Fetch & normalize player props for a sport. Caps the number of events to
  * protect API credits (each event is a separate, markets×regions-priced call).
@@ -325,8 +408,10 @@ export interface FetchPropsResult {
 export async function fetchPlayerProps(
   apiKey: string,
   sport: Sport,
-  maxEvents = 12,
+  opts: FetchPropsOptions | number = {},
 ): Promise<FetchPropsResult> {
+  const options: FetchPropsOptions = typeof opts === "number" ? { maxEvents: opts } : opts;
+  const maxEvents = options.maxEvents ?? 12;
   const comps = competitionsForSport(sport);
   if (comps.length === 0) {
     return { status: { ok: false, remaining: null, used: null, error: "Unsupported sport" }, props: [], events: 0, sportKey: "" };
@@ -341,13 +426,17 @@ export async function fetchPlayerProps(
 
   for (const comp of comps) {
     const fam = MARKET_KEYS[sportFamily(comp.sportKey)] ?? {};
-    const marketKeys = Object.values(fam);
+    const marketKeys = options.propTypes
+      ? options.propTypes.map((p) => fam[p]).filter((k): k is string => Boolean(k))
+      : Object.values(fam);
     if (marketKeys.length === 0) continue;
 
     const events = await getEvents(apiKey, comp.sportKey);
-    const upcoming = events
-      .filter((e) => new Date(e.commence_time).getTime() > Date.now() - 3 * 3600_000)
-      .slice(0, perComp);
+    let candidates = events.filter((e) => new Date(e.commence_time).getTime() > Date.now() - 3 * 3600_000);
+    if (options.slateDate) {
+      candidates = filterEventsForSlate(candidates, options.slateDate, options.toSlate ?? defaultToSlate);
+    }
+    const upcoming = candidates.slice(0, perComp);
     totalEvents += upcoming.length;
 
     for (const ev of upcoming) {

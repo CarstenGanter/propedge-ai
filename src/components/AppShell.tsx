@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  CalendarDays,
   FlaskConical,
   LayoutDashboard,
   Layers,
@@ -21,6 +22,7 @@ import { DisclaimerBanner } from "@/components/DisclaimerBanner";
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/picks", label: "Today's Picks", icon: Target },
+  { href: "/nfl", label: "NFL Gameday", icon: CalendarDays },
   { href: "/teams", label: "Team Picks", icon: Trophy },
   { href: "/research", label: "Research Lab", icon: FlaskConical },
   { href: "/parlays", label: "Parlay Builder", icon: Layers },

@@ -1,6 +1,7 @@
 import type { PlayerStatsContext } from "@/types";
 import { espnPathForSport, nameMatches } from "./espn";
 import { normalizeTeamName, lookupTeam } from "@/lib/utils/teamName";
+import { nflSeasonForDate, seasonStartDate } from "@/lib/nfl/slate";
 
 /**
  * ESPN athlete game logs (free, no key) for NBA / WNBA / NFL / NHL / NCAAB —
@@ -69,6 +70,15 @@ const EXTRACTORS: Record<string, Record<string, Extractor>> = {
     Receptions: (n, s) => plainNum(col(n, s, "receptions")),
     "Pass TDs": (n, s) => plainNum(col(n, s, "passingTouchdowns")),
     Completions: (n, s) => firstNum(col(n, s, "completions")),
+    // Combined yardage: a player with only one of the two columns (pure RB / pure WR
+    // gamelogs) still counts — the missing side is 0, not "unknown".
+    "Rush+Rec Yards": (n, s) => {
+      const r = plainNum(col(n, s, "rushingYards"));
+      const c = plainNum(col(n, s, "receivingYards"));
+      return r == null && c == null ? null : (r ?? 0) + (c ?? 0);
+    },
+    "Pass Attempts": (n, s) => firstNum(col(n, s, "passingAttempts")),
+    "Rush Attempts": (n, s) => plainNum(col(n, s, "rushingAttempts")),
   },
   hockey: {
     "Shots on Goal": (n, s) => plainNum(col(n, s, "shotsTotal")),
@@ -85,7 +95,12 @@ function usageValue(family: string, propType: string, names: string[], stats: st
   if (family === "basketball") return plainNum(col(names, stats, "minutes"));
   if (family === "hockey") return parseTOI(col(names, stats, "timeOnIcePerGame"));
   if (family === "football") {
-    if (/Rushing/.test(propType)) return plainNum(col(names, stats, "rushingAttempts"));
+    if (/Rush\+Rec/.test(propType)) {
+      const a = plainNum(col(names, stats, "rushingAttempts"));
+      const t = plainNum(col(names, stats, "receivingTargets"));
+      return a == null && t == null ? null : (a ?? 0) + (t ?? 0);
+    }
+    if (/Rushing|Rush Attempts/.test(propType)) return plainNum(col(names, stats, "rushingAttempts"));
     if (/Receiving|Reception/.test(propType)) return plainNum(col(names, stats, "receivingTargets"));
     return firstNum(col(names, stats, "passingAttempts"));
   }
@@ -162,6 +177,69 @@ export function parseGamelog(json: GamelogJson): ParsedGamelog {
   }
   rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)); // date desc
   return { names, rows };
+}
+
+export interface BlendResult {
+  parsed: ParsedGamelog;
+  blended: boolean;
+  currentGames: number;
+  priorGamesUsed: number;
+}
+
+/** Re-order a row's stats from `fromNames` column order into `toNames` order. */
+function realignRows(rows: GamelogRow[], fromNames: string[], toNames: string[]): GamelogRow[] {
+  if (fromNames.length === toNames.length && fromNames.every((n, i) => n === toNames[i])) return rows;
+  return rows.map((r) => ({
+    ...r,
+    stats: toNames.map((n) => {
+      const i = fromNames.indexOf(n);
+      return i >= 0 ? r.stats[i] ?? "" : "";
+    }),
+  }));
+}
+
+/**
+ * Early-season sample blending (pure, tested). When fewer than `minCurrent`
+ * games of the current season exist, append the most recent prior-season games
+ * (from the same gamelog if ESPN still serves last season by default, else from
+ * an explicit prior-season gamelog) up to `maxRows` total, current games first.
+ */
+export function blendGamelogs(
+  current: ParsedGamelog,
+  prior: ParsedGamelog | null,
+  seasonStart: string,
+  minCurrent = 4,
+  maxRows = 17,
+): BlendResult {
+  const names = current.names.length ? current.names : prior?.names ?? [];
+  const curRows = current.rows.filter((r) => r.date >= seasonStart);
+  if (curRows.length >= minCurrent) {
+    return { parsed: { names, rows: curRows }, blended: false, currentGames: curRows.length, priorGamesUsed: 0 };
+  }
+  const seen = new Set(curRows.map((r) => r.eventId));
+  const priorRows: GamelogRow[] = [];
+  for (const r of current.rows) {
+    if (r.date < seasonStart && !seen.has(r.eventId)) {
+      seen.add(r.eventId);
+      priorRows.push(r);
+    }
+  }
+  if (prior) {
+    for (const r of realignRows(prior.rows, prior.names, names)) {
+      if (r.date < seasonStart && !seen.has(r.eventId)) {
+        seen.add(r.eventId);
+        priorRows.push(r);
+      }
+    }
+  }
+  priorRows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const rows = [...curRows, ...priorRows].slice(0, maxRows);
+  return {
+    parsed: { names, rows },
+    blended: rows.length > curRows.length,
+    currentGames: curRows.length,
+    priorGamesUsed: rows.length - curRows.length,
+  };
 }
 
 /** Extract one prop's per-game value from a row (exported for tests). */
@@ -276,15 +354,49 @@ export async function resolveEspnAthlete(
   return result;
 }
 
-async function getParsedGamelog(family: { sport: string; league: string }, athleteId: string): Promise<ParsedGamelog | null> {
-  const key = `${family.sport}/${family.league}|${athleteId}`;
+async function getParsedGamelog(
+  family: { sport: string; league: string },
+  athleteId: string,
+  season?: number,
+): Promise<ParsedGamelog | null> {
+  const key = `${family.sport}/${family.league}|${athleteId}|${season ?? "default"}`;
   const cached = gamelogCache.get(key);
   if (cached && Date.now() - cached.at < 10 * 60 * 1000) return cached.parsed;
-  const data = await fetchJson<GamelogJson>(`${WEB}/${family.sport}/${family.league}/athletes/${athleteId}/gamelog`);
+  const url =
+    `${WEB}/${family.sport}/${family.league}/athletes/${athleteId}/gamelog` + (season ? `?season=${season}` : "");
+  const data = await fetchJson<GamelogJson>(url);
   if (!data) return null;
   const parsed = parseGamelog(data);
   gamelogCache.set(key, { at: Date.now(), parsed });
   return parsed;
+}
+
+/**
+ * NFL: early in a season the sample is 0–3 games, so blend in last season's
+ * games (labeled). Other sports return the default gamelog untouched.
+ */
+async function getGamelogForProp(
+  sport: string,
+  family: { sport: string; league: string },
+  athleteId: string,
+  date: string | null | undefined,
+): Promise<{ parsed: ParsedGamelog; blend: BlendResult | null; season: number | null; prior: number | null } | null> {
+  const parsed = await getParsedGamelog(family, athleteId);
+  if (!parsed) return null;
+  if (sport !== "NFL" || !date) return { parsed, blend: null, season: null, prior: null };
+  const { season, prior } = nflSeasonForDate(date);
+  const start = seasonStartDate(season);
+  const currentGames = parsed.rows.filter((r) => r.date >= start).length;
+  let priorParsed: ParsedGamelog | null = null;
+  if (currentGames < 4 && !parsed.rows.some((r) => r.date < start)) {
+    priorParsed = await getParsedGamelog(family, athleteId, prior);
+  }
+  const blend = blendGamelogs(parsed, priorParsed, start);
+  return { parsed: blend.parsed, blend, season, prior };
+}
+
+function gamelogUrl(family: { sport: string; league: string }, athleteId: string): string {
+  return `https://www.espn.com/${family.league}/player/gamelog/_/id/${athleteId}`;
 }
 
 function mean(xs: number[]) {
@@ -309,14 +421,17 @@ export async function getEspnPlayerStats(
   team: string,
   opponent: string,
   propType: string,
+  date?: string | null,
 ): Promise<PlayerStatsContext | undefined> {
   const family = espnFamily(sport);
   if (!family || !EXTRACTORS[family.sport]?.[propType]) return undefined;
 
   const ref = await resolveEspnAthlete(sport, playerName, team, opponent);
   if (!ref) return undefined;
-  const parsed = await getParsedGamelog(family, ref.athleteId);
-  if (!parsed || parsed.rows.length === 0) return undefined;
+  const log = await getGamelogForProp(sport, family, ref.athleteId, date);
+  if (!log || log.parsed.rows.length === 0) return undefined;
+  const parsed = log.parsed;
+  const blend = log.blend;
 
   const games = parsed.rows
     .map((r) => extractStat(family.sport, propType, parsed.names, r.stats))
@@ -335,6 +450,11 @@ export async function getEspnPlayerStats(
     usageTrend = recent > overall * 1.08 ? "up" : recent < overall * 0.92 ? "down" : "steady";
   }
 
+  const blended = Boolean(blend?.blended);
+  const note = blend?.blended
+    ? `Sample includes ${blend.priorGamesUsed} game(s) from the ${log.prior} season (${blend.currentGames} of ${log.season} played).`
+    : undefined;
+
   return {
     recentGames: games.slice(0, 15),
     seasonAverage: Math.round(mean(games) * 100) / 100,
@@ -343,7 +463,10 @@ export async function getEspnPlayerStats(
     gamesPlayed: games.length,
     usage,
     usageTrend,
-    source: "ESPN",
+    currentSeasonGames: blend ? blend.currentGames : undefined,
+    note,
+    source: blended ? `ESPN gamelog (${log.season} + ${log.prior} season)` : "ESPN gamelog",
+    sourceUrl: gamelogUrl(family, ref.athleteId),
   };
 }
 
@@ -361,13 +484,15 @@ export async function getEspnGameRows(
   team: string,
   opponent: string,
   propType: string,
+  date?: string | null,
 ): Promise<EspnGameRow[] | undefined> {
   const family = espnFamily(sport);
   if (!family) return undefined;
   const ref = await resolveEspnAthlete(sport, playerName, team, opponent);
   if (!ref) return undefined;
-  const parsed = await getParsedGamelog(family, ref.athleteId);
-  if (!parsed) return undefined;
+  const log = await getGamelogForProp(sport, family, ref.athleteId, date);
+  if (!log) return undefined;
+  const parsed = log.parsed;
   return parsed.rows.map((r) => ({
     date: r.date,
     homeAway: r.homeAway,
@@ -378,7 +503,15 @@ export async function getEspnGameRows(
 
 /** Concurrently pre-resolve + warm gamelogs so the scoring loop hits cache. */
 export async function prewarmEspn(
-  entries: { sport: string; league: string; playerName: string; team: string; opponent: string; propType: string }[],
+  entries: {
+    sport: string;
+    league: string;
+    playerName: string;
+    team: string;
+    opponent: string;
+    propType: string;
+    date?: string | null;
+  }[],
 ): Promise<void> {
   const seen = new Set<string>();
   const unique = entries.filter((e) => {
@@ -392,7 +525,7 @@ export async function prewarmEspn(
   async function worker() {
     while (i < unique.length) {
       const e = unique[i++];
-      await getEspnPlayerStats(e.sport, e.playerName, e.team, e.opponent, e.propType).catch(() => undefined);
+      await getEspnPlayerStats(e.sport, e.playerName, e.team, e.opponent, e.propType, e.date).catch(() => undefined);
     }
   }
   await Promise.all(Array.from({ length: Math.min(limit, unique.length) }, worker));

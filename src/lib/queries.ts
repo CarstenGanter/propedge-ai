@@ -186,13 +186,26 @@ export async function getDistinctTeamPickDates(): Promise<string[]> {
   return rows.map((r) => r.date);
 }
 
-export async function getPicksForParlayBuilder(): Promise<SerializedPick[]> {
+/**
+ * Pending picks for the parlay builder: the 60 newest, plus every pending pick
+ * on `includeDate` (so a deep-linked slate is always fully present).
+ */
+export async function getPicksForParlayBuilder(opts?: { includeDate?: string }): Promise<SerializedPick[]> {
   const picks = await prisma.pick.findMany({
     where: { status: "pending" },
     include: PICK_INCLUDE,
     orderBy: [{ date: "desc" }, { confidenceScore: "desc" }],
     take: 60,
   });
+  if (opts?.includeDate) {
+    const seen = new Set(picks.map((p) => p.id));
+    const extra = await prisma.pick.findMany({
+      where: { status: "pending", date: opts.includeDate },
+      include: PICK_INCLUDE,
+      orderBy: { confidenceScore: "desc" },
+    });
+    for (const p of extra) if (!seen.has(p.id)) picks.push(p);
+  }
   return picks.map(serializePick);
 }
 

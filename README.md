@@ -106,9 +106,9 @@ typed adapter with a demo implementation and a documented seam for keyed APIs:
 
 | Provider | Live (free, no key) | Wire later via |
 | --- | --- | --- |
-| `sportsStatsProvider` | **Game logs**: MLB Stats API (MLB) · **ESPN athlete gamelogs** (NBA/WNBA/NFL/NHL/NCAAB). **Matchup**: MLB probable-pitcher hittability · ESPN opponent-defense rank (pts/goals props) | SportsDataIO / balldontlie (`*_API_KEY`) |
-| `newsProvider` | MLB injured-list + probable-starter confirmation · **ESPN injury feed** (NBA/WNBA/NFL/NHL) matched to the player | News API (`NEWS_API_KEY`) |
-| `historicalProvider` | **home/away + rest days / back-to-back** (from ESPN game dates) · **MLB park factors** (static) | — |
+| `sportsStatsProvider` | **Game logs**: MLB Stats API (MLB) · **ESPN athlete gamelogs** (NBA/WNBA/NFL/NHL/NCAAB, with prior-season blending for early-season NFL). **Matchup**: MLB probable-pitcher hittability · **NFL opponent-defense ranks from aggregated ESPN box scores** · ESPN opponent-defense rank (pts/goals props) | SportsDataIO / balldontlie (`*_API_KEY`) |
+| `newsProvider` | MLB injured-list + probable-starter confirmation · **NFL official game injury report + RotoWire notes + headlines** · **ESPN injury feed** (NBA/WNBA/NHL) matched to the player | News API (`NEWS_API_KEY`) |
+| `historicalProvider` | **home/away + rest days / back-to-back** (from ESPN game dates) · **NFL kickoff weather via Open-Meteo** · **MLB park factors** (static) | — |
 | `oddsProvider` | The Odds API snapshot (`ODDS_API_KEY`) — all sports | The Odds API |
 | `sentimentProvider` | demo summary | Tavily/SerpAPI/Reddit (`SEARCH_API_KEY`) |
 | `resultsProvider` | ESPN box scores / MLB Stats API | any final-stats API |
@@ -119,6 +119,47 @@ form, season baseline, matchup (points/goals props), role/usage, injuries, home/
 market** — up from market-only. All of this is **free** and spends **no Odds API credits** (ESPN +
 statsapi). When a source is missing, the model **discloses it** ("insufficient data", "no market
 comparison available", etc.) and tempers confidence — it never fabricates stats, sources, or quotes.
+
+---
+
+## NFL Gameday
+
+The **NFL Gameday** tab (`/nfl`) is the game-day workflow for Underdog/PrizePicks-style pick'em:
+open it in the morning, fetch the slate, and get ranked player picks grouped by game with sourced
+evidence, plus ready-made 2/3/4-leg slips.
+
+- **Slate-aware.** The page opens on today's games, or the next game day if there are none. NFL slate
+  dates use **US Eastern time**, so Sunday Night Football stays on Sunday wherever your machine is.
+- **Credit-safe fetching.** Player props are the only paid call. Before spending anything, the page
+  shows an estimate — *"13 games × 6 markets = 78 credits, ≈422 left (floor 25)"* — and you confirm.
+  Only games **on that slate date** are fetched, and only the markets you enabled in
+  **Settings → NFL gameday**. On days with no NFL games the daily job fetches **nothing** (0 credits).
+- **Free research** (no key, no credits), all of it sourced and linked on each pick:
+
+  | Signal | Source |
+  | --- | --- |
+  | Game logs, usage (targets / carries / attempts) | ESPN athlete gamelog — blended with **last season** in the first weeks, clearly labeled |
+  | Opponent defense rank vs the stat | **ESPN box scores aggregated** over the season (pass yds, rush yds, completions, pass TDs, total yds allowed per game, plus plays faced for pace) |
+  | Player status, teammate absences | **ESPN game injury report** (the official Wed–Sun report) + RotoWire practice notes + recent headlines |
+  | Kickoff weather | **Open-Meteo** at the kickoff hour for outdoor stadiums (wind ≥15 mph, precip ≥60%, or ≤25°F flags the passing game); domes never flagged |
+  | Home/away, rest days | ESPN gamelog dates |
+  | Market probability | The Odds API de-vigged no-vig probability |
+
+- **Honest in the early season.** Until a player has four games of the current season, recent form is
+  blended with last year *and weighted down*, with a warning saying so. Opponent-defense ranks fall
+  back to the prior season and disclose it.
+- **Suggested slips.** 2/3/4-leg tickets built from the top picks: never the same player twice, never
+  opposite sides of the same game, different games preferred, and same-game legs explicitly flagged as
+  positively correlated. Each leg shows a one-line "why" taken from its evidence. Open it in the
+  Parlay Builder or save it directly.
+- **Settlement.** NFL box scores are read by stat group and machine key (`passingYards`,
+  `rushingYards`, `receivingYards`, `receptions`, `passingTouchdowns`, `completions/passingAttempts`,
+  `rushingAttempts`), so passing/rushing/receiving yards no longer collide on the generic "YDS" label
+  and Pass TDs, Completions, attempts and Rush+Rec Yards settle automatically.
+
+**Credit budget.** The free tier is 500 credits/month. Six markets across a full week
+(~15 games) is ~90 credits/week. Settings → NFL gameday shows the arithmetic live and lets you trade
+markets against a max-games cap; the credit floor blocks any fetch that would drop you below it.
 
 ---
 

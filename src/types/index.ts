@@ -26,7 +26,17 @@ export const SPORT_LABELS: Record<Sport, string> = {
 
 /** Common prop types per sport — used by the manual entry form & demo data. */
 export const PROP_TYPES: Record<Sport, string[]> = {
-  NFL: ["Passing Yards", "Rushing Yards", "Receiving Yards", "Receptions", "Pass TDs", "Completions"],
+  NFL: [
+    "Passing Yards",
+    "Rushing Yards",
+    "Receiving Yards",
+    "Receptions",
+    "Pass TDs",
+    "Completions",
+    "Rush+Rec Yards",
+    "Pass Attempts",
+    "Rush Attempts",
+  ],
   NBA: ["Points", "Rebounds", "Assists", "Pts+Reb+Ast", "3-Pointers Made", "Steals+Blocks"],
   NCAAB: ["Points", "Rebounds", "Assists", "3-Pointers Made", "Pts+Reb+Ast"],
   MLB: ["Total Bases", "Hits", "Strikeouts", "RBIs", "Runs", "Hits+Runs+RBIs"],
@@ -34,6 +44,25 @@ export const PROP_TYPES: Record<Sport, string[]> = {
   NHL: ["Shots on Goal", "Points", "Goals", "Assists", "Saves", "Blocked Shots"],
   Soccer: ["Shots", "Shots on Target", "Passes", "Tackles", "Goals + Assists"],
 };
+
+/**
+ * NFL prop markets selectable for The Odds API pulls. Each market costs one
+ * credit per game, so the default set is the six with the most pick'em value.
+ */
+export const NFL_MARKET_OPTIONS: { propType: string; note: string; defaultOn: boolean }[] = [
+  { propType: "Passing Yards", note: "QB volume; weather-sensitive", defaultOn: true },
+  { propType: "Rushing Yards", note: "RB workload", defaultOn: true },
+  { propType: "Receiving Yards", note: "WR/TE production", defaultOn: true },
+  { propType: "Receptions", note: "Low variance, PPR-style", defaultOn: true },
+  { propType: "Pass TDs", note: "High variance", defaultOn: true },
+  { propType: "Rush+Rec Yards", note: "Combined yardage (popular on Underdog)", defaultOn: true },
+  { propType: "Completions", note: "QB volume; steady", defaultOn: false },
+  { propType: "Pass Attempts", note: "Pure volume", defaultOn: false },
+  { propType: "Rush Attempts", note: "Pure volume", defaultOn: false },
+];
+export const NFL_DEFAULT_MARKETS: readonly string[] = NFL_MARKET_OPTIONS.filter((m) => m.defaultOn).map(
+  (m) => m.propType,
+);
 
 export type Direction = "OVER" | "UNDER";
 export const DIRECTIONS: Direction[] = ["OVER", "UNDER"];
@@ -170,7 +199,12 @@ export interface PlayerStatsContext {
   /** Usage-style metric relevant to the sport (minutes, snaps, TOI...). */
   usage?: number;
   usageTrend?: "up" | "down" | "steady";
+  /** Games from the current season inside `recentGames` (rest are prior-season, if blended). */
+  currentSeasonGames?: number;
+  /** Factual disclosure about the sample, e.g. "Includes 2025 season games (1 of 2026 played)." */
+  note?: string;
   source: string;
+  sourceUrl?: string;
   isDemo?: boolean;
 }
 
@@ -183,6 +217,7 @@ export interface MatchupContext {
   /** Human-readable matchup note, e.g. "vs SP Gerrit Cole (2.90 ERA, 1.05 WHIP)". */
   opponentContext?: string;
   source: string;
+  sourceUrl?: string;
   isDemo?: boolean;
 }
 
@@ -224,8 +259,11 @@ export interface HistoricalSplitsContext {
   restDays?: number;
   backToBack?: boolean;
   weatherConcern?: boolean;
+  /** Factual forecast text (or "indoor venue") — always shown, concern or not. */
+  weatherNote?: string;
   ballparkFactor?: number; // MLB, 1.0 = neutral
   source: string;
+  sourceUrl?: string;
   isDemo?: boolean;
 }
 
@@ -371,6 +409,8 @@ export interface ScorablePropInput {
   marketLine?: number | null;
   /** Slate date "YYYY-MM-DD" — used for schedule/matchup lookups. */
   date?: string | null;
+  /** External game id (ESPN event id when known) — lets providers skip schedule matching. */
+  gameId?: string | null;
   /** JSON market snapshot stored on the prop (from The Odds API ingestion). */
   marketDataJson?: string | null;
 }

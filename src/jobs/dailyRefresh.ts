@@ -11,7 +11,10 @@ import { settleTeamPickById } from "@/lib/settleTeams";
 import { getGameResult } from "@/lib/providers/live/espnTeams";
 import { isLeague, type League } from "@/lib/teamLeagues";
 import { hasKey } from "@/lib/providers/config";
+import { getOddsCredits } from "@/lib/providerCache";
 import { todaySlate } from "@/lib/utils/dates";
+import { ingestNflSlate } from "@/lib/nfl/ingest";
+import { todayNflSlate } from "@/lib/nfl/slate";
 import type { Sport, TeamSide } from "@/types";
 
 export interface DailyRefreshSummary {
@@ -23,6 +26,8 @@ export interface DailyRefreshSummary {
   teamsGenerated: number;
   teamsSettled: number;
   creditsRemaining: number | null;
+  /** NFL is game-day aware: on non-game days nothing is fetched (0 credits). */
+  nfl?: { date: string; skipped: boolean; reason?: string; propsImported: number; picksCreated: number; creditsEstimate: number | null };
   error?: string;
 }
 
@@ -47,19 +52,42 @@ export async function runDailyRefresh(opts?: {
     oddsApiSupportsSport(s),
   );
   const maxEvents = opts?.maxEventsPerSport ?? 8;
-  const creditFloor = opts?.creditFloor ?? 25;
+  const creditFloor = opts?.creditFloor ?? settings.oddsCreditFloor;
 
   const sportsOut: DailyRefreshSummary["sports"] = [];
   const today = todaySlate();
   const dates = new Set<string>([today]);
   let creditsRemaining: number | null = null;
+  let nfl: DailyRefreshSummary["nfl"];
 
   for (const sport of enabled) {
     if (creditsRemaining != null && creditsRemaining < creditFloor) {
       sportsOut.push({ sport, imported: 0, events: 0, error: `Skipped — low credits (${creditsRemaining})` });
       continue;
     }
-    const r = await ingestOddsPropsForSport(sport, maxEvents);
+    if (sport === "NFL") {
+      // Game-day aware: only this slate's games, only the configured markets,
+      // and nothing at all on days without NFL games.
+      const nflDate = todayNflSlate();
+      const s = await ingestNflSlate(nflDate, { onlyIfGameday: true });
+      if (s.creditsRemaining != null) creditsRemaining = s.creditsRemaining;
+      nfl = {
+        date: nflDate,
+        skipped: s.skipped,
+        reason: s.reason ?? s.error,
+        propsImported: s.propsImported,
+        picksCreated: s.picks?.created ?? 0,
+        creditsEstimate: s.estimate?.credits ?? null,
+      };
+      sportsOut.push({
+        sport,
+        imported: s.propsImported,
+        events: s.estimate?.gamesToFetch ?? 0,
+        error: s.skipped ? s.reason : s.error ?? s.reason,
+      });
+      continue; // picks for the NFL slate were generated inside ingestNflSlate
+    }
+    const r = await ingestOddsPropsForSport(sport, { maxEvents });
     if (r.creditsRemaining != null) creditsRemaining = r.creditsRemaining;
     sportsOut.push({ sport, imported: r.imported, events: r.events, error: r.error });
     for (const d of r.dates) dates.add(d);
@@ -88,7 +116,9 @@ export async function runDailyRefresh(opts?: {
     settled,
     teamsGenerated: teamGen.created,
     teamsSettled,
-    creditsRemaining: teamGen.creditsRemaining ?? creditsRemaining,
+    // Fall back to the last recorded balance so a zero-cost run still reports it.
+    creditsRemaining: teamGen.creditsRemaining ?? creditsRemaining ?? (await getOddsCredits())?.remaining ?? null,
+    nfl,
   };
 }
 

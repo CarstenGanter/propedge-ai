@@ -71,4 +71,39 @@ describe("scoring engine", () => {
     const a = analyzeProp(baseProp, strongOverBundle);
     for (const e of a.evidence) expect(e.sourceName.length).toBeGreaterThan(0);
   });
+
+  it("carries provider source URLs and sample notes into evidence", () => {
+    const a = analyzeProp(baseProp, {
+      ...strongOverBundle,
+      playerStats: { ...strongOverBundle.playerStats!, sourceUrl: "https://espn.example/gamelog", note: "Includes 2025 games." },
+      matchup: { ...strongOverBundle.matchup!, sourceUrl: "https://espn.example/team" },
+      historical: { homeAway: "away", weatherNote: "Open-Meteo forecast at kickoff: 48°F, wind 18 mph.", weatherConcern: true, source: "Open-Meteo", sourceUrl: "https://open-meteo.example" },
+    });
+    const form = a.evidence.find((e) => e.category === "recentForm")!;
+    expect(form.sourceUrl).toBe("https://espn.example/gamelog");
+    expect(form.summary).toContain("Includes 2025 games.");
+    expect(a.evidence.find((e) => e.category === "matchup")?.sourceUrl).toBe("https://espn.example/team");
+    const hist = a.evidence.find((e) => e.category === "historicalSplits")!;
+    expect(hist.sourceUrl).toBe("https://open-meteo.example");
+    expect(hist.summary).toContain("wind 18 mph");
+    expect(a.warnings.join(" ")).toMatch(/Weather flagged/);
+  });
+
+  it("weights NFL recent form down until 4 current-season games exist", () => {
+    const nflProp: ScorablePropInput = { ...baseProp, sport: "NFL", league: "NFL", propType: "Receiving Yards", line: 60.5 };
+    const hotForm = { recentGames: [90, 85, 88, 92, 80, 95, 84, 91, 87, 89], seasonAverage: 88, seasonStdDev: 5, gamesPlayed: 10, source: "ESPN gamelog" };
+    const full = analyzeProp(nflProp, { playerStats: { ...hotForm, currentSeasonGames: 6 } });
+    const early = analyzeProp(nflProp, { playerStats: { ...hotForm, currentSeasonGames: 1 } });
+    expect(full.scoreBreakdown.recentForm).toBeGreaterThan(early.scoreBreakdown.recentForm);
+    expect(early.scoreBreakdown.recentForm).toBeGreaterThan(50);
+    expect(early.warnings.join(" ")).toMatch(/Only 1 game played this NFL season/);
+    expect(full.warnings.join(" ")).not.toMatch(/NFL season/);
+    // Zero games gets its own wording, and is shrunk hardest.
+    const none = analyzeProp(nflProp, { playerStats: { ...hotForm, currentSeasonGames: 0 } });
+    expect(none.warnings.join(" ")).toMatch(/No games played yet this NFL season/);
+    expect(none.scoreBreakdown.recentForm).toBeLessThan(early.scoreBreakdown.recentForm);
+    // The gate is NFL-specific.
+    const nba = analyzeProp(baseProp, { playerStats: { ...hotForm, currentSeasonGames: 1 } });
+    expect(nba.warnings.join(" ")).not.toMatch(/NFL season/);
+  });
 });

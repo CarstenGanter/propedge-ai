@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { SPORTS, type Sport, type ScoringProfile } from "@/types";
+import { NFL_DEFAULT_MARKETS, PROP_TYPES, SPORTS, type Sport, type ScoringProfile } from "@/types";
 
 export interface AppSettingsData {
   defaultStake: number;
@@ -13,6 +13,23 @@ export interface AppSettingsData {
   scoringProfile: ScoringProfile;
   leaguesEnabled: string[];
   minTeamConfidence: number;
+  /** NFL prop markets to pull from The Odds API (each = 1 credit per game). */
+  nflMarkets: string[];
+  /** Max NFL games to pull props for per slate (credit cap). */
+  nflMaxGames: number;
+  /** Refuse Odds API fetches that would leave fewer credits than this. */
+  oddsCreditFloor: number;
+}
+
+function parseNflMarkets(json: string): string[] {
+  try {
+    const parsed = JSON.parse(json);
+    if (!Array.isArray(parsed)) return [...NFL_DEFAULT_MARKETS];
+    const valid = parsed.filter((m): m is string => typeof m === "string" && PROP_TYPES.NFL.includes(m));
+    return valid.length > 0 ? valid : [...NFL_DEFAULT_MARKETS];
+  } catch {
+    return [...NFL_DEFAULT_MARKETS];
+  }
 }
 
 function envNumber(name: string, fallback: number): number {
@@ -63,6 +80,9 @@ export async function getSettings(): Promise<AppSettingsData> {
     scoringProfile: (row.scoringProfile as ScoringProfile) ?? "balanced",
     leaguesEnabled,
     minTeamConfidence: row.minTeamConfidence,
+    nflMarkets: parseNflMarkets(row.nflMarketsJson),
+    nflMaxGames: row.nflMaxGames,
+    oddsCreditFloor: row.oddsCreditFloor,
   };
 }
 
@@ -84,6 +104,12 @@ export async function saveSettings(patch: Partial<AppSettingsData>): Promise<App
   if (patch.scoringProfile) data.scoringProfile = patch.scoringProfile;
   if (patch.leaguesEnabled) data.leaguesEnabledJson = JSON.stringify(patch.leaguesEnabled);
   if (patch.minTeamConfidence != null) data.minTeamConfidence = patch.minTeamConfidence;
+  if (patch.nflMarkets) {
+    const valid = patch.nflMarkets.filter((m) => PROP_TYPES.NFL.includes(m));
+    data.nflMarketsJson = JSON.stringify(valid.length > 0 ? valid : [...NFL_DEFAULT_MARKETS]);
+  }
+  if (patch.nflMaxGames != null) data.nflMaxGames = Math.max(1, Math.min(20, Math.round(patch.nflMaxGames)));
+  if (patch.oddsCreditFloor != null) data.oddsCreditFloor = Math.max(0, Math.round(patch.oddsCreditFloor));
 
   await prisma.appSettings.update({ where: { id: "singleton" }, data });
   return getSettings();

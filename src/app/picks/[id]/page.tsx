@@ -95,7 +95,7 @@ export default async function PickDetailPage({ params }: { params: Promise<{ id:
 
           <Card>
             <CardHeader><CardTitle>Score breakdown</CardTitle></CardHeader>
-            <CardContent><ScoreBreakdown breakdown={pick.scoreBreakdown} /></CardContent>
+            <CardContent><ScoreBreakdown breakdown={pick.scoreBreakdown} profile={settings.scoringProfile} /></CardContent>
           </Card>
 
           <div className="grid gap-4 sm:grid-cols-2">

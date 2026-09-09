@@ -38,11 +38,16 @@ export const liveStatsProvider: SportsStatsProvider = {
     if (prop.sport === "MLB") {
       return getMlbPlayerStats(prop.playerName, prop.propType);
     }
-    return getEspnPlayerStats(prop.sport, prop.playerName, prop.team, prop.opponent, prop.propType);
+    return getEspnPlayerStats(prop.sport, prop.playerName, prop.team, prop.opponent, prop.propType, prop.date);
   },
   async getMatchup(prop) {
     if (prop.sport === "MLB" && prop.date) {
       return getMlbMatchup(prop.playerName, prop.propType, prop.date);
+    }
+    // NFL: opponent defense vs this stat family from aggregated ESPN box scores.
+    if (prop.sport === "NFL") {
+      const { getNflMatchup } = await import("./live/nflMatchup"); // server-only deps → lazy
+      return getNflMatchup(prop);
     }
     return getEspnMatchup(prop);
   },

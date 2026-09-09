@@ -6,7 +6,7 @@ import { saveSettings, type AppSettingsData } from "@/lib/settings";
 import { seedDemoData, clearDemoDataPublic } from "@/lib/demoSeed";
 
 function revalidateAll() {
-  for (const p of ["/", "/picks", "/research", "/results", "/analytics", "/parlays", "/settings"]) {
+  for (const p of ["/", "/picks", "/nfl", "/research", "/results", "/analytics", "/parlays", "/settings"]) {
     revalidatePath(p);
   }
 }

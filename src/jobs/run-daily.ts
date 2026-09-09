@@ -21,6 +21,14 @@ async function main() {
   for (const g of summary.generated) {
     console.log(`  picks ${g.date}: ${g.created} generated from ${g.evaluated} props`);
   }
+  if (summary.nfl) {
+    const n = summary.nfl;
+    console.log(
+      n.skipped
+        ? `  NFL ${n.date}: skipped — ${n.reason ?? "no games"} (0 credits)`
+        : `  NFL ${n.date}: imported ${n.propsImported} props (~${n.creditsEstimate ?? "?"} credits), ${n.picksCreated} picks${n.reason ? ` (${n.reason})` : ""}`,
+    );
+  }
   console.log(`  settled ${summary.settled} prior pending pick(s) from final games`);
   console.log(`  team picks: generated ${summary.teamsGenerated}, settled ${summary.teamsSettled} prior game(s)`);
   console.log(`[${stamp}] Done. Credits remaining: ${summary.creditsRemaining ?? "unknown"}`);

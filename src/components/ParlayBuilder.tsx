@@ -22,15 +22,28 @@ import { cn } from "@/lib/utils/cn";
 export function ParlayBuilder({
   picks,
   defaultStake,
+  initialSelected,
+  initialMultiplier,
+  date,
 }: {
   picks: SerializedPick[];
   defaultStake: number;
+  /** Pre-selected pick ids (e.g. from an NFL Gameday suggested slip). */
+  initialSelected?: string[];
+  initialMultiplier?: number;
+  /** Slate date to file the parlay under (defaults to today when saved). */
+  date?: string;
 }) {
   const router = useRouter();
-  const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const known = React.useMemo(() => new Set(picks.map((p) => p.id)), [picks]);
+  const [selected, setSelected] = React.useState<Set<string>>(
+    () => new Set((initialSelected ?? []).filter((id) => known.has(id))),
+  );
   const [name, setName] = React.useState("");
   const [stake, setStake] = React.useState(String(defaultStake));
-  const [multiplier, setMultiplier] = React.useState("3");
+  const [multiplier, setMultiplier] = React.useState(
+    initialMultiplier != null && initialMultiplier > 0 ? String(initialMultiplier) : "3",
+  );
   const [placedReal, setPlacedReal] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
   const [msg, setMsg] = React.useState<string | null>(null);
@@ -72,6 +85,7 @@ export function ParlayBuilder({
         payoutMultiplier: multNum,
         pickIds: [...selected],
         placedReal,
+        date,
       });
       if (res.ok) {
         setSelected(new Set());

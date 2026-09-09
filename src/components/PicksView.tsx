@@ -12,15 +12,18 @@ import { DailyRefreshButton } from "@/components/DailyRefreshButton";
 import { SPORTS } from "@/types";
 import { formatSlate } from "@/lib/utils/dates";
 import type { SerializedPick } from "@/lib/dto";
+import type { ScoringProfile } from "@/types";
 
 export function PicksView({
   picks,
   date,
   availablePropCount,
+  profile = "balanced",
 }: {
   picks: SerializedPick[];
   date: string;
   availablePropCount: number;
+  profile?: ScoringProfile;
 }) {
   const router = useRouter();
   const [sport, setSport] = React.useState("All");
@@ -97,7 +100,7 @@ export function PicksView({
       ) : (
         <div className="space-y-3">
           {filtered.map((pick, i) => (
-            <PickCard key={pick.id} pick={pick} defaultOpen={i === 0} />
+            <PickCard key={pick.id} pick={pick} defaultOpen={i === 0} profile={profile} />
           ))}
         </div>
       )}

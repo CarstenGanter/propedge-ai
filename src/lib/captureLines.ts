@@ -6,6 +6,8 @@ import { hasKey } from "@/lib/providers/config";
 import { teamsMatch } from "@/lib/utils/teamName";
 import { isLeague, type League } from "@/lib/teamLeagues";
 import { todaySlate } from "@/lib/utils/dates";
+import { toNflSlateDate } from "@/lib/nfl/slate";
+import { recordOddsCredits } from "@/lib/providerCache";
 import type { Sport, TeamSide } from "@/types";
 
 export interface CaptureSummary {
@@ -63,6 +65,7 @@ export async function captureClosingLines(opts?: {
   for (const league of leagues) {
     const ml = await fetchMoneylines(league, apiKey);
     if (ml.creditsRemaining != null) creditsRemaining = ml.creditsRemaining;
+    await recordOddsCredits(ml.creditsRemaining, null);
     if (!ml.ok) continue;
     for (const pick of teamPicks.filter((p) => p.league === league)) {
       const game = ml.games.find(
@@ -91,8 +94,16 @@ export async function captureClosingLines(opts?: {
     const sports = [...new Set(marketPicks.map((p) => p.playerProp.sport))].filter(oddsApiSupportsSport) as Sport[];
 
     for (const sport of sports) {
-      const res = await fetchPlayerProps(apiKey, sport, opts?.maxEventsPerSport ?? 8);
+      const sportPicks = marketPicks.filter((p) => p.playerProp.sport === sport);
+      // Only re-price the markets we actually hold picks in, and (NFL) only that slate's games.
+      const propTypes = [...new Set(sportPicks.map((p) => p.playerProp.propType))];
+      const res = await fetchPlayerProps(apiKey, sport, {
+        maxEvents: opts?.maxEventsPerSport ?? 8,
+        propTypes,
+        ...(sport === "NFL" ? { slateDate: date, toSlate: toNflSlateDate } : {}),
+      });
       if (res.status.remaining != null) creditsRemaining = res.status.remaining;
+      await recordOddsCredits(res.status.remaining, res.status.used);
       if (res.props.length === 0) continue;
       for (const pick of marketPicks.filter((p) => p.playerProp.sport === sport)) {
         const pp = pick.playerProp;

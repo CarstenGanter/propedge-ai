@@ -1,8 +1,9 @@
 import {
   CATEGORY_LABELS,
-  CATEGORY_WEIGHTS,
+  weightsForProfile,
   type ScoreBreakdown as ScoreBreakdownType,
   type ScoreCategory,
+  type ScoringProfile,
 } from "@/types";
 import { cn } from "@/lib/utils/cn";
 
@@ -25,7 +26,15 @@ function barColor(score: number): string {
   return "bg-danger";
 }
 
-export function ScoreBreakdown({ breakdown }: { breakdown: ScoreBreakdownType }) {
+export function ScoreBreakdown({
+  breakdown,
+  profile = "balanced",
+}: {
+  breakdown: ScoreBreakdownType;
+  /** Scoring profile the pick was generated with — decides which weights to display. */
+  profile?: ScoringProfile;
+}) {
+  const weights = weightsForProfile(profile);
   return (
     <div className="space-y-2.5">
       {ORDER.map((cat) => {
@@ -35,7 +44,7 @@ export function ScoreBreakdown({ breakdown }: { breakdown: ScoreBreakdownType })
             <div className="flex items-center justify-between text-xs">
               <span className="text-foreground/90">{CATEGORY_LABELS[cat]}</span>
               <span className="text-muted-foreground">
-                {Math.round(CATEGORY_WEIGHTS[cat] * 100)}% weight
+                {Math.round(weights[cat] * 100)}% weight
               </span>
             </div>
             <span className="row-span-2 w-10 text-right font-mono text-sm tabular-nums">

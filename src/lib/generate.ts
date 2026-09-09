@@ -27,6 +27,7 @@ export function propToScorable(p: PlayerProp): ScorablePropInput {
     projection: p.projection,
     injuryStatus: p.injuryStatus,
     date: p.date,
+    gameId: p.gameId,
     marketDataJson: p.marketDataJson,
   };
 }
@@ -72,6 +73,7 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
           team: p.team,
           opponent: p.opponent,
           propType: p.propType,
+          date: p.date,
         })),
       );
     }

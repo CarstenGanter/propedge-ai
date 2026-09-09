@@ -16,7 +16,7 @@ import {
   addAvoidItem,
   removeAvoidItem,
 } from "@/server/actions/settings";
-import { SPORTS } from "@/types";
+import { NFL_MARKET_OPTIONS, SPORTS } from "@/types";
 import { TEAM_LEAGUES, LEAGUE_LABELS } from "@/lib/teamLeagues";
 import type { AppSettingsData } from "@/lib/settings";
 import type { ProviderStatus } from "@/lib/providers/config";
@@ -49,6 +49,9 @@ export function SettingsForm({
   const [sports, setSports] = React.useState<string[]>(settings.sportsEnabled);
   const [leagues, setLeagues] = React.useState<string[]>(settings.leaguesEnabled);
   const [minTeamConf, setMinTeamConf] = React.useState(String(settings.minTeamConfidence));
+  const [nflMarkets, setNflMarkets] = React.useState<string[]>(settings.nflMarkets);
+  const [nflMaxGames, setNflMaxGames] = React.useState(String(settings.nflMaxGames));
+  const [creditFloor, setCreditFloor] = React.useState(String(settings.oddsCreditFloor));
   const [saved, setSaved] = React.useState(false);
   const [busy, setBusy] = React.useState<string | null>(null);
 
@@ -162,6 +165,70 @@ export function SettingsForm({
               disabled={pending}
             >
               {pending ? "Saving…" : "Save team settings"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* NFL gameday */}
+      <Card>
+        <CardHeader>
+          <CardTitle>NFL gameday</CardTitle>
+          <CardDescription>
+            Each market costs one Odds API credit per game. A full Sunday is ~13 games, plus Thursday and
+            Monday night. The free tier is 500 credits a month, so the default six markets across every game
+            already use ~415 a month — add markets only if you lower the game cap.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Prop markets to pull</Label>
+            <div className="mt-2 grid gap-1.5 sm:grid-cols-3">
+              {NFL_MARKET_OPTIONS.map((m) => {
+                const on = nflMarkets.includes(m.propType);
+                return (
+                  <button
+                    key={m.propType}
+                    onClick={() =>
+                      setNflMarkets((prev) =>
+                        prev.includes(m.propType) ? prev.filter((x) => x !== m.propType) : [...prev, m.propType],
+                      )
+                    }
+                    className={cn(
+                      "rounded-lg border px-3 py-2 text-left text-xs transition-colors",
+                      on ? "border-primary/40 bg-primary/12 text-primary" : "border-border bg-muted/30 text-muted-foreground",
+                    )}
+                  >
+                    <span className="font-medium">{m.propType}</span>
+                    <span className="block text-[11px] opacity-80">{m.note}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <Field label="Max games per slate">
+              <Input type="number" step="1" min="1" max="20" value={nflMaxGames} onChange={(e) => setNflMaxGames(e.target.value)} className="w-28" />
+            </Field>
+            <Field label="Credit floor (never go below)">
+              <Input type="number" step="1" min="0" value={creditFloor} onChange={(e) => setCreditFloor(e.target.value)} className="w-28" />
+            </Field>
+            <p className="pb-2 text-xs text-muted-foreground">
+              Full Sunday ≈ {Math.min(13, Number(nflMaxGames) || 0)} × {nflMarkets.length} ={" "}
+              <span className="text-foreground">{Math.min(13, Number(nflMaxGames) || 0) * nflMarkets.length} credits</span>
+              {" "}· week with TNF + MNF ≈ {Math.min(15, Number(nflMaxGames) || 0) * nflMarkets.length}
+            </p>
+            <Button
+              onClick={() =>
+                persist({
+                  nflMarkets,
+                  nflMaxGames: Number(nflMaxGames) || 16,
+                  oddsCreditFloor: Number(creditFloor) || 0,
+                })
+              }
+              disabled={pending || nflMarkets.length === 0}
+            >
+              {pending ? "Saving…" : "Save NFL settings"}
             </Button>
           </div>
         </CardContent>

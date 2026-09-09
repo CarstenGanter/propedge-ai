@@ -35,6 +35,14 @@ export function getProviderStatuses(): ProviderStatus[] {
         : "Set ENABLE_WEB_RESEARCH=true to fetch live box scores/schedules.",
     },
     {
+      key: "openmeteo",
+      label: "Open-Meteo weather (no key)",
+      configured: envFlag("ENABLE_WEB_RESEARCH"),
+      detail: envFlag("ENABLE_WEB_RESEARCH")
+        ? "NFL kickoff forecasts (temperature, wind, precipitation) for outdoor stadiums."
+        : "Enabled together with live research — NFL kickoff wind/rain/cold checks.",
+    },
+    {
       key: "sportsdata",
       label: "SportsDataIO",
       configured: hasKey("SPORTSDATA_API_KEY"),
