@@ -171,6 +171,8 @@ export function pickToRecord(pick: Pick & { playerProp: PlayerProp }): PickRecor
     confidenceScore: pick.confidenceScore,
     status: pick.status as SettlementStatus,
     date: pick.date,
+    placedReal: pick.placedReal,
+    isDemo: pick.isDemo,
   };
 }
 

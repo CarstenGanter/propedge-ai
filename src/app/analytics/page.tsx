@@ -14,6 +14,7 @@ import {
   computeRecord,
   computeTeamRecord,
   cumulativePLSeries,
+  filterRecords,
   groupRecords,
   profitLossBy,
   recordByDirection,
@@ -23,8 +24,10 @@ import {
   summarizeBankroll,
   teamRecordByLeague,
   avgConfidenceWinnersVsLosers,
+  type AccuracyScope,
   type GroupedRecord,
 } from "@/lib/analytics";
+import { AccuracyFilterBar } from "@/components/AccuracyFilterBar";
 import { LEAGUE_LABELS, type League } from "@/lib/teamLeagues";
 import { computeCalibration, recentTrend } from "@/lib/analysis/calibration";
 import { brierScore, logLoss, brierSkillScore, clvSummary } from "@/lib/analysis/modelQuality";
@@ -35,8 +38,16 @@ import { cn } from "@/lib/utils/cn";
 
 export const dynamic = "force-dynamic";
 
-export default async function AnalyticsPage() {
-  const [records, bankroll, settings, teamRecords, propModel, teamModel] = await Promise.all([
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ scope?: string; sport?: string }>;
+}) {
+  const params = await searchParams;
+  const scope: AccuracyScope = params.scope === "mine" ? "mine" : "all";
+  const sportParam = params.sport ?? "All";
+
+  const [allRecords, bankroll, settings, teamRecords, propModel, teamModel] = await Promise.all([
     getAllPickRecords(),
     getBankrollRecords(),
     getSettings(),
@@ -44,6 +55,15 @@ export default async function AnalyticsPage() {
     getPropModelInputs(),
     getTeamModelInputs(),
   ]);
+
+  // Accuracy views are scoped; demo-seeded picks are excluded so synthetic
+  // results never inflate a real hit rate.
+  const realRecords = allRecords.filter((r) => !r.isDemo);
+  const sportsPresent = [...new Set(realRecords.map((r) => r.sport))].sort();
+  const sport = sportsPresent.includes(sportParam) ? sportParam : "All";
+  const records = filterRecords(allRecords, { scope, sport });
+  const mineCount = filterRecords(allRecords, { scope: "mine", sport }).length;
+  const allCount = filterRecords(allRecords, { scope: "all", sport }).length;
 
   // ---- Model quality: calibration score (Brier / log-loss) + closing-line value ----
   const propCalib = propModel
@@ -102,9 +122,29 @@ export default async function AnalyticsPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
         <p className="text-sm text-muted-foreground">
-          Lifetime accuracy, ROI, calibration and trends. Past performance does not ensure future results.
+          {scope === "mine"
+            ? "How the picks you actually took have performed."
+            : "How every pick the model produced has performed."}{" "}
+          {sport !== "All" && `${sport} only. `}
+          Demo data is excluded. Past performance does not ensure future results.
         </p>
       </div>
+
+      <AccuracyFilterBar
+        scope={scope}
+        sport={sport}
+        sports={sportsPresent}
+        mineCount={mineCount}
+        allCount={allCount}
+      />
+
+      {scope === "mine" && mineCount === 0 && (
+        <div className="rounded-lg border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-foreground/90">
+          You haven&apos;t marked any picks as taken yet. On NFL Gameday or Today&apos;s Picks, click{" "}
+          <span className="font-medium">I took this</span> on a pick and it will be scored here once the
+          game settles.
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Overall record" value={`${overall.hits}-${overall.misses}`} sub={`${overall.pushes + overall.voids} push/void`} />
@@ -182,6 +222,17 @@ export default async function AnalyticsPage() {
         </TabsList>
 
         <TabsContent value="accuracy" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Accuracy by prop type</CardTitle>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Hit rate for each kind of pick — passing yards, receptions, rush attempts and so on.
+                A rate is only shown once a category has at least {MIN_SAMPLE} decided picks, because
+                anything less is noise rather than a trend.
+              </p>
+            </CardHeader>
+            <CardContent><RecordTable groups={byPropType} showSample /></CardContent>
+          </Card>
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader><CardTitle>Hit rate by sport</CardTitle></CardHeader>
@@ -189,17 +240,27 @@ export default async function AnalyticsPage() {
             </Card>
             <Card>
               <CardHeader><CardTitle>By confidence tier</CardTitle></CardHeader>
-              <CardContent><RecordTable groups={byTier} /></CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle>By prop type</CardTitle></CardHeader>
-              <CardContent><RecordTable groups={byPropType} /></CardContent>
+              <CardContent><RecordTable groups={byTier} showSample /></CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle>By direction & league</CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                <RecordTable groups={byDirection} />
-                <RecordTable groups={byLeague} />
+                <RecordTable groups={byDirection} showSample />
+                <RecordTable groups={byLeague} showSample />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle>Still pending</CardTitle></CardHeader>
+              <CardContent className="text-sm text-muted-foreground">
+                {overall.pending > 0 ? (
+                  <>
+                    <span className="font-medium text-foreground">{overall.pending}</span> pick
+                    {overall.pending === 1 ? "" : "s"} not settled yet. Results auto-settle from ESPN box
+                    scores the morning after a game, or settle them by hand on the Results page.
+                  </>
+                ) : (
+                  "Everything in this view has been settled."
+                )}
               </CardContent>
             </Card>
           </div>
@@ -349,22 +410,37 @@ function QualityTable({
   );
 }
 
-function RecordTable({ groups }: { groups: GroupedRecord[] }) {
+/** Below this many decided picks a hit rate is noise, so we show the record only. */
+const MIN_SAMPLE = 5;
+
+function RecordTable({ groups, showSample = false }: { groups: GroupedRecord[]; showSample?: boolean }) {
   const rows = groups.filter((g) => g.record.total > 0);
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">No data yet.</p>;
   return (
     <div className="space-y-2">
       {rows.map(({ key, record }) => {
         const decided = record.hits + record.misses;
+        const enough = decided >= MIN_SAMPLE;
         return (
           <div key={key} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 text-sm">
-            <span className="truncate">{key}</span>
+            <span className="truncate">
+              {key}
+              {showSample && record.pending > 0 && (
+                <span className="ml-1.5 text-xs text-muted-foreground">+{record.pending} pending</span>
+              )}
+            </span>
             <span className="text-muted-foreground tabular-nums">
               {record.hits}-{record.misses}
               {record.pushes ? `-${record.pushes}` : ""}
             </span>
-            <span className={cn("w-14 text-right font-medium tabular-nums", decided ? "text-foreground" : "text-muted-foreground")}>
-              {decided ? formatPercent(record.hitRate, 0) : "—"}
+            <span
+              className={cn(
+                "w-24 text-right font-medium tabular-nums",
+                enough ? "text-foreground" : "text-muted-foreground",
+              )}
+              title={enough ? undefined : `Only ${decided} decided pick(s) — too few to read a rate from.`}
+            >
+              {!decided ? "—" : enough ? formatPercent(record.hitRate, 0) : `${decided} decided`}
             </span>
           </div>
         );

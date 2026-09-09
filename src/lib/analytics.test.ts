@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeRecord,
+  filterRecords,
   profitLossBy,
   summarizeBankroll,
   type BankrollRecord,
@@ -79,5 +80,45 @@ describe("computeCalibration", () => {
     const b = points.find((p) => p.bucket === "70-79")!;
     expect(b.count).toBe(2);
     expect(b.actual).toBe(50);
+  });
+});
+
+describe("filterRecords", () => {
+  const rec = (over: Partial<PickRecord>): PickRecord => ({
+    sport: "NFL",
+    league: "NFL",
+    propType: "Receiving Yards",
+    direction: "OVER",
+    confidenceScore: 60,
+    status: "hit",
+    date: "2026-09-13",
+    ...over,
+  });
+  const records: PickRecord[] = [
+    rec({ placedReal: true }),
+    rec({ placedReal: false }),
+    rec({ sport: "MLB", propType: "Hits", placedReal: true }),
+    rec({ placedReal: true, isDemo: true }),
+  ];
+
+  it("defaults to every real pick across sports", () => {
+    expect(filterRecords(records, { scope: "all", sport: "All" })).toHaveLength(3);
+  });
+
+  it("keeps only picks the user marked as taken", () => {
+    const mine = filterRecords(records, { scope: "mine", sport: "All" });
+    expect(mine).toHaveLength(2);
+    expect(mine.every((r) => r.placedReal)).toBe(true);
+  });
+
+  it("narrows to one sport", () => {
+    expect(filterRecords(records, { scope: "all", sport: "NFL" })).toHaveLength(2);
+    expect(filterRecords(records, { scope: "mine", sport: "NFL" })).toHaveLength(1);
+    expect(filterRecords(records, { scope: "mine", sport: "MLB" })).toHaveLength(1);
+  });
+
+  it("excludes demo picks so synthetic results never inflate a hit rate", () => {
+    expect(filterRecords(records, { scope: "mine", sport: "All" }).some((r) => r.isDemo)).toBe(false);
+    expect(filterRecords(records, { scope: "mine", sport: "All", includeDemo: true })).toHaveLength(3);
   });
 });

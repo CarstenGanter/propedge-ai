@@ -10,6 +10,30 @@ export interface PickRecord {
   confidenceScore: number;
   status: SettlementStatus;
   date: string;
+  /** True when you marked this pick as one you actually took. */
+  placedReal?: boolean;
+  isDemo?: boolean;
+}
+
+/** Which picks an accuracy view covers. */
+export type AccuracyScope = "all" | "mine";
+
+export interface AccuracyFilter {
+  scope: AccuracyScope;
+  /** Sport name, or "All". */
+  sport: string;
+  /** Exclude demo-seeded picks (they are synthetic and would skew accuracy). */
+  includeDemo?: boolean;
+}
+
+/** Narrow a record set to one scope/sport (pure, tested). */
+export function filterRecords(records: PickRecord[], f: AccuracyFilter): PickRecord[] {
+  return records.filter((r) => {
+    if (f.scope === "mine" && !r.placedReal) return false;
+    if (f.sport !== "All" && r.sport !== f.sport) return false;
+    if (!f.includeDemo && r.isDemo) return false;
+    return true;
+  });
 }
 
 export interface BankrollRecord {

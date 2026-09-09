@@ -8,7 +8,35 @@ import { todaySlate } from "@/lib/utils/dates";
 import type { SettlementStatus } from "@/types";
 
 function revalidateAll() {
-  for (const p of ["/", "/picks", "/results", "/analytics"]) revalidatePath(p);
+  for (const p of ["/", "/picks", "/nfl", "/results", "/analytics"]) revalidatePath(p);
+}
+
+/**
+ * Mark a pick as one you actually took (or un-mark it). Sets `Pick.placedReal`
+ * — the flag the analytics "My picks" scope filters on — and mirrors it into a
+ * bankroll entry so profit/loss tracks too. Settlement then flows to both.
+ */
+export async function setPickTaken(input: {
+  pickId: string;
+  taken: boolean;
+  stake?: number;
+}): Promise<{ ok: boolean; taken: boolean }> {
+  const pick = await prisma.pick.findUnique({ where: { id: input.pickId } });
+  if (!pick) return { ok: false, taken: false };
+
+  await prisma.pick.update({
+    where: { id: input.pickId },
+    data: { placedReal: input.taken },
+  });
+  await setPickBet({
+    pickId: input.pickId,
+    mode: input.taken ? "single" : "none",
+    stake: input.stake,
+    placedReal: input.taken,
+  });
+
+  revalidateAll();
+  return { ok: true, taken: input.taken };
 }
 
 /** Mark a pick as bet as a single (creates/updates its bankroll entry) or not bet. */

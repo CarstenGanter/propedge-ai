@@ -16,6 +16,7 @@ import {
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
 import { EvidenceList } from "@/components/EvidenceList";
 import { UnderdogEdgeBadge, UnderdogLineInput } from "@/components/UnderdogLine";
+import { TrackPickButton } from "@/components/TrackPickButton";
 import { formatSignedNumber } from "@/lib/utils/format";
 import { formatGameDateTime } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
@@ -64,13 +65,18 @@ export function PickCard({
             <ConfidenceBadge score={pick.confidenceScore} />
             <RiskBadge risk={pick.riskLevel} />
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <TrendingUp className="h-3 w-3" /> edge {formatSignedNumber(pick.edgeScore)}
             </span>
             {pick.underdogEdge != null && <UnderdogEdgeBadge edge={pick.underdogEdge} />}
             <StatusBadge status={pick.status} />
           </div>
+          <TrackPickButton
+            pickId={pick.id}
+            taken={pick.placedReal}
+            stake={pick.recommendedStake}
+          />
         </div>
       </div>
 
