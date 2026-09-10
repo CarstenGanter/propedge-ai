@@ -11,6 +11,7 @@ import { PickCard } from "@/components/PickCard";
 import { NflFetchButton } from "./NflFetchButton";
 import { NflGameCard } from "./NflGameCard";
 import { NflSlipsPanel } from "./NflSlipsPanel";
+import { UnderdogLineTable } from "./UnderdogLineTable";
 import { generateNflPicksAction, refreshNflContextAction } from "@/server/actions/nfl";
 import { formatSlate } from "@/lib/utils/dates";
 import type { NflGamedayData } from "@/lib/nfl/gameday";
@@ -128,6 +129,7 @@ export function NflGamedayView({ data }: { data: NflGamedayData }) {
       ) : (
         <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
           <div className="space-y-4">
+            <UnderdogLineTable picks={allPicks.filter((p) => p.status === "pending")} />
             {data.contextsCached < data.games.length && (
               <Note>
                 Game context (injury reports, spread/total, kickoff weather) is loaded for {data.contextsCached} of{" "}

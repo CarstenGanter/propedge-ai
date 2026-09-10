@@ -1,8 +1,10 @@
 import type { MatchupContext, ScorablePropInput } from "@/types";
-import { normalizeTeamName } from "@/lib/utils/teamName";
+import { normalizeTeamName, teamsMatch } from "@/lib/utils/teamName";
 import { nflSeasonForDate, statFamilyForProp } from "@/lib/nfl/slate";
 import { familyUnit, paceBucket, pickDefenseBasis } from "@/lib/nfl/defense";
 import { getDefenseAgg } from "@/lib/nfl/defenseCache";
+import { gameEnvironmentFavor } from "@/lib/nfl/gameEnvironment";
+import { getNflGameContextForProp } from "@/lib/nfl/gameContext";
 import { resolveEspnAthlete } from "./espnPlayerStats";
 
 /**
@@ -21,6 +23,23 @@ export async function getNflMatchup(prop: ScorablePropInput): Promise<MatchupCon
   const opponentName = ref.teamName === prop.team ? prop.opponent : prop.team;
   const oppKey = normalizeTeamName(opponentName);
 
+  // Game environment: posted total + spread-implied script. ESPN reports the
+  // spread from the HOME team's perspective (negative = home favored), so flip
+  // it when our player is on the road.
+  const { game, context } = await getNflGameContextForProp(prop).catch(() => ({ game: null, context: null }));
+  let environment: ReturnType<typeof gameEnvironmentFavor> = null;
+  if (context?.odds && game) {
+    const isHome = teamsMatch(ref.teamName, game.home.name);
+    const homeSpread = context.odds.spread;
+    const teamSpread = homeSpread == null ? null : isHome ? homeSpread : -homeSpread;
+    environment = gameEnvironmentFavor({
+      propType: prop.propType,
+      direction: prop.direction,
+      gameTotal: context.odds.overUnder,
+      teamSpread,
+    });
+  }
+
   const { season, prior } = nflSeasonForDate(prop.date);
   const [current, priorAgg] = await Promise.all([getDefenseAgg(season), getDefenseAgg(prior)]);
   if (!current && !priorAgg) return undefined;
@@ -34,10 +53,19 @@ export async function getNflMatchup(prop: ScorablePropInput): Promise<MatchupCon
     return null;
   };
   const key = findKey(current) ?? findKey(priorAgg);
-  if (!key) return undefined;
-
-  const basis = pickDefenseBasis(current, priorAgg, key, family);
-  if (!basis) return undefined;
+  const basis = key ? pickDefenseBasis(current, priorAgg, key, family) : null;
+  if (!basis) {
+    // No defense data, but the game environment alone is still worth scoring.
+    if (!environment) return undefined;
+    return {
+      environmentFavor: environment.favor,
+      environmentNote: environment.note,
+      blowoutRisk: environment.blowoutRisk,
+      opponentContext: `Opponent defense data unavailable for ${opponentName}.`,
+      source: `${context?.odds?.provider ?? "ESPN"} line via ESPN`,
+      sourceUrl: context?.sourceUrl,
+    };
+  }
 
   const source = basis.basis === "current" ? current! : priorAgg!;
   const pace = paceBucket(basis.agg.playsFacedPg, [...source.values()].map((a) => a.playsFacedPg));
@@ -51,10 +79,13 @@ export async function getNflMatchup(prop: ScorablePropInput): Promise<MatchupCon
     opponentDefenseRank: basis.rank.rank,
     leagueSize: basis.ranks.size,
     pace,
+    environmentFavor: environment?.favor,
+    environmentNote: environment?.note,
+    blowoutRisk: environment?.blowoutRisk,
     opponentContext:
       `${basis.agg.team} allow ${basis.rank.allowedPg} ${unit}/game (rank ${basis.rank.rank}/${basis.ranks.size}; ` +
       `${basis.agg.playsFacedPg} plays faced/game). Basis: ${basisText}.`,
-    source: "ESPN box scores (aggregated)",
+    source: environment ? "ESPN box scores (aggregated) + posted line" : "ESPN box scores (aggregated)",
     sourceUrl: `https://www.espn.com/nfl/team/stats/_/name/${encodeURIComponent(basis.agg.team.toLowerCase().split(" ").pop() ?? "")}`,
   };
 }

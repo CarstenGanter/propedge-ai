@@ -24,6 +24,10 @@ export const SCORING_MODEL_VERSION = "v1.2.0";
 
 /** NFL: full recent-form weight needs at least this many current-season games. */
 const NFL_FULL_FORM_GAMES = 4;
+/** Points the game environment (total + script) can move the matchup sub-score. */
+const ENVIRONMENT_POINTS = 18;
+/** Books needed before a de-vigged market probability is trusted at full strength. */
+const FULL_TRUST_BOOKS = 4;
 
 interface CategoryResult {
   score: number; // 0..100, 50 = neutral
@@ -222,6 +226,19 @@ function scoreMatchup(
     acc += (prop.direction === "OVER" ? paceFavor : -paceFavor) * 6;
     parts.push(`${m.pace} pace/environment.`);
   }
+  // Game environment (posted total + spread-implied script), already signed for
+  // this pick's direction by the provider that understands the sport.
+  if (m.environmentFavor != null) {
+    acc += clamp(m.environmentFavor, -1, 1) * ENVIRONMENT_POINTS;
+    if (m.environmentNote) parts.push(m.environmentNote);
+    if (m.environmentFavor >= 0.35) res.reasonsFor.push("Game total and script point this way.");
+    if (m.environmentFavor <= -0.35) res.reasonsAgainst.push("Game total and script work against this pick.");
+  }
+  if (m.blowoutRisk) {
+    res.warnings.push(
+      "Double-digit spread — a blowout can pull starters or flip the game script, which cuts volume either way.",
+    );
+  }
   res.score = clamp(acc, 0, 100);
   res.evidence.push({
     category: "matchup",
@@ -402,19 +419,29 @@ function scoreMarketEdge(
   const scale = Math.max(prop.line * 0.12, 0.75);
   let score = marginToScore(edge, scale);
 
-  // The de-vigged market probability is the strongest single market signal.
+  // The de-vigged market probability is the strongest single market signal, but
+  // a consensus of one or two books is thin — trust it proportionally.
   if (noVigApplicable && pOver != null) {
     const pFavored = prop.direction === "OVER" ? pOver : 1 - pOver;
+    const books = market?.bookCount ?? 1;
+    const trust = clamp(books / FULL_TRUST_BOOKS, 0.3, 1);
     const probScore = clamp(50 + (pFavored - 0.5) * 300, 0, 100);
-    // Let the no-vig probability drive the market sub-score.
-    score = probScore;
+    // Let the no-vig probability drive the market sub-score, shrunk toward
+    // neutral when few books priced it.
+    score = 50 + (probScore - 50) * trust;
     parts.unshift(
       `Market no-vig win probability ${(pFavored * 100).toFixed(1)}%` +
-        (market?.bookCount ? ` across ${market.bookCount} book(s).` : "."),
+        (market?.bookCount ? ` across ${market.bookCount} book(s).` : ".") +
+        (trust < 1 ? ` Thin consensus — market signal weighted at ${Math.round(trust * 100)}%.` : ""),
     );
-    if (pFavored >= 0.55)
+    if (books <= 2) {
+      res.warnings.push(
+        `Only ${books} book${books === 1 ? "" : "s"} posted this line — the market consensus is thin and the line may be stale or soft.`,
+      );
+    }
+    if (pFavored >= 0.55 && trust >= 0.75)
       res.reasonsFor.push(`Sharp market gives the ${overUnderWord(prop.direction)} a ${(pFavored * 100).toFixed(0)}% no-vig win probability.`);
-    if (pFavored <= 0.47)
+    if (pFavored <= 0.47 && trust >= 0.75)
       res.reasonsAgainst.push(`Market no-vig probability (${(pFavored * 100).toFixed(0)}%) does not favor this side.`);
   }
 

@@ -140,7 +140,7 @@ export function weightsForProfile(profile: ScoringProfile): Record<ScoreCategory
 export const CATEGORY_LABELS: Record<ScoreCategory, string> = {
   recentForm: "Recent Form",
   seasonBaseline: "Season Baseline",
-  matchup: "Matchup Quality",
+  matchup: "Matchup & Game Script",
   roleUsage: "Role & Usage",
   injuryNews: "Injury & News",
   marketEdge: "Market & Projection Edge",
@@ -216,6 +216,15 @@ export interface MatchupContext {
   pace?: "fast" | "average" | "slow";
   /** Human-readable matchup note, e.g. "vs SP Gerrit Cole (2.90 ERA, 1.05 WHIP)". */
   opponentContext?: string;
+  /**
+   * Game environment (total + game script), already resolved for this pick's
+   * direction: -1 works fully against it, +1 fully for it. Providers compute it
+   * because the sport decides what a spread implies; the engine just weighs it.
+   */
+  environmentFavor?: number;
+  environmentNote?: string;
+  /** Set when the spread is lopsided enough that game script / resting is a risk. */
+  blowoutRisk?: boolean;
   source: string;
   sourceUrl?: string;
   isDemo?: boolean;

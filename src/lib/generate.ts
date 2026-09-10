@@ -36,6 +36,8 @@ export interface GenerationSummary {
   date: string;
   created: number;
   evaluated: number;
+  /** Picks you had marked as taken that were carried through the re-rank. */
+  restoredTaken?: number;
   filtered: { reason: string; count: number }[];
 }
 
@@ -50,6 +52,19 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
   const props = await prisma.playerProp.findMany({
     where: { date, status: "pending" },
   });
+
+  // Picks you marked as taken must survive a re-rank. The marking belongs to the
+  // prop, but the Pick row is recreated below (and its bankroll entry cascades
+  // away with it), so capture both first and restore them after.
+  const takenBefore = await prisma.pick.findMany({
+    where: { date, status: "pending", placedReal: true },
+    select: { playerPropId: true, bankrollEntries: { where: { entryType: "single" }, select: { stake: true, placedReal: true } } },
+  });
+  const takenStakes = new Map<string, { stake: number | null; placedReal: boolean }>();
+  for (const t of takenBefore) {
+    const entry = t.bankrollEntries[0];
+    takenStakes.set(t.playerPropId, { stake: entry?.stake ?? null, placedReal: entry?.placedReal ?? true });
+  }
 
   // Drop existing pending picks for the date so we can re-rank cleanly.
   await prisma.pick.deleteMany({ where: { date, status: "pending" } });
@@ -158,12 +173,15 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
   const top = candidates.slice(0, settings.maxDailyPicks);
 
   let rank = 1;
+  let restored = 0;
   for (const { prop, analysis, entryProb } of top) {
-    await prisma.pick.create({
+    const wasTaken = takenStakes.get(prop.id);
+    const created = await prisma.pick.create({
       data: {
         playerPropId: prop.id,
         date,
         entryProb,
+        placedReal: wasTaken != null,
         confidenceScore: analysis.confidenceScore,
         edgeScore: analysis.edgeScore,
         riskLevel: analysis.riskLevel,
@@ -192,11 +210,38 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
         },
       },
     });
+
+    // Re-attach the bankroll entry that cascaded away with the old pick row.
+    if (wasTaken) {
+      await prisma.bankrollEntry.create({
+        data: {
+          date,
+          pickId: created.id,
+          entryType: "single",
+          stake: wasTaken.stake ?? created.recommendedStake,
+          payout: 0,
+          profitLoss: 0,
+          status: "pending",
+          placedReal: wasTaken.placedReal,
+          isDemo: prop.isDemo,
+        },
+      });
+      restored++;
+    }
+  }
+
+  // A pick you took that no longer clears the bar would silently vanish — say so.
+  const droppedTaken = [...takenStakes.keys()].filter(
+    (propId) => !top.some((t) => t.prop.id === propId),
+  ).length;
+  if (droppedTaken > 0) {
+    filters[`Dropped from the board but you had taken ${droppedTaken}`] = droppedTaken;
   }
 
   return {
     date,
     created: top.length,
+    restoredTaken: restored,
     evaluated: props.length,
     filtered: Object.entries(filters)
       .filter(([, count]) => count > 0)

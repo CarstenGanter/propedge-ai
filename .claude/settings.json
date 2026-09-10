@@ -4,7 +4,11 @@
       "Bash(echo \"lint-exit=$?\")",
       "Bash(curl -s -o /dev/null -w \"/analytics?scope=mine %{http_code}\\\\n\" \"http://localhost:3000/analytics?scope=mine&sport=NFL\")",
       "Bash(curl -s \"http://localhost:3000/nfl\" -o /tmp/n.html)",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(python3 -)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(node --conditions=react-server --env-file=.env --import tsx -e ' *)"
     ]
   }
 }
