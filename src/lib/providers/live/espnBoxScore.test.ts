@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractFootballBoxStat, type EspnStatGroup } from "./espn";
+import { appearsInBoxScore, extractFootballBoxStat, nameMatches, nameParts, type EspnStatGroup } from "./espn";
 
 // Verified NFL box-score shape (group name + machine keys + parallel stats).
 const groups: EspnStatGroup[] = [
@@ -64,12 +64,62 @@ describe("extractFootballBoxStat", () => {
     expect(extractFootballBoxStat(groups, "B. Mayfield", "Passing Yards")).toBe(167);
   });
 
-  it("returns null when the player is absent from every relevant group (DNP)", () => {
+  it("returns null only when the player appears nowhere in the box score", () => {
+    // Never listed at all → may have been inactive, so we refuse to guess.
     expect(extractFootballBoxStat(groups, "Chris Godwin", "Receiving Yards")).toBeNull();
-    expect(extractFootballBoxStat(groups, "Emeka Egbuka", "Passing Yards")).toBeNull();
+  });
+
+  it("scores a real zero when the player played but recorded nothing in that group", () => {
+    // Bucky Irving rushed and caught passes but threw nothing.
+    expect(extractFootballBoxStat(groups, "Bucky Irving", "Passing Yards")).toBe(0);
+    // A back who played but had no catches is 0 receptions, not unknown.
+    const rushOnly: EspnStatGroup[] = [
+      {
+        name: "rushing",
+        keys: ["rushingAttempts", "rushingYards", "yardsPerRushAttempt", "rushingTouchdowns", "longRushing"],
+        athletes: [{ athlete: { displayName: "Blake Corum" }, stats: ["10", "54", "5.4", "0", "13"] }],
+      },
+      { name: "receiving", keys: ["receptions", "receivingYards"], athletes: [] },
+    ];
+    expect(extractFootballBoxStat(rushOnly, "Blake Corum", "Receptions")).toBe(0);
+    expect(extractFootballBoxStat(rushOnly, "Blake Corum", "Receiving Yards")).toBe(0);
+    expect(extractFootballBoxStat(rushOnly, "Blake Corum", "Rush+Rec Yards")).toBe(54);
+    expect(extractFootballBoxStat(rushOnly, "Someone Else", "Receptions")).toBeNull();
   });
 
   it("returns null for an unsupported prop type", () => {
     expect(extractFootballBoxStat(groups, "Baker Mayfield", "Anytime TD")).toBeNull();
+  });
+
+  it("detects box-score participation", () => {
+    expect(appearsInBoxScore(groups, "Bucky Irving")).toBe(true);
+    expect(appearsInBoxScore(groups, "Chris Godwin")).toBe(false);
+  });
+});
+
+describe("name matching with generational suffixes", () => {
+  it("strips Jr/Sr/II/III/IV so book names match ESPN names", () => {
+    expect(nameParts("Deebo Samuel Sr.")).toEqual(["deebo", "samuel"]);
+    expect(nameParts("Michael Pittman Jr.")).toEqual(["michael", "pittman"]);
+    expect(nameParts("Kenneth Walker III")).toEqual(["kenneth", "walker"]);
+    expect(nameMatches("Deebo Samuel Sr.", "Deebo Samuel")).toBe(true);
+    expect(nameMatches("Michael Pittman Jr.", "Michael Pittman")).toBe(true);
+    expect(nameMatches("Brian Thomas Jr.", "Brian Thomas Jr.")).toBe(true);
+    expect(nameMatches("Travis Etienne Jr.", "Travis Etienne")).toBe(true);
+  });
+
+  it("still matches on last name plus first initial, and accents", () => {
+    expect(nameMatches("B. Mayfield", "Baker Mayfield")).toBe(true);
+    expect(nameMatches("José Alvarado", "Jose Alvarado")).toBe(true);
+  });
+
+  it("does not match different people", () => {
+    expect(nameMatches("Deebo Samuel", "Curtis Samuel")).toBe(false);
+    expect(nameMatches("Kyren Williams", "Jameson Williams")).toBe(false);
+    expect(nameMatches("", "Deebo Samuel")).toBe(false);
+  });
+
+  it("does not strip a lone name that is only a suffix", () => {
+    expect(nameParts("Jr")).toEqual(["jr"]);
   });
 });

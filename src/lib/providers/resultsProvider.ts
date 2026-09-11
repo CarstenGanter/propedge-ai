@@ -95,7 +95,9 @@ export const liveResultsProvider: ResultsProvider = {
           actualResult: null,
           source: "ESPN",
           resolved: false,
-          note: "Game final, but this stat/player could not be parsed — settle manually.",
+          note:
+            "Game is final but this player recorded nothing anywhere in the box score — " +
+            "they were likely inactive or did not take the field. Settle manually.",
         };
       }
       return { actualResult: stat, source: "ESPN box score", resolved: true };

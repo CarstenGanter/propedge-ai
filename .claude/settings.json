@@ -8,7 +8,9 @@
       "Bash(node --input-type=module -e ' *)",
       "Bash(python3 -)",
       "Bash(echo \"exit=$?\")",
-      "Bash(node --conditions=react-server --env-file=.env --import tsx -e ' *)"
+      "Bash(node --conditions=react-server --env-file=.env --import tsx -e ' *)",
+      "Bash(echo \"typecheck exit=$?\")",
+      "Bash(node --conditions=react-server --env-file=.env --import tsx /tmp/settle-now.ts 2026-09-10)"
     ]
   }
 }

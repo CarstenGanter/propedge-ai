@@ -74,19 +74,33 @@ export function normalizeName(name: string): string {
     .normalize("NFD")
     .replace(COMBINING_MARKS, "")
     .replace(/[^a-z\s]/g, "")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
+/**
+ * Generational suffixes, which the NFL is full of. ESPN writes "Deebo Samuel
+ * Sr." where the sportsbooks write "Deebo Samuel"; without stripping these the
+ * suffix becomes the surname and every such player fails to match.
+ */
+const NAME_SUFFIXES = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
+
+/** Name words with any generational suffix removed (exported for tests). */
+export function nameParts(name: string): string[] {
+  const parts = normalizeName(name).split(" ").filter(Boolean);
+  while (parts.length > 1 && NAME_SUFFIXES.has(parts[parts.length - 1])) parts.pop();
+  return parts;
+}
+
 export function nameMatches(a: string, b: string): boolean {
-  const na = normalizeName(a);
-  const nb = normalizeName(b);
-  if (na === nb) return true;
-  const aParts = na.split(/\s+/);
-  const bParts = nb.split(/\s+/);
+  const pa = nameParts(a);
+  const pb = nameParts(b);
+  if (pa.length === 0 || pb.length === 0) return false;
+  if (pa.join(" ") === pb.join(" ")) return true;
   // last name + first initial match
-  const aLast = aParts[aParts.length - 1];
-  const bLast = bParts[bParts.length - 1];
-  return aLast === bLast && aParts[0]?.[0] === bParts[0]?.[0];
+  const aLast = pa[pa.length - 1];
+  const bLast = pb[pb.length - 1];
+  return aLast === bLast && pa[0][0] === pb[0][0];
 }
 
 interface EspnEvent {
@@ -268,10 +282,22 @@ function parsePart(raw: string, part?: "first" | "second"): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
+/** Did this player record a stat in any group of the final box score? */
+export function appearsInBoxScore(groups: EspnStatGroup[], playerName: string): boolean {
+  return groups.some((g) =>
+    (g.athletes ?? []).some((a) => a.athlete?.displayName && nameMatches(a.athlete.displayName, playerName)),
+  );
+}
+
 /**
- * Pure football box-score extractor (exported for tests). Returns null when the
- * player appears in none of the relevant groups (DNP → manual settlement). For
- * summed props, a player present in one group but not the other counts 0 there.
+ * Pure football box-score extractor (exported for tests). For summed props, a
+ * player present in one group but not the other counts 0 there.
+ *
+ * ESPN lists a player in a group only when they recorded something in it, so a
+ * receiver with no catches is simply absent. That is a genuine zero, not missing
+ * data — provided the player shows up elsewhere in the box score, which proves
+ * they played. If they appear nowhere they may have been inactive, so we return
+ * null and let settlement fall back to manual.
  */
 export function extractFootballBoxStat(
   groups: EspnStatGroup[],
@@ -299,7 +325,8 @@ export function extractFootballBoxStat(
       found = true;
     }
   }
-  return found ? total : null;
+  if (found) return total;
+  return appearsInBoxScore(groups, playerName) ? 0 : null;
 }
 
 /** Pull a single completed-game stat for a player from the box score. */
