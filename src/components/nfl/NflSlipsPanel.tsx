@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, Layers } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ConfidenceBadge, RiskBadge } from "@/components/badges";
 import { buildSuggestedSlips, pickToSlipCandidate, type SuggestedSlip } from "@/lib/analysis/slipBuilder";
 import { parlayPayout } from "@/lib/analysis/parlayCorrelation";
