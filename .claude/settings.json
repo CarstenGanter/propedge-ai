@@ -10,7 +10,11 @@
       "Bash(echo \"exit=$?\")",
       "Bash(node --conditions=react-server --env-file=.env --import tsx -e ' *)",
       "Bash(echo \"typecheck exit=$?\")",
-      "Bash(node --conditions=react-server --env-file=.env --import tsx /tmp/settle-now.ts 2026-09-10)"
+      "Bash(node --conditions=react-server --env-file=.env --import tsx /tmp/settle-now.ts 2026-09-10)",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:3000/)",
+      "Bash(echo \"HTTP: $\\(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:3000/ || echo 'no response'\\)\")",
+      "Bash(curl -s \"http://localhost:3000/nfl\" -o /tmp/v.html)",
+      "Bash(xargs -I{} echo \"errors in log: {}\")"
     ]
   }
 }

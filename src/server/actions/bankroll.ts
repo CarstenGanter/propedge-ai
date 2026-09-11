@@ -84,6 +84,25 @@ export async function setPickBet(input: {
   return { ok: true };
 }
 
+/**
+ * Flag picks as ones you took, without creating per-pick bankroll entries.
+ * Used when the legs belong to a slip: the parlay already carries the stake, so
+ * adding single entries too would double-count it, but the picks still need the
+ * flag for the analytics "picks I took" scope.
+ */
+export async function setPicksTakenFlag(
+  pickIds: string[],
+  taken: boolean,
+): Promise<{ ok: boolean; updated: number }> {
+  if (pickIds.length === 0) return { ok: true, updated: 0 };
+  const r = await prisma.pick.updateMany({
+    where: { id: { in: pickIds } },
+    data: { placedReal: taken },
+  });
+  revalidateAll();
+  return { ok: true, updated: r.count };
+}
+
 export async function addManualAdjustment(input: {
   amount: number;
   note?: string;

@@ -11,6 +11,7 @@ import { ConfidenceBadge, RiskBadge } from "@/components/badges";
 import { buildSuggestedSlips, pickToSlipCandidate, type SuggestedSlip } from "@/lib/analysis/slipBuilder";
 import { parlayPayout } from "@/lib/analysis/parlayCorrelation";
 import { createParlay } from "@/server/actions/parlays";
+import { setPicksTakenFlag } from "@/server/actions/bankroll";
 import { formatCurrency } from "@/lib/utils/format";
 import type { SerializedPick } from "@/lib/dto";
 
@@ -57,6 +58,7 @@ function SlipCard({ slip, date, defaultStake }: { slip: SuggestedSlip; date: str
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const [multiplier, setMultiplier] = React.useState(String(slip.multiplier));
+  const [placedReal, setPlacedReal] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
   const mult = Number(multiplier) || 0;
   const payout = parlayPayout(defaultStake, mult);
@@ -71,8 +73,18 @@ function SlipCard({ slip, date, defaultStake }: { slip: SuggestedSlip; date: str
         payoutMultiplier: mult,
         pickIds: ids,
         date,
+        placedReal,
       });
-      setMsg(r.ok ? "Saved to Parlay Builder." : r.error ?? "Could not save.");
+      if (r.ok) {
+        // Mark the legs so they count in the analytics "picks I took" scope.
+        // Flag only: the parlay entry already carries the stake.
+        await setPicksTakenFlag(ids, true);
+      }
+      setMsg(
+        r.ok
+          ? `Saved${placedReal ? " as a real entry" : " (simulated)"}. ${ids.length} picks marked as yours.`
+          : r.error ?? "Could not save.",
+      );
       router.refresh();
     });
   }
@@ -131,15 +143,25 @@ function SlipCard({ slip, date, defaultStake }: { slip: SuggestedSlip; date: str
         </span>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={placedReal}
+          onChange={(e) => setPlacedReal(e.target.checked)}
+          className="h-3.5 w-3.5 accent-[var(--color-primary)]"
+        />
+        I actually placed this slip on Underdog
+      </label>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <Button asChild size="sm" variant="secondary">
           <Link href={`/parlays?legs=${ids.join(",")}&mult=${mult}&date=${date}`}>Open in Parlay Builder</Link>
         </Button>
         <Button size="sm" onClick={save} disabled={pending || mult <= 0}>
           {pending ? "Saving…" : "Save slip"}
         </Button>
-        {msg && <Badge variant="muted">{msg}</Badge>}
       </div>
+      {msg && <p className="mt-2 text-xs text-muted-foreground">{msg}</p>}
     </div>
   );
 }
