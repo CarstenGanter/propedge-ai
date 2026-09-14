@@ -18,8 +18,12 @@ model PlayerProp {
   sport           String
   league          String
   playerName      String
-  team            String
+  team            String // NOTE: for Odds API props this is the HOME team, not the player's
   opponent        String
+  // The player's own team (ESPN team id), resolved during scoring. `team` above
+  // cannot serve this purpose, so this is what tells us two players are
+  // team-mates — which pick'em entries are not allowed to contain.
+  playerTeamId    String?
   gameId          String?
   gameStartTime   DateTime?
   propType        String

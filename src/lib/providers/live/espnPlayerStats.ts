@@ -506,6 +506,7 @@ export async function getEspnPlayerStats(
     usage,
     usageTrend,
     currentSeasonGames: blend ? blend.currentGames : undefined,
+    playerTeamId: ref.teamId,
     note,
     source: blended ? `ESPN gamelog (${log.season} + ${log.prior} season)` : "ESPN gamelog",
     sourceUrl: gamelogUrl(family, ref.athleteId),

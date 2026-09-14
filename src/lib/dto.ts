@@ -29,6 +29,8 @@ export interface SerializedProp {
   playerName: string;
   team: string;
   opponent: string;
+  /** The player's own team id; `team` is the home side and cannot identify team-mates. */
+  playerTeamId: string | null;
   gameStartTime: string | null;
   propType: string;
   line: number;
@@ -122,6 +124,7 @@ export function serializeProp(p: PlayerProp): SerializedProp {
     playerName: p.playerName,
     team: p.team,
     opponent: p.opponent,
+    playerTeamId: p.playerTeamId,
     gameStartTime: p.gameStartTime ? p.gameStartTime.toISOString() : null,
     propType: p.propType,
     line: p.line,

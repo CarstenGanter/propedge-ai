@@ -159,6 +159,15 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
       continue;
     }
 
+    // Remember whose team the player is actually on. `prop.team` is the home
+    // side for Odds-API props, so it cannot answer "are these two team-mates?",
+    // which pick'em entries are not allowed to contain.
+    const resolvedTeamId = bundle.playerStats?.playerTeamId;
+    if (resolvedTeamId && resolvedTeamId !== prop.playerTeamId) {
+      await prisma.playerProp.update({ where: { id: prop.id }, data: { playerTeamId: resolvedTeamId } });
+      prop.playerTeamId = resolvedTeamId;
+    }
+
     // Entry line for CLV: no-vig probability of the chosen side at pick time.
     const entryProb = clvEntryProb(bundle.market?.noVigProbOver, prop.direction as Direction);
     candidates.push({ prop, analysis, entryProb });

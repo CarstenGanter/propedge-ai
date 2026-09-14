@@ -10,6 +10,7 @@ function cand(
   opp: string,
   conf: number,
   direction: "OVER" | "UNDER" = "OVER",
+  teamId: string | null = null,
 ): SlipCandidate {
   return {
     pickId: id,
@@ -25,17 +26,18 @@ function cand(
     sport: "NFL",
     date: "2026-09-13",
     whyLine: "why",
+    teamId,
   };
 }
 
 describe("buildSuggestedSlips", () => {
   const cands = [
-    cand("a", "Alpha WR", "Bengals", "Buccaneers", 80),
-    cand("b", "Bravo RB", "Lions", "Saints", 78),
-    cand("c", "Charlie TE", "Bengals", "Buccaneers", 76), // same game as a
-    cand("d", "Alpha WR", "Bengals", "Buccaneers", 75), // same player as a (other prop)
-    cand("e", "Echo QB", "Chiefs", "Broncos", 72),
-    cand("f", "Foxtrot WR", "Lions", "Saints", 70, "UNDER"), // same game as b, opposite direction
+    cand("a", "Alpha WR", "Bengals", "Buccaneers", 80, "OVER", "CIN"),
+    cand("b", "Bravo RB", "Lions", "Saints", 78, "OVER", "DET"),
+    cand("c", "Charlie TE", "Bengals", "Buccaneers", 76, "OVER", "TB"), // same game as a, opposing team
+    cand("d", "Alpha WR", "Bengals", "Buccaneers", 75, "OVER", "CIN"), // same player as a (other prop)
+    cand("e", "Echo QB", "Chiefs", "Broncos", 72, "OVER", "KC"),
+    cand("f", "Foxtrot WR", "Lions", "Saints", 70, "UNDER", "NO"), // same game as b, opposite direction
   ];
 
   it("builds slips by confidence from distinct players in distinct games", () => {
@@ -54,6 +56,40 @@ describe("buildSuggestedSlips", () => {
     expect(ids).toEqual(["a", "b", "e", "c"]);
     expect(four.flags).toHaveLength(1);
     expect(four.flags[0]).toMatch(/Charlie TE shares a game/);
+  });
+
+  // ---- Underdog platform rules ----
+
+  it("refuses to pair two players from the same game whose teams are unknown", () => {
+    // 'c' shares a game with 'a' and neither carries a resolved team id, so
+    // they might be team-mates — which the platform would reject.
+    const onlyOneGame = [cand("a", "Alpha WR", "Bengals", "Buccaneers", 80), cand("c", "Charlie TE", "Bengals", "Buccaneers", 76)];
+    expect(buildSuggestedSlips(onlyOneGame, [2])).toEqual([]);
+  });
+
+  it("allows same-game legs once they are known to be on opposing teams", () => {
+    const opposing = [
+      cand("a", "Alpha WR", "Bengals", "Buccaneers", 80, "OVER", "CIN"),
+      cand("c", "Charlie TE", "Bengals", "Buccaneers", 76, "OVER", "TB"),
+    ];
+    const [two] = buildSuggestedSlips(opposing, [2]);
+    expect(two.legs.map((l) => l.pickId)).toEqual(["a", "c"]);
+  });
+
+  it("rejects a slip whose legs are all team-mates", () => {
+    const teammates = [
+      cand("a", "Alpha WR", "Bengals", "Buccaneers", 80, "OVER", "CIN"),
+      cand("c", "Charlie TE", "Bengals", "Buccaneers", 76, "OVER", "CIN"),
+    ];
+    expect(buildSuggestedSlips(teammates, [2])).toEqual([]);
+  });
+
+  it("treats legs from different games as spanning two teams even without ids", () => {
+    const twoGames = [
+      cand("a", "Alpha WR", "Bengals", "Buccaneers", 80),
+      cand("b", "Bravo RB", "Lions", "Saints", 78),
+    ];
+    expect(buildSuggestedSlips(twoGames, [2])[0].legs).toHaveLength(2);
   });
 
   it("omits sizes it cannot fill honestly", () => {
@@ -98,6 +134,7 @@ describe("pickToSlipCandidate / whyLineFor", () => {
       line: 82.5,
       underdogLine: 79.5,
       sport: "NFL",
+      playerTeamId: "CIN",
     },
   } as unknown as SerializedPick;
 

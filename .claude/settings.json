@@ -26,7 +26,9 @@
       "Bash(curl -s \"https://api.github.com/repos/nflverse/nflverse-data/releases/tags/snap_counts\")",
       "Bash(curl -s \"https://api.github.com/repos/nflverse/nflverse-data/releases/tags/stats_player\")",
       "Bash(curl -s \"https://site.web.api.espn.com/apis/common/v3/sports/football/nfl/athletes/4262921/gamelog\")",
-      "Bash(node --conditions=react-server --env-file=.env --import tsx /tmp/verify-audit.ts)"
+      "Bash(node --conditions=react-server --env-file=.env --import tsx /tmp/verify-audit.ts)",
+      "WebSearch",
+      "WebFetch(domain:help.underdogsports.com)"
     ]
   }
 }

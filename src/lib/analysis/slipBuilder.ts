@@ -2,10 +2,20 @@ import type { SerializedPick } from "@/lib/dto";
 import { analyzeParlay, makeGameKey, type ParlayAnalysis, type ParlayLegInput } from "./parlayCorrelation";
 
 /**
- * Suggested pick'em slips (pure, tested). Greedy by model confidence with
- * correlation rules: never the same player twice, never opposite directions in
- * the same game, prefer legs from different games; same-game/same-direction
- * legs are used only when nothing independent is left and are flagged.
+ * Suggested pick'em slips (pure, tested).
+ *
+ * Two of the rules below are Underdog's, not ours, and an entry that breaks
+ * either is rejected by the platform:
+ *  - the same player may not appear twice in one entry;
+ *  - an entry must contain players from at least two different teams.
+ * The rest are ours: never take opposite sides of the same game, and prefer
+ * legs from different games, flagging same-game legs as correlated.
+ *
+ * A player's team comes from `teamId`, never from the prop's `team` field,
+ * which holds the home side for Odds-API props and so cannot tell team-mates
+ * apart. When a team is unknown we treat two same-game players as *possibly*
+ * team-mates and refuse to pair them, since suggesting an entry the platform
+ * will reject is worse than suggesting one fewer.
  */
 
 /** Standard Underdog "Standard" payouts by leg count (editable in the builder). */
@@ -16,6 +26,8 @@ export interface SlipCandidate extends ParlayLegInput {
   sport: string;
   date: string;
   whyLine: string;
+  /** The player's own team id, when resolved. Null means unknown. */
+  teamId: string | null;
 }
 
 export interface SuggestedSlip {
@@ -49,6 +61,7 @@ export function pickToSlipCandidate(p: SerializedPick): SlipCandidate {
     sport: p.prop.sport,
     date: p.prop.date,
     whyLine: whyLineFor(p),
+    teamId: p.prop.playerTeamId,
   };
 }
 
@@ -58,6 +71,26 @@ function samePlayer(a: SlipCandidate, b: SlipCandidate): boolean {
 
 function conflicts(a: SlipCandidate, b: SlipCandidate): boolean {
   return a.gameKey === b.gameKey && a.direction !== b.direction;
+}
+
+/**
+ * Could these two be team-mates? Different games rules it out. Within one game
+ * it depends on the resolved team ids, and an unknown id is treated as "maybe"
+ * so we never propose an entry the platform would reject.
+ */
+export function maybeTeammates(a: SlipCandidate, b: SlipCandidate): boolean {
+  if (a.gameKey !== b.gameKey) return false;
+  if (a.teamId && b.teamId) return a.teamId === b.teamId;
+  return true;
+}
+
+/** Underdog requires an entry to span at least two different teams. */
+export function spansTwoTeams(legs: SlipCandidate[]): boolean {
+  if (legs.length < 2) return false;
+  if (legs.some((l) => l.gameKey !== legs[0].gameKey)) return true; // different games
+  const ids = legs.map((l) => l.teamId);
+  if (ids.some((id) => !id)) return false; // unknown within one game — can't prove it
+  return new Set(ids).size >= 2;
 }
 
 export function buildSuggestedSlips(
@@ -82,16 +115,19 @@ export function buildSuggestedSlips(
       if (legs.some((l) => samePlayer(l, c) || l.gameKey === c.gameKey)) continue;
       legs.push(c);
     }
-    // Pass 2: fill from the same game, same direction only, if allowed.
+    // Pass 2: fill from the same game, same direction, opposing teams only.
     if (legs.length < size && allowSameGame) {
       for (const c of sorted) {
         if (legs.length >= size) break;
         if (legs.some((l) => l.pickId === c.pickId || samePlayer(l, c) || conflicts(l, c))) continue;
+        // Team-mates (or possible team-mates) would make the entry invalid.
+        if (legs.some((l) => maybeTeammates(l, c))) continue;
         legs.push(c);
         flags.push(`${c.playerName} shares a game with another leg — outcomes are positively correlated (same game script).`);
       }
     }
     if (legs.length < size) continue; // can't fill this size honestly
+    if (!spansTwoTeams(legs)) continue; // Underdog rejects single-team entries
 
     out.push({
       size,
