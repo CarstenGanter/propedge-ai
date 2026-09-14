@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button";
 import { ConfidenceBadge, RiskBadge } from "@/components/badges";
 import { buildSuggestedSlips, pickToSlipCandidate, type SuggestedSlip } from "@/lib/analysis/slipBuilder";
 import { parlayPayout } from "@/lib/analysis/parlayCorrelation";
+import { slipEconomics } from "@/lib/analysis/pickemMath";
 import { createParlay } from "@/server/actions/parlays";
 import { setPicksTakenFlag } from "@/server/actions/bankroll";
 import { formatCurrency } from "@/lib/utils/format";
+import { cn } from "@/lib/utils/cn";
 import type { SerializedPick } from "@/lib/dto";
 
 export function NflSlipsPanel({
@@ -24,8 +26,10 @@ export function NflSlipsPanel({
   defaultStake: number;
 }) {
   const pendingPicks = picks.filter((p) => p.status === "pending");
+  // Offer every size the board can fill and let the economics rank them, rather
+  // than assuming which size is best — that depends on your actual multipliers.
   const slips = React.useMemo(
-    () => buildSuggestedSlips(pendingPicks.map(pickToSlipCandidate), [2, 3, 4]),
+    () => buildSuggestedSlips(pendingPicks.map(pickToSlipCandidate), [2, 3, 4, 5]),
     [pendingPicks],
   );
 
@@ -62,6 +66,12 @@ function SlipCard({ slip, date, defaultStake }: { slip: SuggestedSlip; date: str
   const mult = Number(multiplier) || 0;
   const payout = parlayPayout(defaultStake, mult);
   const ids = slip.legs.map((l) => l.pickId);
+  // Recomputed on every keystroke, so a boosted or discounted multiplier
+  // immediately changes the verdict.
+  const econ = slipEconomics(mult, slip.legs.map((l) => l.confidenceScore / 100));
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  const evTone =
+    econ.verdict === "positive" ? "text-success" : econ.verdict === "negative" ? "text-danger" : "text-warning";
 
   function save() {
     setMsg(null);
@@ -125,13 +135,11 @@ function SlipCard({ slip, date, defaultStake }: { slip: SuggestedSlip; date: str
       ))}
 
       <div className="mt-3 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 text-xs">
-        <span className="text-muted-foreground">Model est. all hit</span>
-        <span>{(slip.analysis.combinedHitEstimate * 100).toFixed(0)}% (independent estimate)</span>
         <span className="text-muted-foreground">Payout multiplier</span>
         <span className="flex items-center gap-2">
           <input
             type="number"
-            step="0.5"
+            step="0.05"
             value={multiplier}
             onChange={(e) => setMultiplier(e.target.value)}
             className="h-7 w-16 rounded-md border border-border bg-input/60 px-2 text-xs"
@@ -140,7 +148,48 @@ function SlipCard({ slip, date, defaultStake }: { slip: SuggestedSlip; date: str
             × {formatCurrency(defaultStake)} → {formatCurrency(payout.projectedPayout)}
           </span>
         </span>
+
+        <span className="text-muted-foreground">Break-even</span>
+        <span>
+          each leg must hit{" "}
+          <span className="font-medium tabular-nums text-foreground">
+            {econ.breakEvenPerLeg == null ? "—" : pct(econ.breakEvenPerLeg)}
+          </span>{" "}
+          <span className="text-muted-foreground">(exact, from your multiplier)</span>
+        </span>
+
+        <span className="text-muted-foreground">Model says</span>
+        <span>
+          <span className="tabular-nums">{econ.modelPerLeg == null ? "—" : pct(econ.modelPerLeg)}</span> per leg ·{" "}
+          <span className="tabular-nums">{pct(econ.modelPAll)}</span> all hit
+        </span>
+
+        <span className="text-muted-foreground">Expected value</span>
+        <span className={cn("font-medium tabular-nums", econ.overconfident ? "text-muted-foreground" : evTone)}>
+          {econ.ev >= 0 ? "+" : ""}
+          {(econ.ev * 100).toFixed(0)}%
+          <span className="ml-1 font-normal text-muted-foreground">
+            {econ.verdict === "positive"
+              ? `— model clears the bar by ${econ.cushion == null ? "" : pct(econ.cushion)}`
+              : econ.verdict === "negative"
+                ? "— below the bar, likely a pass"
+                : "— too close to call"}
+          </span>
+        </span>
       </div>
+      {econ.overconfident ? (
+        <p className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-warning/25 bg-warning/5 p-2 text-[11px] leading-snug text-warning">
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+          The model claims {econ.modelPerLeg == null ? "" : pct(econ.modelPerLeg)} per leg. Prop markets
+          are priced too well for an edge that size, so this expected value is inflated. Trust the
+          break-even figure and the ranking between slips, not the percentage.
+        </p>
+      ) : (
+        <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+          Break-even is exact. Expected value leans on confidence as a probability, which is not yet
+          calibrated, so use it to choose between slips rather than as a promised return.
+        </p>
+      )}
 
       <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
         <input

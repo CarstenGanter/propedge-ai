@@ -28,7 +28,8 @@
       "Bash(curl -s \"https://site.web.api.espn.com/apis/common/v3/sports/football/nfl/athletes/4262921/gamelog\")",
       "Bash(node --conditions=react-server --env-file=.env --import tsx /tmp/verify-audit.ts)",
       "WebSearch",
-      "WebFetch(domain:help.underdogsports.com)"
+      "WebFetch(domain:help.underdogsports.com)",
+      "Bash(curl -s \"http://localhost:3000/nfl?date=2026-09-13\" -o /tmp/s.html -w \"status %{http_code}\\\\n\" --max-time 40)"
     ]
   }
 }
