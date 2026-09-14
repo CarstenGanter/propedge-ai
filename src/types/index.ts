@@ -101,17 +101,25 @@ export type ScoreCategory =
 
 export type ScoreBreakdown = Record<ScoreCategory, number>;
 
-/** Weight (0..1) each category contributes to the final confidence score. */
+/**
+ * Weight (0..1) each category contributes to the final confidence score.
+ *
+ * `parlaySuitability` is weighted 0 on purpose. It scores volatility and data
+ * completeness, which say nothing about *which side* of the line is right, so
+ * including it pushed the OVER and the UNDER of the same prop up together and
+ * broke the requirement that the two sides sum to 100. It is still computed and
+ * displayed, and it still drives risk labelling and slip suitability.
+ */
 export const CATEGORY_WEIGHTS: Record<ScoreCategory, number> = {
-  recentForm: 0.2,
-  seasonBaseline: 0.15,
-  matchup: 0.15,
-  roleUsage: 0.15,
-  injuryNews: 0.1,
-  marketEdge: 0.1,
+  recentForm: 0.21,
+  seasonBaseline: 0.16,
+  matchup: 0.16,
+  roleUsage: 0.16,
+  injuryNews: 0.105,
+  marketEdge: 0.105,
   sentiment: 0.05,
   historicalSplits: 0.05,
-  parlaySuitability: 0.05,
+  parlaySuitability: 0,
 };
 
 export type ScoringProfile = "balanced" | "market";
@@ -127,10 +135,10 @@ export const MARKET_PROFILE_WEIGHTS: Record<ScoreCategory, number> = {
   matchup: 0.07,
   roleUsage: 0.05,
   injuryNews: 0.08,
-  marketEdge: 0.55,
+  marketEdge: 0.57,
   sentiment: 0.02,
-  historicalSplits: 0.02,
-  parlaySuitability: 0.03,
+  historicalSplits: 0.03,
+  parlaySuitability: 0,
 };
 
 export function weightsForProfile(profile: ScoringProfile): Record<ScoreCategory, number> {

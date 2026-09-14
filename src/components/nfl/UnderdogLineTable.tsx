@@ -85,7 +85,7 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                 {picks.map((p) => {
                   const raw = (draft[p.id] ?? "").trim();
                   const typed = raw === "" ? null : Number(raw);
-                  const reference = p.prop.marketProjection ?? p.prop.marketLine ?? p.prop.line;
+                  const reference = p.prop.marketLine ?? p.prop.line;
                   const liveEdge =
                     typed != null && Number.isFinite(typed)
                       ? Math.round((p.prop.direction === "OVER" ? 1 : -1) * (reference - typed) * 10) / 10

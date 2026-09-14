@@ -147,9 +147,9 @@ export default async function PickDetailPage({ params }: { params: Promise<{ id:
                   edge={pick.underdogEdge}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Market fair value{" "}
+                  Sharp market line{" "}
                   <span className="font-mono text-foreground">
-                    {(p.marketProjection ?? p.marketLine ?? p.line).toFixed(1)}
+                    {(p.marketLine ?? p.line).toFixed(1)}
                   </span>
                   . Enter Underdog&apos;s number to score this pick against what you actually bet.
                 </p>

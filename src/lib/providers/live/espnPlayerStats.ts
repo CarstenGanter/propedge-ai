@@ -1,5 +1,5 @@
 import type { PlayerStatsContext } from "@/types";
-import { espnPathForSport, nameMatches } from "./espn";
+import { espnPathForSport, nameMatches, nameParts, normalizeName } from "./espn";
 import { normalizeTeamName, lookupTeam } from "@/lib/utils/teamName";
 import { nflSeasonForDate, seasonStartDate } from "@/lib/nfl/slate";
 
@@ -326,6 +326,30 @@ async function getRoster(family: { sport: string; league: string }, teamId: stri
   return flat;
 }
 
+/**
+ * Pick the right roster entry for a player name (pure, exported for tests).
+ *
+ * `nameMatches` deliberately falls back to surname plus first initial, which
+ * makes "Bijan Robinson" and "Brian Robinson Jr." match each other. Taking the
+ * first fuzzy hit therefore silently returns a different human, and every stat,
+ * matchup and injury signal downstream belongs to that other player. So: prefer
+ * an exact full-name match, and when only ambiguous fuzzy candidates remain,
+ * return null rather than guessing. Missing data is disclosed by the engine;
+ * the wrong player's data is not.
+ */
+export function pickRosterMatch<T extends { name: string }>(
+  roster: T[],
+  playerName: string,
+): { match: T | null; ambiguous: boolean } {
+  const wanted = nameParts(playerName).join(" ");
+  const exact = roster.filter((r) => nameParts(r.name).join(" ") === wanted);
+  if (exact.length === 1) return { match: exact[0], ambiguous: false };
+  if (exact.length > 1) return { match: null, ambiguous: true }; // true namesakes on one roster
+  const fuzzy = roster.filter((r) => nameMatches(r.name, playerName));
+  if (fuzzy.length === 1) return { match: fuzzy[0], ambiguous: false };
+  return { match: null, ambiguous: fuzzy.length > 1 };
+}
+
 /** Resolve a player to an ESPN athlete id by scanning both teams' rosters. */
 export async function resolveEspnAthlete(
   sport: string,
@@ -335,17 +359,35 @@ export async function resolveEspnAthlete(
 ): Promise<EspnAthleteRef | null> {
   const family = espnFamily(sport);
   if (!family) return null;
-  const memoKey = `${family.sport}/${family.league}|${normalizeTeamName(playerName)}`;
+  // The teams must be part of the key: the same player name resolves against
+  // different rosters in different games, and a cross-team namesake would
+  // otherwise poison every later lookup for that name.
+  const memoKey = `${family.sport}/${family.league}|${normalizeName(playerName)}|${normalizeTeamName(team)}|${normalizeTeamName(opponent)}`;
   if (resolveCache.has(memoKey)) return resolveCache.get(memoKey)!;
 
   const teams = await getTeams(family);
   const result = await (async (): Promise<EspnAthleteRef | null> => {
+    // Exact matches win over fuzzy ones across BOTH rosters before falling back,
+    // so an exact hit on the away roster beats a fuzzy hit on the home roster.
+    const candidates: { teamId: string; teamName: string; roster: { id: string; name: string }[] }[] = [];
     for (const teamName of [team, opponent]) {
       const teamId = lookupTeam(teams, teamName);
       if (!teamId) continue;
-      const roster = await getRoster(family, teamId);
-      const hit = roster.find((r) => nameMatches(r.name, playerName));
-      if (hit) return { athleteId: hit.id, teamId, teamName };
+      candidates.push({ teamId, teamName, roster: await getRoster(family, teamId) });
+    }
+    const wanted = nameParts(playerName).join(" ");
+    const exact = candidates.flatMap((c) =>
+      c.roster.filter((r) => nameParts(r.name).join(" ") === wanted).map((r) => ({ ...c, hit: r })),
+    );
+    if (exact.length === 1) {
+      return { athleteId: exact[0].hit.id, teamId: exact[0].teamId, teamName: exact[0].teamName };
+    }
+    if (exact.length > 1) return null; // namesakes in the same game — refuse to guess
+    const fuzzy = candidates.flatMap((c) =>
+      c.roster.filter((r) => nameMatches(r.name, playerName)).map((r) => ({ ...c, hit: r })),
+    );
+    if (fuzzy.length === 1) {
+      return { athleteId: fuzzy[0].hit.id, teamId: fuzzy[0].teamId, teamName: fuzzy[0].teamName };
     }
     return null;
   })();

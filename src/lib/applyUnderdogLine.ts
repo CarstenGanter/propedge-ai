@@ -37,8 +37,10 @@ export async function applyUnderdogLine(
   const bundle = await buildResearchBundle(scorable, ctx);
   const analysis = analyzeProp(scorable, bundle, { profile: settings.scoringProfile });
 
-  // Tag the entered line's value relative to the sharp market.
-  const reference = bundle.market?.projection ?? bundle.market?.marketLine ?? pick.playerProp.line;
+  // Tag the entered line's value relative to the sharp market. Line vs line —
+  // never against the synthesised "projection", which is the market's lean in
+  // disguise and is nonzero even when the two lines are identical.
+  const reference = bundle.market?.marketLine ?? pick.playerProp.line;
   const tags = new Set(analysis.tags);
   let edge: number | null = null;
   if (underdogLine != null) {

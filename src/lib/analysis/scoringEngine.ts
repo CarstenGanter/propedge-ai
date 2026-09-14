@@ -20,7 +20,10 @@ import { deriveRiskLevel } from "./confidenceModel";
 // v1.2.0: NFL depth — prior-season sample blending with an early-season form
 // gate, box-score defense ranks, game injury reports, kickoff weather, and
 // source URLs on evidence.
-export const SCORING_MODEL_VERSION = "v1.2.0";
+// v1.3.0: the two sides of a prop now sum to 100 — direction-blind terms
+// (parlay suitability, an "active" bonus) removed and asymmetric ones squared
+// up; the Underdog edge measures line softness rather than the market's lean.
+export const SCORING_MODEL_VERSION = "v1.3.0";
 
 /** NFL: full recent-form weight needs at least this many current-season games. */
 const NFL_FULL_FORM_GAMES = 4;
@@ -279,7 +282,7 @@ function scoreRoleUsage(
     parts.push(`Usage trending ${ps.usageTrend}.`);
   }
   if (news?.teammateAbsencesBoost) {
-    acc += prop.direction === "OVER" ? 12 : -8;
+    acc += dirSign(prop.direction) * 12;
     parts.push("Teammate absence(s) likely increase opportunity.");
     if (prop.direction === "OVER") res.reasonsFor.push("Opportunity boost from teammate absence.");
   }
@@ -319,33 +322,35 @@ function scoreInjuryNews(
   let acc = 50;
   const parts: string[] = [];
 
+  // Availability is directional: a player who may not play, or who plays hurt,
+  // produces less, which hurts an OVER by exactly as much as it helps an UNDER.
+  // Applying the same penalty to both sides (as this once did) makes the two
+  // sides of one prop sum to more than 100.
+  const dir = dirSign(prop.direction);
   switch (status) {
     case "out":
-      acc -= 45;
+      acc -= dir * 45;
       res.warnings.push("Player is reported OUT — pick should be avoided unless overridden.");
-      res.reasonsAgainst.push("Player currently listed as OUT.");
+      if (dir > 0) res.reasonsAgainst.push("Player currently listed as OUT.");
       break;
     case "doubtful":
-      acc -= 22;
+      acc -= dir * 22;
       res.warnings.push("Player is DOUBTFUL — elevated risk of no play / reduced role.");
-      res.reasonsAgainst.push("Doubtful injury status.");
+      if (dir > 0) res.reasonsAgainst.push("Doubtful injury status.");
       break;
     case "questionable":
     case "gtd":
-      acc -= 10;
+      acc -= dir * 10;
       res.warnings.push("Player is QUESTIONABLE/GTD — confirm active before entry.");
-      res.reasonsAgainst.push("Questionable tag adds availability risk.");
+      if (dir > 0) res.reasonsAgainst.push("Questionable tag adds availability risk.");
       break;
     case "active":
-      acc += 6;
+      // No bonus. Carrying no injury designation is the normal state, not
+      // evidence for either side.
       break;
   }
   if (status) parts.push(`Status: ${status}.`);
-  if (news?.lineupConfirmed) {
-    acc += 8;
-    parts.push("Lineup/role confirmed.");
-    res.reasonsFor.push("Lineup or role is confirmed.");
-  }
+  if (news?.lineupConfirmed) parts.push("Lineup/role confirmed.");
   for (const n of news?.notes ?? []) parts.push(n.summary);
 
   res.score = clamp(acc, 0, 100);
@@ -520,7 +525,7 @@ function scoreHistoricalSplits(
   }
   if (h.homeAway) parts.push(h.homeAway === "home" ? "Playing at home." : "Playing on the road.");
   if (h.weatherConcern) {
-    acc += prop.direction === "OVER" ? -8 : 6;
+    acc -= dirSign(prop.direction) * 8;
     parts.push(h.weatherNote ?? "Weather could suppress output.");
     res.warnings.push("Weather flagged as a potential factor for this outdoor game.");
     if (prop.direction === "OVER") res.reasonsAgainst.push("Kickoff weather works against the passing game.");

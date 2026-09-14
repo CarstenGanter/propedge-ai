@@ -282,11 +282,24 @@ function parsePart(raw: string, part?: "first" | "second"): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
+/**
+ * Find a player's row in one stat group, preferring an exact full-name match.
+ * A box score spans both teams, so a fuzzy-only hit may be a namesake on the
+ * other sideline; we take a fuzzy match only when it is unambiguous.
+ */
+function findAthleteRow(group: EspnStatGroup, playerName: string): EspnBoxAthlete | null {
+  const rows = (group.athletes ?? []).filter((a) => a.athlete?.displayName);
+  const wanted = nameParts(playerName).join(" ");
+  const exact = rows.filter((a) => nameParts(a.athlete!.displayName!).join(" ") === wanted);
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1) return null;
+  const fuzzy = rows.filter((a) => nameMatches(a.athlete!.displayName!, playerName));
+  return fuzzy.length === 1 ? fuzzy[0] : null;
+}
+
 /** Did this player record a stat in any group of the final box score? */
 export function appearsInBoxScore(groups: EspnStatGroup[], playerName: string): boolean {
-  return groups.some((g) =>
-    (g.athletes ?? []).some((a) => a.athlete?.displayName && nameMatches(a.athlete.displayName, playerName)),
-  );
+  return groups.some((g) => findAthleteRow(g, playerName) != null);
 }
 
 /**
@@ -313,9 +326,7 @@ export function extractFootballBoxStat(
       if ((g.name ?? "").toLowerCase() !== group) continue;
       const idx = (g.keys ?? []).indexOf(key);
       if (idx < 0) continue;
-      const ath = (g.athletes ?? []).find(
-        (a) => a.athlete?.displayName && nameMatches(a.athlete.displayName, playerName),
-      );
+      const ath = findAthleteRow(g, playerName);
       if (!ath) continue;
       const raw = ath.stats?.[idx];
       if (raw == null) continue;

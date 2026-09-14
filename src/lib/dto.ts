@@ -75,12 +75,23 @@ export interface SerializedPick {
   prop: SerializedProp;
 }
 
-/** Edge of the Underdog line vs the market's fair value (positive = favorable). */
+/**
+ * How much softer the pick'em line is than the sharp market line, in stat units
+ * (positive = favorable). This must compare LINE to LINE.
+ *
+ * It previously measured against `marketProjection`, which is not a projection
+ * at all: the Odds API adapter synthesises it by nudging the line in proportion
+ * to the market's lean *and to the line's magnitude*. That made the edge nonzero
+ * even when Underdog posted the identical number, and made it grow with line
+ * size, so a worthless "+1.5" on a receiving-yards prop outranked a genuinely
+ * valuable "+0.5" on receptions.
+ */
 export function computeUnderdogEdge(p: SerializedProp): number | null {
   if (p.underdogLine == null) return null;
-  const reference = p.marketProjection ?? p.marketLine ?? p.line;
+  const reference = p.marketLine ?? p.line;
   const sign = p.direction === "OVER" ? 1 : -1;
-  return Math.round(sign * (reference - p.underdogLine) * 10) / 10;
+  // `+ 0` normalises -0 (which renders as "-0" and breaks equality checks).
+  return Math.round(sign * (reference - p.underdogLine) * 10) / 10 + 0;
 }
 
 function safeParse<T>(json: string, fallback: T): T {
