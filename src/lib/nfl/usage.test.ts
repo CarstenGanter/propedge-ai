@@ -14,6 +14,7 @@ const wk = (week: number, over: Partial<WeeklyStatRow> = {}): WeeklyStatRow => (
   receptions: 4,
   receivingYards: 55,
   carries: 0,
+  rushingYards: 0,
   ...over,
 });
 

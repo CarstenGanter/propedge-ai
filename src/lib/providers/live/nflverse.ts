@@ -100,6 +100,7 @@ export interface WeeklyStatRow {
   receptions: number | null;
   receivingYards: number | null;
   carries: number | null;
+  rushingYards: number | null;
 }
 
 const num = (v: string | undefined): number | null => {
@@ -128,6 +129,7 @@ export function parseWeeklyStats(csv: string): WeeklyStatRow[] {
       receptions: num(r.receptions),
       receivingYards: num(r.receiving_yards),
       carries: num(r.carries),
+      rushingYards: num(r.rushing_yards),
     });
   }
   return out;

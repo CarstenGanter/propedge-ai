@@ -5,7 +5,74 @@ import { familyUnit, paceBucket, pickDefenseBasis } from "@/lib/nfl/defense";
 import { getDefenseAgg } from "@/lib/nfl/defenseCache";
 import { gameEnvironmentFavor } from "@/lib/nfl/gameEnvironment";
 import { getNflGameContextForProp } from "@/lib/nfl/gameContext";
+import {
+  aggregateDefenseVsPosition,
+  metricForProp,
+  posGroupOf,
+  rankDefenseVsPosition,
+} from "@/lib/nfl/defenseByPosition";
+import { nflverseCode } from "@/lib/nfl/teamCodes";
+import { getIdMap, getWeeklyStats } from "./nflverse";
 import { resolveEspnAthlete } from "./espnPlayerStats";
+
+/** Positional splits need a few games before they beat the team-level view. */
+const MIN_POSITIONAL_GAMES = 2;
+
+/**
+ * Opponent defense against the player's own position group, when we can
+ * identify it. A tight end scored against a team's total passing yards allowed
+ * is measured against the wrong thing; a defense can smother receivers and be
+ * shredded by tight ends.
+ */
+async function positionalMatchup(
+  prop: ScorablePropInput,
+  espnAthleteId: string,
+  opponentName: string,
+  season: number,
+  prior: number,
+): Promise<{ rank: number; leagueSize: number; context: string } | null> {
+  const metric = metricForProp(prop.propType);
+  if (!metric) return null;
+  const code = nflverseCode(opponentName);
+  if (!code) return null;
+
+  const idMap = await getIdMap(season);
+  const pos = posGroupOf(idMap.get(espnAthleteId)?.position ?? "");
+  if (!pos) return null;
+
+  const rankIn = async (yr: number) => {
+    const weekly = await getWeeklyStats(yr);
+    if (weekly.length === 0) return null;
+    return rankDefenseVsPosition(aggregateDefenseVsPosition(weekly), pos, metric).get(code) ?? null;
+  };
+
+  // A single week of positional data is noise, so fall back to last season and
+  // say which one the rank came from — the same rule the team-level view uses.
+  let hit = await rankIn(season);
+  let basisYear = season;
+  const currentGames = hit?.gp ?? 0;
+  if (!hit || hit.gp < MIN_POSITIONAL_GAMES) {
+    const priorHit = await rankIn(prior);
+    if (priorHit && priorHit.gp >= MIN_POSITIONAL_GAMES) {
+      hit = priorHit;
+      basisYear = prior;
+    }
+  }
+  if (!hit || hit.gp < MIN_POSITIONAL_GAMES) return null;
+
+  const unit = metric === "recYdsPg" ? "rec yds" : metric === "rushYdsPg" ? "rush yds" : "receptions";
+  const basisText =
+    basisYear === season
+      ? `${hit.gp} game${hit.gp === 1 ? "" : "s"} of ${season}`
+      : `${prior} season (${currentGames} of ${season} played)`;
+  return {
+    rank: hit.rank,
+    leagueSize: hit.leagueSize,
+    context:
+      `${opponentName} allow ${hit.allowedPg} ${unit}/game to ${pos}s ` +
+      `(rank ${hit.rank}/${hit.leagueSize}, basis: ${basisText}).`,
+  };
+}
 
 /**
  * NFL opponent-defense matchup from aggregated ESPN box scores. Uses the
@@ -41,8 +108,14 @@ export async function getNflMatchup(prop: ScorablePropInput): Promise<MatchupCon
   }
 
   const { season, prior } = nflSeasonForDate(prop.date);
+
+  // Prefer the position-group view; fall back to team totals below.
+  const positional = await positionalMatchup(prop, ref.athleteId, opponentName, season, prior).catch(
+    () => null,
+  );
+
   const [current, priorAgg] = await Promise.all([getDefenseAgg(season), getDefenseAgg(prior)]);
-  if (!current && !priorAgg) return undefined;
+  if (!current && !priorAgg && !positional) return undefined;
 
   // Team names from ESPN box scores are full display names; prop names come
   // from The Odds API (also full names). Fall back to a substring scan.
@@ -55,15 +128,18 @@ export async function getNflMatchup(prop: ScorablePropInput): Promise<MatchupCon
   const key = findKey(current) ?? findKey(priorAgg);
   const basis = key ? pickDefenseBasis(current, priorAgg, key, family) : null;
   if (!basis) {
-    // No defense data, but the game environment alone is still worth scoring.
-    if (!environment) return undefined;
+    // No team-total data. A positional rank or the game environment alone is
+    // still worth scoring.
+    if (!positional && !environment) return undefined;
     return {
-      environmentFavor: environment.favor,
-      environmentNote: environment.note,
-      blowoutRisk: environment.blowoutRisk,
-      opponentContext: `Opponent defense data unavailable for ${opponentName}.`,
-      source: `${context?.odds?.provider ?? "ESPN"} line via ESPN`,
-      sourceUrl: context?.sourceUrl,
+      opponentDefenseRank: positional?.rank,
+      leagueSize: positional?.leagueSize,
+      environmentFavor: environment?.favor,
+      environmentNote: environment?.note,
+      blowoutRisk: environment?.blowoutRisk,
+      opponentContext: positional?.context ?? `Opponent defense data unavailable for ${opponentName}.`,
+      source: positional ? "nflverse (defense vs position)" : `${context?.odds?.provider ?? "ESPN"} line via ESPN`,
+      sourceUrl: positional ? "https://github.com/nflverse/nflverse-data" : context?.sourceUrl,
     };
   }
 
@@ -75,17 +151,26 @@ export async function getNflMatchup(prop: ScorablePropInput): Promise<MatchupCon
       ? `${season} season, ${basis.agg.gp} game${basis.agg.gp === 1 ? "" : "s"}`
       : `${prior} season (${basis.currentGames} of ${season} played — prior-year defense used)`;
 
+  const teamLevel =
+    `${basis.agg.team} allow ${basis.rank.allowedPg} ${unit}/game (rank ${basis.rank.rank}/${basis.ranks.size}; ` +
+    `${basis.agg.playsFacedPg} plays faced/game). Basis: ${basisText}.`;
+
   return {
-    opponentDefenseRank: basis.rank.rank,
-    leagueSize: basis.ranks.size,
+    // The positional rank is the sharper read when we have it.
+    opponentDefenseRank: positional?.rank ?? basis.rank.rank,
+    leagueSize: positional?.leagueSize ?? basis.ranks.size,
     pace,
     environmentFavor: environment?.favor,
     environmentNote: environment?.note,
     blowoutRisk: environment?.blowoutRisk,
-    opponentContext:
-      `${basis.agg.team} allow ${basis.rank.allowedPg} ${unit}/game (rank ${basis.rank.rank}/${basis.ranks.size}; ` +
-      `${basis.agg.playsFacedPg} plays faced/game). Basis: ${basisText}.`,
-    source: environment ? "ESPN box scores (aggregated) + posted line" : "ESPN box scores (aggregated)",
-    sourceUrl: `https://www.espn.com/nfl/team/stats/_/name/${encodeURIComponent(basis.agg.team.toLowerCase().split(" ").pop() ?? "")}`,
+    opponentContext: positional ? `${positional.context} Team-wide: ${teamLevel}` : teamLevel,
+    source: positional
+      ? "nflverse (defense vs position) + ESPN box scores"
+      : environment
+        ? "ESPN box scores (aggregated) + posted line"
+        : "ESPN box scores (aggregated)",
+    sourceUrl: positional
+      ? "https://github.com/nflverse/nflverse-data"
+      : `https://www.espn.com/nfl/team/stats/_/name/${encodeURIComponent(basis.agg.team.toLowerCase().split(" ").pop() ?? "")}`,
   };
 }
