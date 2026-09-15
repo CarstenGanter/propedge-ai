@@ -14,6 +14,7 @@ import {
 type PlayerStatus = NonNullable<NewsContext["playerStatus"]>;
 import { clamp, hitCount, marginToScore, mean, median, stdDev } from "./stats";
 import { deriveRiskLevel } from "./confidenceModel";
+import { adjustmentsFrom, estimateProbability } from "./probabilityModel";
 
 // v1.1.0: live non-MLB game logs (ESPN), cross-league prop injuries, and live
 // historical splits (home/away, rest, park factors) + defense-rank matchups.
@@ -671,10 +672,41 @@ export function analyzeProp(
   const rawWeighted = wDen > 0 ? wNum / wDen : 50;
   // Dampen distance from 50 as input data gets sparser — honesty about uncertainty.
   const dampen = 0.55 + 0.45 * completeness;
-  const confidenceScore = Math.round(clamp(50 + (rawWeighted - 50) * dampen, 0, 100));
+  const blendedScore = Math.round(clamp(50 + (rawWeighted - 50) * dampen, 0, 100));
+
+  // The distribution profile replaces the blend with an actual tail
+  // probability, so the number means what it says. It falls back to the blend
+  // when there is no game log to build a distribution from.
+  let probability: number | null = null;
+  let probabilityNote: string | undefined;
+  if (profile === "distribution") {
+    const est = estimateProbability({
+      line: prop.line,
+      direction: prop.direction,
+      propType: prop.propType,
+      games: bundle.playerStats?.recentGames ?? [],
+      marketProbOver: bundle.market?.noVigProbOver,
+      marketLine: bundle.market?.marketLine ?? prop.marketLine,
+      adjustments: adjustmentsFrom(prop, bundle),
+    });
+    if (est) {
+      probability = est.probability;
+      probabilityNote = est.note;
+    }
+  }
+  const confidenceScore = probability != null ? Math.round(probability * 100) : blendedScore;
 
   const allCats = [...inputCats, parlaySuitability];
   const evidence = allCats.flatMap((c) => c.evidence);
+  if (probabilityNote) {
+    evidence.unshift({
+      category: "dataQuality",
+      title: `Model probability ${confidenceScore}%`,
+      summary: probabilityNote,
+      confidenceImpact: 0,
+      sourceName: "PropEdge distribution model",
+    });
+  }
   const warnings = allCats.flatMap((c) => c.warnings);
   const reasonsFor = dedupe(allCats.flatMap((c) => c.reasonsFor));
   const reasonsAgainst = dedupe(allCats.flatMap((c) => c.reasonsAgainst));

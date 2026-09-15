@@ -122,7 +122,13 @@ export const CATEGORY_WEIGHTS: Record<ScoreCategory, number> = {
   parlaySuitability: 0,
 };
 
-export type ScoringProfile = "balanced" | "market";
+/**
+ * `distribution` does not blend category scores at all: it estimates the
+ * player's per-game distribution and reads P(stat beats the line) off the tail,
+ * so the number it produces is an actual probability. The categories are still
+ * scored and displayed as evidence.
+ */
+export type ScoringProfile = "balanced" | "market" | "distribution";
 
 /**
  * "Market model" weights: confidence is driven mostly by the de-vigged market
@@ -142,6 +148,8 @@ export const MARKET_PROFILE_WEIGHTS: Record<ScoreCategory, number> = {
 };
 
 export function weightsForProfile(profile: ScoringProfile): Record<ScoreCategory, number> {
+  // The distribution profile ignores weights when scoring; these are the ones
+  // shown in the breakdown so the evidence panel still reads sensibly.
   return profile === "market" ? MARKET_PROFILE_WEIGHTS : CATEGORY_WEIGHTS;
 }
 

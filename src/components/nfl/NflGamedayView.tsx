@@ -149,7 +149,12 @@ export function NflGamedayView({ data }: { data: NflGamedayData }) {
             )}
           </div>
           <div className="lg:sticky lg:top-6 lg:self-start">
-            <NflSlipsPanel picks={allPicks} date={data.date} defaultStake={s.defaultStake} />
+            <NflSlipsPanel
+              picks={allPicks}
+              date={data.date}
+              defaultStake={s.defaultStake}
+              calibrated={s.profile === "distribution"}
+            />
           </div>
         </div>
       )}

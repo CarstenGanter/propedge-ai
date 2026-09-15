@@ -20,10 +20,13 @@ export function NflSlipsPanel({
   picks,
   date,
   defaultStake,
+  calibrated = false,
 }: {
   picks: SerializedPick[];
   date: string;
   defaultStake: number;
+  /** True when picks were scored by the probability model, so EV is meaningful. */
+  calibrated?: boolean;
 }) {
   const pendingPicks = picks.filter((p) => p.status === "pending");
   // Offer every size the board can fill and let the economics rank them, rather
@@ -50,14 +53,26 @@ export function NflSlipsPanel({
             {pendingPicks.length < 2 ? "Need at least two pending picks to suggest a slip." : "Not enough independent picks to build a slip."}
           </p>
         ) : (
-          slips.map((slip) => <SlipCard key={slip.size} slip={slip} date={date} defaultStake={defaultStake} />)
+          slips.map((slip) => (
+            <SlipCard key={slip.size} slip={slip} date={date} defaultStake={defaultStake} calibrated={calibrated} />
+          ))
         )}
       </CardContent>
     </Card>
   );
 }
 
-function SlipCard({ slip, date, defaultStake }: { slip: SuggestedSlip; date: string; defaultStake: number }) {
+function SlipCard({
+  slip,
+  date,
+  defaultStake,
+  calibrated,
+}: {
+  slip: SuggestedSlip;
+  date: string;
+  defaultStake: number;
+  calibrated: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const [multiplier, setMultiplier] = React.useState(String(slip.multiplier));
@@ -68,7 +83,9 @@ function SlipCard({ slip, date, defaultStake }: { slip: SuggestedSlip; date: str
   const ids = slip.legs.map((l) => l.pickId);
   // Recomputed on every keystroke, so a boosted or discounted multiplier
   // immediately changes the verdict.
-  const econ = slipEconomics(mult, slip.legs.map((l) => l.confidenceScore / 100));
+  const econ = slipEconomics(mult, slip.legs.map((l) => l.confidenceScore / 100), {
+    pIsCalibrated: calibrated,
+  });
   const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
   const evTone =
     econ.verdict === "positive" ? "text-success" : econ.verdict === "negative" ? "text-danger" : "text-warning";

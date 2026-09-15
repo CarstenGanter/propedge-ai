@@ -239,14 +239,16 @@ export function SettingsForm({
         <CardHeader>
           <CardTitle>Scoring model</CardTitle>
           <CardDescription>
-            Choose how confidence is calculated. Use “Market model” when The Odds API is your main
-            source (confidence is driven by de-vigged market probability). Use “Balanced” when you
-            also have player stats/projections.
+            How the confidence number is produced. <strong>Probability</strong> estimates the
+            player&apos;s per-game distribution and reads the chance of beating the line off its tail,
+            so 58 means 58%. The other two blend category scores, where the number is a ranking
+            rather than a probability.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
             {([
+              ["distribution", "Probability (recommended)"],
               ["balanced", "Balanced (stats + market)"],
               ["market", "Market model (The Odds API)"],
             ] as const).map(([value, label]) => (
