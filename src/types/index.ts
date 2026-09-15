@@ -207,6 +207,14 @@ export interface PlayerStatsContext {
   /** Usage-style metric relevant to the sport (minutes, snaps, TOI...). */
   usage?: number;
   usageTrend?: "up" | "down" | "steady";
+  /** Share of team offensive snaps, 0..1 (NFL, from nflverse). */
+  snapPct?: number;
+  /** Share of team targets, 0..1 (NFL, from nflverse). */
+  targetShare?: number;
+  /** Weeks of role data behind snapPct/targetShare. */
+  usageWeeks?: number;
+  usageSource?: string;
+  usageSourceUrl?: string;
   /** Games from the current season inside `recentGames` (rest are prior-season, if blended). */
   currentSeasonGames?: number;
   /** The player's own team, as the provider's canonical id (ESPN team id for NFL). */

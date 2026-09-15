@@ -492,6 +492,26 @@ export async function getEspnPlayerStats(
     usageTrend = recent > overall * 1.08 ? "up" : recent < overall * 0.92 ? "down" : "steady";
   }
 
+  // NFL role data (snap share / target share) from nflverse, joined by ESPN id.
+  // Lazily imported: that module is server-only and this file is unit-tested.
+  let role: { snapPct?: number; targetShare?: number; trend?: "up" | "down" | "steady"; weeks?: number } = {};
+  if (sport === "NFL" && date) {
+    try {
+      const { getNflPlayerUsage } = await import("@/lib/nfl/playerUsage");
+      const u = await getNflPlayerUsage(ref.athleteId, date);
+      if (u) {
+        role = {
+          snapPct: u.snapPct ?? undefined,
+          targetShare: u.targetShare ?? undefined,
+          trend: u.trend ?? undefined,
+          weeks: u.weeksUsed,
+        };
+      }
+    } catch {
+      // Role data is an enhancement; its absence is disclosed, never fatal.
+    }
+  }
+
   const blended = Boolean(blend?.blended);
   const note = blend?.blended
     ? `Sample includes ${blend.priorGamesUsed} game(s) from the ${log.prior} season (${blend.currentGames} of ${log.season} played).`
@@ -504,7 +524,17 @@ export async function getEspnPlayerStats(
     seasonStdDev: Math.round(stdDev(games) * 100) / 100,
     gamesPlayed: games.length,
     usage,
-    usageTrend,
+    // Snap-share trend beats a gamelog count trend: it separates role from
+    // game script, and it moves first when a player is promoted or benched.
+    usageTrend: role.trend ?? usageTrend,
+    snapPct: role.snapPct,
+    targetShare: role.targetShare,
+    usageWeeks: role.weeks,
+    usageSource: role.snapPct != null || role.targetShare != null ? "nflverse" : undefined,
+    usageSourceUrl:
+      role.snapPct != null || role.targetShare != null
+        ? "https://github.com/nflverse/nflverse-data"
+        : undefined,
     currentSeasonGames: blend ? blend.currentGames : undefined,
     playerTeamId: ref.teamId,
     note,

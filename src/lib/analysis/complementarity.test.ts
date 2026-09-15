@@ -97,6 +97,29 @@ describe("a prop's two sides sum to 100", () => {
     expect(over + under).toBeLessThanOrEqual(101);
   });
 
+  it("holds when snap share and target share are present", () => {
+    for (const snapPct of [0.25, 0.49, 0.5, 0.9]) {
+      const extra = {
+        playerStats: { ...bundleFor("OVER").playerStats!, snapPct, targetShare: 0.28, usageWeeks: 4 },
+      };
+      const { over, under } = sides(prop, extra);
+      expect(over + under).toBeGreaterThanOrEqual(99);
+      expect(over + under).toBeLessThanOrEqual(101);
+    }
+  });
+
+  it("penalises an OVER on a part-time player and rewards the UNDER", () => {
+    const stats = { recentGames: [5, 4, 6, 5], seasonAverage: 5, seasonStdDev: 1, gamesPlayed: 4, source: "s" };
+    const parttime = { playerStats: { ...stats, snapPct: 0.3, usageWeeks: 4 } };
+    const fulltime = { playerStats: { ...stats, snapPct: 0.9, usageWeeks: 4 } };
+    const overPart = analyzeProp({ ...prop, direction: "OVER" }, parttime);
+    const overFull = analyzeProp({ ...prop, direction: "OVER" }, fulltime);
+    const underPart = analyzeProp({ ...prop, direction: "UNDER" }, parttime);
+    expect(overPart.scoreBreakdown.roleUsage).toBeLessThan(overFull.scoreBreakdown.roleUsage);
+    expect(underPart.scoreBreakdown.roleUsage).toBeGreaterThan(50);
+    expect(overPart.reasonsAgainst.join(" ")).toMatch(/Part-time role/);
+  });
+
   it("holds with an empty bundle", () => {
     const over = analyzeProp({ ...prop, direction: "OVER" }, {});
     const under = analyzeProp({ ...prop, direction: "UNDER" }, {});

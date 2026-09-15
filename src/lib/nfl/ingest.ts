@@ -82,6 +82,7 @@ export async function estimateNflFetch(date: string): Promise<NflFetchEstimate> 
 export interface NflPrepareSummary {
   contextsWarmed: number;
   defense: { season: DefenseRefreshSummary | null; prior: DefenseRefreshSummary | null };
+  nflverse: { season: number; idMapPlayers: number; weeklyRows: number; snapRows: number; latestWeek: number | null } | null;
 }
 
 /**
@@ -92,12 +93,15 @@ export async function prepareNflResearch(date: string, slate?: NflGame[]): Promi
   const games = slate ?? (await getNflSlate(date));
   const contextsWarmed = games.length ? await warmNflGameContexts(games) : 0;
   const { season, prior } = nflSeasonForDate(date);
+  // Snap share / target share for the whole league, free and keyless.
+  const { refreshNflverse } = await import("@/lib/providers/live/nflverse");
+  const nflverse = await refreshNflverse(season).catch(() => null);
   const seasonSummary = await refreshNflDefense(season).catch(() => null);
   let priorSummary: DefenseRefreshSummary | null = null;
   if (!(await getDefenseAgg(prior))) {
     priorSummary = await refreshNflDefense(prior).catch(() => null);
   }
-  return { contextsWarmed, defense: { season: seasonSummary, prior: priorSummary } };
+  return { contextsWarmed, defense: { season: seasonSummary, prior: priorSummary }, nflverse };
 }
 
 export interface NflIngestSummary {

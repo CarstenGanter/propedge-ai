@@ -262,7 +262,7 @@ function scoreRoleUsage(
 ): CategoryResult {
   const ps = bundle.playerStats;
   const news = bundle.news;
-  const hasUsage = ps?.usage != null || ps?.usageTrend != null;
+  const hasUsage = ps?.usage != null || ps?.usageTrend != null || ps?.snapPct != null || ps?.targetShare != null;
   const hasBoost = news?.teammateAbsencesBoost != null;
   if (!hasUsage && !hasBoost) {
     return {
@@ -286,7 +286,30 @@ function scoreRoleUsage(
     parts.push("Teammate absence(s) likely increase opportunity.");
     if (prop.direction === "OVER") res.reasonsFor.push("Opportunity boost from teammate absence.");
   }
-  if (ps?.usage != null) {
+  // Snap share and target share describe the role the market has already
+  // priced, so their level is context rather than edge. The exception is a
+  // part-time role, which genuinely caps an OVER: a player on a third of the
+  // snaps needs an outlier game to clear a line set for a starter.
+  if (ps?.snapPct != null) {
+    parts.push(`Playing ${(ps.snapPct * 100).toFixed(0)}% of offensive snaps.`);
+    if (ps.snapPct < 0.5) {
+      acc -= dirSign(prop.direction) * 10;
+      if (prop.direction === "OVER") {
+        res.reasonsAgainst.push(
+          `Part-time role — only ${(ps.snapPct * 100).toFixed(0)}% of snaps over the last ${ps.usageWeeks ?? "few"} week(s).`,
+        );
+      }
+    } else if (ps.snapPct >= 0.85) {
+      parts.push("Full-time role.");
+    }
+  }
+  if (ps?.targetShare != null) {
+    parts.push(`${(ps.targetShare * 100).toFixed(0)}% of team targets.`);
+    if (ps.targetShare >= 0.25 && prop.direction === "OVER") {
+      res.reasonsFor.push(`Commands ${(ps.targetShare * 100).toFixed(0)}% of his team's targets.`);
+    }
+  }
+  if (ps?.snapPct == null && ps?.usage != null) {
     parts.push(`Recent usage/volume metric ~${ps.usage.toFixed(1)}.`);
   }
   res.score = clamp(acc, 0, 100);
@@ -295,8 +318,8 @@ function scoreRoleUsage(
     title: "Role & usage context",
     summary: parts.join(" "),
     confidenceImpact: Math.round((res.score - 50) / 3),
-    sourceName: ps?.source ?? news?.source ?? "manual/demo data",
-    sourceUrl: ps?.sourceUrl ?? news?.notes?.find((n) => n.sourceUrl)?.sourceUrl,
+    sourceName: ps?.usageSource ?? ps?.source ?? news?.source ?? "manual/demo data",
+    sourceUrl: ps?.usageSourceUrl ?? ps?.sourceUrl ?? news?.notes?.find((n) => n.sourceUrl)?.sourceUrl,
   });
   if (res.score >= 60 && prop.direction === "OVER")
     res.reasonsFor.push("Strong/expanding role supports volume.");
