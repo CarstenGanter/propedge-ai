@@ -29,7 +29,8 @@
       "Bash(node --conditions=react-server --env-file=.env --import tsx /tmp/verify-audit.ts)",
       "WebSearch",
       "WebFetch(domain:help.underdogsports.com)",
-      "Bash(curl -s \"http://localhost:3000/nfl?date=2026-09-13\" -o /tmp/s.html -w \"status %{http_code}\\\\n\" --max-time 40)"
+      "Bash(curl -s \"http://localhost:3000/nfl?date=2026-09-13\" -o /tmp/s.html -w \"status %{http_code}\\\\n\" --max-time 40)",
+      "Bash(curl -s \"http://localhost:3000/analytics?sport=NFL\" -o /tmp/a.html -w \"analytics %{http_code}\\\\n\" --max-time 40)"
     ]
   }
 }

@@ -8,7 +8,9 @@ import {
   getBankrollRecords,
   getPropModelInputs,
   getTeamModelInputs,
+  getLineEdgeInputs,
 } from "@/lib/queries";
+import { summarizeLineEdge, MIN_DECIDED_FOR_SIGNAL, type LineEdgeSummary } from "@/lib/analysis/lineEdge";
 import { getSettings } from "@/lib/settings";
 import {
   computeRecord,
@@ -47,14 +49,16 @@ export default async function AnalyticsPage({
   const scope: AccuracyScope = params.scope === "mine" ? "mine" : "all";
   const sportParam = params.sport ?? "All";
 
-  const [allRecords, bankroll, settings, teamRecords, propModel, teamModel] = await Promise.all([
+  const [allRecords, bankroll, settings, teamRecords, propModel, teamModel, lineEdgeInputs] = await Promise.all([
     getAllPickRecords(),
     getBankrollRecords(),
     getSettings(),
     getAllTeamRecords(),
     getPropModelInputs(),
     getTeamModelInputs(),
+    getLineEdgeInputs(sportParam === "All" ? undefined : sportParam),
   ]);
+  const lineEdge = summarizeLineEdge(lineEdgeInputs);
 
   // Accuracy views are scoped; demo-seeded picks are excluded so synthetic
   // results never inflate a real hit rate.
@@ -222,6 +226,7 @@ export default async function AnalyticsPage({
         </TabsList>
 
         <TabsContent value="accuracy" className="space-y-4">
+          <LineEdgeCard summary={lineEdge} />
           <Card>
             <CardHeader>
               <CardTitle>Accuracy by prop type</CardTitle>
@@ -407,6 +412,83 @@ function QualityTable({
         {q.n} decided picks · lower Brier/log-loss is better · skill &gt; 0 beats a coin flip.
       </p>
     </div>
+  );
+}
+
+function LineEdgeCard({ summary }: { summary: LineEdgeSummary }) {
+  if (summary.total === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Is line shopping working?</CardTitle>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Enter the line your pick&apos;em app posts on a few picks and this will start measuring
+            whether those lines are actually softer than the sportsbooks&apos;.
+          </p>
+        </CardHeader>
+      </Card>
+    );
+  }
+  const { softer, identical, tougher } = summary.buckets;
+  const rows: { label: string; rec: typeof softer; note: string }[] = [
+    { label: "Pick'em line was softer", rec: softer, note: "the edge you are hoping for" },
+    { label: "Identical to the book", rec: identical, note: "no edge either way" },
+    { label: "Pick'em line was tougher", rec: tougher, note: "negative edge" },
+  ];
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Is line shopping working?</CardTitle>
+        <p className="mt-1 text-xs text-muted-foreground">
+          In fixed-multiplier pick&apos;em the structural edge comes from your app posting a softer
+          number than the sharp books. This tests that claim directly instead of assuming it.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-2">
+          {rows.map(({ label, rec, note }) => {
+            const decided = rec.hits + rec.misses;
+            const share = summary.total > 0 ? (rec.count / summary.total) * 100 : 0;
+            return (
+              <div key={label} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 text-sm">
+                <span className="truncate">
+                  {label}
+                  <span className="ml-1.5 text-xs text-muted-foreground">{note}</span>
+                </span>
+                <span className="tabular-nums text-muted-foreground">
+                  {rec.count} of {summary.total} ({share.toFixed(0)}%)
+                </span>
+                <span className="w-24 text-right tabular-nums">
+                  {decided >= MIN_SAMPLE && rec.hitRate != null
+                    ? formatPercent(rec.hitRate, 0)
+                    : `${rec.hits}-${rec.misses}`}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {summary.identicalShare != null && summary.identicalShare >= 0.6 ? (
+            <>
+              Your pick&apos;em app matched the book on{" "}
+              <span className="font-medium text-warning">
+                {formatPercent(summary.identicalShare * 100, 0)}
+              </span>{" "}
+              of these props. Where the lines agree there is no line edge to win, so results there come
+              down to the model and to variance.
+            </>
+          ) : (
+            <>
+              Average difference {summary.averageEdge == null ? "—" : summary.averageEdge.toFixed(2)} stat
+              units in your favour across {summary.total} props.
+            </>
+          )}{" "}
+          {summary.conclusive
+            ? "There is now enough settled data to compare these rows."
+            : `Not yet conclusive — needs at least ${MIN_DECIDED_FOR_SIGNAL} decided picks with a good number on a softer line.`}
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 

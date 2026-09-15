@@ -12,7 +12,8 @@ import {
   type SerializedTeamPick,
 } from "@/lib/dto";
 import type { BankrollRecord, PickRecord, TeamRecordInput } from "@/lib/analytics";
-import type { SettlementStatus, TeamStatus, WagerStatus } from "@/types";
+import type { LineEdgeInput } from "@/lib/analysis/lineEdge";
+import type { Direction, SettlementStatus, TeamStatus, WagerStatus } from "@/types";
 
 export interface PropModelInput {
   status: SettlementStatus;
@@ -135,6 +136,45 @@ export async function getDistinctPickDates(): Promise<string[]> {
     orderBy: { date: "desc" },
   });
   return rows.map((r) => r.date);
+}
+
+/**
+ * Picks where a pick'em line was actually recorded, for testing whether line
+ * shopping produces an edge. Demo rows are excluded so synthetic data can never
+ * make the answer look better than it is.
+ */
+export async function getLineEdgeInputs(sport?: string): Promise<LineEdgeInput[]> {
+  const picks = await prisma.pick.findMany({
+    where: {
+      isDemo: false,
+      playerProp: { underdogLine: { not: null }, ...(sport ? { sport } : {}) },
+    },
+    include: PICK_INCLUDE,
+  });
+  const out: LineEdgeInput[] = [];
+  for (const p of picks) {
+    const pp = p.playerProp;
+    if (pp.underdogLine == null) continue;
+    const market = parseMarketLine(pp.marketDataJson) ?? pp.line;
+    out.push({
+      underdogLine: pp.underdogLine,
+      marketLine: market,
+      direction: pp.direction as Direction,
+      status: p.status as SettlementStatus,
+      propType: pp.propType,
+    });
+  }
+  return out;
+}
+
+function parseMarketLine(json: string | null): number | null {
+  if (!json) return null;
+  try {
+    const m = JSON.parse(json) as { marketLine?: number };
+    return typeof m.marketLine === "number" ? m.marketLine : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getAvoidList() {
