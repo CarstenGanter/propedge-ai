@@ -70,6 +70,9 @@ model Pick {
   tagsJson           String   @default("[]")
   userNote           String?
   modelVersion       String   @default("v1.0.0")
+  // Which engine produced `confidenceScore`. Only "distribution" makes it an
+  // actual probability, so calibration metrics must be scoped to those picks.
+  scoringProfile     String   @default("balanced")
   status             String   @default("pending") // pending | hit | miss | push | void
   actualResult       Float?
   placedReal         Boolean  @default(false)

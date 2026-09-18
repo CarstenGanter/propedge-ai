@@ -72,6 +72,8 @@ export interface SerializedPick {
   actualResult: number | null;
   placedReal: boolean;
   isDemo: boolean;
+  /** True once a closing line was recorded for this pick (drives CLV). */
+  closingCaptured: boolean;
   /** Value of the entered Underdog line vs the sharp-market fair value (>0 = soft). */
   underdogEdge: number | null;
   prop: SerializedProp;
@@ -171,6 +173,7 @@ export function serializePick(
     actualResult: pick.actualResult,
     placedReal: pick.placedReal,
     isDemo: pick.isDemo,
+    closingCaptured: pick.closingProb != null,
     underdogEdge: computeUnderdogEdge(prop),
     prop,
   };
@@ -187,6 +190,7 @@ export function pickToRecord(pick: Pick & { playerProp: PlayerProp }): PickRecor
     date: pick.date,
     placedReal: pick.placedReal,
     isDemo: pick.isDemo,
+    scoringProfile: pick.scoringProfile,
   };
 }
 

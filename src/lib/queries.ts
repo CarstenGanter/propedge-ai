@@ -21,6 +21,9 @@ export interface PropModelInput {
   entryProb: number | null;
   closingProb: number | null;
   sport: string;
+  /** Only "distribution" picks carry a confidence that is a real probability. */
+  scoringProfile: string;
+  modelVersion: string;
 }
 
 export interface TeamModelInput {
@@ -61,7 +64,7 @@ export async function getAllPickRecords(): Promise<PickRecord[]> {
 /** Per-pick inputs for calibration (confidence vs. hit) and CLV (entry vs. closing). */
 export async function getPropModelInputs(): Promise<PropModelInput[]> {
   const picks = await prisma.pick.findMany({
-    select: { status: true, confidenceScore: true, entryProb: true, closingProb: true, playerProp: { select: { sport: true } } },
+    select: { status: true, confidenceScore: true, entryProb: true, closingProb: true, scoringProfile: true, modelVersion: true, playerProp: { select: { sport: true } } },
   });
   return picks.map((p) => ({
     status: p.status as SettlementStatus,
@@ -69,6 +72,8 @@ export async function getPropModelInputs(): Promise<PropModelInput[]> {
     entryProb: p.entryProb,
     closingProb: p.closingProb,
     sport: p.playerProp.sport,
+    scoringProfile: p.scoringProfile,
+    modelVersion: p.modelVersion,
   }));
 }
 

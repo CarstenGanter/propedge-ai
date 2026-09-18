@@ -13,6 +13,8 @@ export interface PickRecord {
   /** True when you marked this pick as one you actually took. */
   placedReal?: boolean;
   isDemo?: boolean;
+  /** Engine that produced `confidenceScore`; only "distribution" is a probability. */
+  scoringProfile?: string;
 }
 
 /** Which picks an accuracy view covers. */

@@ -35,7 +35,8 @@
       "Bash(git push *)",
       "Bash(node --conditions=react-server --env-file=.env --import tsx /tmp/settle-now.ts 2026-09-17)",
       "Bash(rm -rf .next)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"/analytics %{http_code}\\\\n\" --max-time 30 http://localhost:3000/analytics)"
     ]
   }
 }

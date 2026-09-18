@@ -30,6 +30,10 @@ export interface NflGamedayData {
   prevDate: string | null;
   nextDate: string | null;
   pickCount: number;
+  /** Pending picks on this slate that have no closing line recorded yet. */
+  awaitingClosingLines: number;
+  /** Minutes until the earliest remaining kickoff, or null if all have started. */
+  minutesToKickoff: number | null;
   pendingPropCount: number;
   contextsCached: number;
   credits: { remaining: number; at: string } | null;
@@ -89,6 +93,14 @@ export async function getNflGamedayData(date: string, today: string): Promise<Nf
     prevDate,
     nextDate: nextResolved?.date ?? null,
     pickCount: picks.length,
+    awaitingClosingLines: picks.filter((p) => p.status === "pending" && !p.closingCaptured).length,
+    minutesToKickoff: (() => {
+      const upcoming = slate
+        .map((g) => Date.parse(g.kickoffISO))
+        .filter((t) => Number.isFinite(t) && t > Date.now());
+      if (upcoming.length === 0) return null;
+      return Math.round((Math.min(...upcoming) - Date.now()) / 60000);
+    })(),
     pendingPropCount,
     contextsCached: contexts.filter(Boolean).length,
     credits: credits ? { remaining: credits.remaining, at: credits.at } : null,

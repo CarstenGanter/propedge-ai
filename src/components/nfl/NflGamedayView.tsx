@@ -12,9 +12,13 @@ import { NflFetchButton } from "./NflFetchButton";
 import { NflGameCard } from "./NflGameCard";
 import { NflSlipsPanel } from "./NflSlipsPanel";
 import { UnderdogLineTable } from "./UnderdogLineTable";
+import { CaptureClosingLinesButton } from "@/components/CaptureClosingLinesButton";
 import { generateNflPicksAction, refreshNflContextAction } from "@/server/actions/nfl";
 import { formatSlate } from "@/lib/utils/dates";
 import type { NflGamedayData } from "@/lib/nfl/gameday";
+
+/** How long before kickoff the closing-line prompt appears. */
+const CAPTURE_WINDOW_MINUTES = 180;
 
 export function NflGamedayView({ data }: { data: NflGamedayData }) {
   const router = useRouter();
@@ -119,6 +123,23 @@ export function NflGamedayView({ data }: { data: NflGamedayData }) {
       )}
       {!s.oddsConfigured && <Note tone="warning">No ODDS_API_KEY in .env — props can only come from CSV/manual entry.</Note>}
       {msg && <Note>{msg}</Note>}
+
+      {/* Closing-line value only exists if the closing line gets recorded, and
+          the window for that is the hour or two before kickoff. Surface it here
+          rather than expecting a trip to Analytics at exactly the right time. */}
+      {data.awaitingClosingLines > 0 &&
+        data.minutesToKickoff != null &&
+        data.minutesToKickoff <= CAPTURE_WINDOW_MINUTES && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/25 bg-primary/5 px-4 py-3">
+            <p className="text-sm text-foreground/90">
+              Kickoff in {data.minutesToKickoff} min. Capture closing lines now to score{" "}
+              {data.awaitingClosingLines} pick{data.awaitingClosingLines === 1 ? "" : "s"} against where
+              the market finished. That is the fastest read on whether these picks were good, and it
+              does not wait for results.
+            </p>
+            <CaptureClosingLinesButton />
+          </div>
+        )}
 
       {data.games.length === 0 ? (
         <EmptyState

@@ -70,9 +70,16 @@ export default async function AnalyticsPage({
   const allCount = filterRecords(allRecords, { scope: "all", sport }).length;
 
   // ---- Model quality: calibration score (Brier / log-loss) + closing-line value ----
-  const propCalib = propModel
+  // Brier and log-loss require confidence to *be* a probability, which is only
+  // true for the distribution profile. Pooling the older blended scores would
+  // grade two different scales against each other and mean nothing.
+  const calibratable = propModel.filter((p) => p.scoringProfile === "distribution");
+  const propCalib = calibratable
     .filter((p) => p.status === "hit" || p.status === "miss")
     .map((p) => ({ p: p.confidenceScore / 100, hit: p.status === "hit" }));
+  const nonProbabilityDecided = propModel.filter(
+    (p) => p.scoringProfile !== "distribution" && (p.status === "hit" || p.status === "miss"),
+  ).length;
   const teamCalib = teamModel
     .filter((t) => t.status === "win" || t.status === "loss")
     .map((t) => ({ p: t.winProbability, hit: t.status === "win" }));
@@ -113,7 +120,9 @@ export default async function AnalyticsPage({
   const plBySport = profitLossBy(bankroll, (e) => e.sport);
   const plByProp = profitLossBy(bankroll, (e) => e.propType);
   const plSeries = cumulativePLSeries(bankroll, settings.bankrollStartingAmount);
-  const calibration = computeCalibration(records);
+  // The calibration curve has the same requirement as Brier: a probability.
+  const calibrationRecords = records.filter((r) => r.scoringProfile === "distribution");
+  const calibration = computeCalibration(calibrationRecords);
   const trend = recentTrend(records);
   const confSplit = avgConfidenceWinnersVsLosers(records);
 
@@ -326,7 +335,19 @@ export default async function AnalyticsPage({
               <CardHeader>
                 <CardTitle>Calibration score — player props</CardTitle>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  How well confidence maps to reality (confidence ÷ 100 as the predicted hit rate).
+                  How well the stated probability matches reality. Counts only picks scored by the
+                  Probability model, where confidence genuinely is a percentage.
+                  {nonProbabilityDecided > 0 && (
+                    <>
+                      {" "}
+                      <span className="text-warning">
+                        {nonProbabilityDecided} older decided pick
+                        {nonProbabilityDecided === 1 ? "" : "s"} excluded
+                      </span>{" "}
+                      — they were scored on a 0-100 lean scale, which cannot be graded as a
+                      probability.
+                    </>
+                  )}
                 </p>
               </CardHeader>
               <CardContent><QualityTable q={propQuality} /></CardContent>

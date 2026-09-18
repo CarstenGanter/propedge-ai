@@ -224,6 +224,7 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
         reasonsAgainstJson: JSON.stringify(analysis.reasonsAgainst),
         tagsJson: JSON.stringify(analysis.tags),
         modelVersion: SCORING_MODEL_VERSION,
+        scoringProfile: settings.scoringProfile,
         isDemo: prop.isDemo,
         evidence: {
           create: analysis.evidence.map((e) => ({

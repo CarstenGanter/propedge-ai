@@ -66,6 +66,7 @@ export async function applyUnderdogLine(
       reasonsAgainstJson: JSON.stringify(analysis.reasonsAgainst),
       tagsJson: JSON.stringify([...tags]),
       modelVersion: SCORING_MODEL_VERSION,
+      scoringProfile: settings.scoringProfile,
     },
   });
 
