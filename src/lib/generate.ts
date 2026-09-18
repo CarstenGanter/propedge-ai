@@ -38,6 +38,8 @@ export interface GenerationSummary {
   evaluated: number;
   /** Picks you had marked as taken that were carried through the re-rank. */
   restoredTaken?: number;
+  /** Saved-slip legs re-attached to their new pick rows. */
+  relinkedLegs?: number;
   filtered: { reason: string; count: number }[];
 }
 
@@ -64,6 +66,21 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
   for (const t of takenBefore) {
     const entry = t.bankrollEntries[0];
     takenStakes.set(t.playerPropId, { stake: entry?.stake ?? null, placedReal: entry?.placedReal ?? true });
+  }
+
+  // Saved slips must survive a re-rank too. ParlayLeg cascades when its Pick is
+  // deleted, which silently emptied slips and left them pending forever with
+  // their stake stranded in the bankroll. Legs belong to the prop, so remember
+  // which parlay wanted which prop and rebuild them against the new pick rows.
+  const legsBefore = await prisma.parlayLeg.findMany({
+    where: { pick: { date, status: "pending" } },
+    select: { parlayId: true, pickId: true, status: true, pick: { select: { playerPropId: true } } },
+  });
+  const legsByProp = new Map<string, { parlayId: string; status: string }[]>();
+  for (const l of legsBefore) {
+    const list = legsByProp.get(l.pick.playerPropId) ?? [];
+    list.push({ parlayId: l.parlayId, status: l.status });
+    legsByProp.set(l.pick.playerPropId, list);
   }
 
   // Drop existing pending picks for the date so we can re-rank cleanly.
@@ -183,6 +200,7 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
 
   let rank = 1;
   let restored = 0;
+  let relinkedLegs = 0;
   for (const { prop, analysis, entryProb } of top) {
     const wasTaken = takenStakes.get(prop.id);
     const created = await prisma.pick.create({
@@ -237,6 +255,22 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
       });
       restored++;
     }
+
+    // Re-attach this prop's slip legs to the pick row that replaced the old one.
+    for (const leg of legsByProp.get(prop.id) ?? []) {
+      await prisma.parlayLeg.create({
+        data: { parlayId: leg.parlayId, pickId: created.id, status: leg.status },
+      });
+      relinkedLegs++;
+    }
+    legsByProp.delete(prop.id);
+  }
+
+  // Any slip leg whose prop no longer makes the board would leave the slip
+  // unsettleable, so say so rather than losing it quietly.
+  const orphanedLegs = [...legsByProp.values()].reduce((n, l) => n + l.length, 0);
+  if (orphanedLegs > 0) {
+    filters[`Slip legs dropped from the board (saved slips affected)`] = orphanedLegs;
   }
 
   // A pick you took that no longer clears the bar would silently vanish — say so.
@@ -251,6 +285,7 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
     date,
     created: top.length,
     restoredTaken: restored,
+    relinkedLegs,
     evaluated: props.length,
     filtered: Object.entries(filters)
       .filter(([, count]) => count > 0)
