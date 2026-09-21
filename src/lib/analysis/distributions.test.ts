@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bivariateNormalCdf,
   negBinomialCdf,
   normalCdf,
   normalQuantile,
@@ -92,5 +93,33 @@ describe("negBinomialCdf", () => {
 
   it("handles a zero mean without dividing by zero", () => {
     expect(negBinomialCdf(0, 0, 0)).toBe(1);
+  });
+});
+
+describe("bivariateNormalCdf", () => {
+  // Phi2(0,0,rho) has the closed form 1/4 + arcsin(rho)/(2*pi).
+  const exact = (r: number) => 0.25 + Math.asin(r) / (2 * Math.PI);
+
+  it("matches the closed form at the origin across rho", () => {
+    for (const r of [-0.8, -0.5, -0.2, 0, 0.2, 0.3, 0.5, 0.8, 0.95]) {
+      expect(bivariateNormalCdf(0, 0, r)).toBeCloseTo(exact(r), 8);
+    }
+  });
+
+  it("factorises into the marginals when rho is zero", () => {
+    for (const [h, k] of [[0.5, 1], [-1, 2], [1.5, -0.5]]) {
+      expect(bivariateNormalCdf(h, k, 0)).toBeCloseTo(normalCdf(h) * normalCdf(k), 12);
+    }
+  });
+
+  it("reduces to a single marginal when the other bound is far out", () => {
+    expect(bivariateNormalCdf(0.7, 8, 0.4)).toBeCloseTo(normalCdf(0.7), 10);
+    expect(bivariateNormalCdf(-8, 0.3, 0.4)).toBeCloseTo(0, 10);
+  });
+
+  it("is symmetric in its arguments and clamps |rho| >= 1", () => {
+    expect(bivariateNormalCdf(0.4, -1.1, 0.25)).toBeCloseTo(bivariateNormalCdf(-1.1, 0.4, 0.25), 12);
+    expect(bivariateNormalCdf(0.3, 0.3, 1)).toBeLessThanOrEqual(1);
+    expect(bivariateNormalCdf(0.3, 0.3, -1)).toBeGreaterThanOrEqual(0);
   });
 });

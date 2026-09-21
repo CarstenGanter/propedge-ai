@@ -143,3 +143,40 @@ export function negBinomialCdf(k: number, mean: number, variance: number): numbe
   }
   return Math.min(1, sum);
 }
+
+/** 20-node Gauss-Legendre abscissae/weights on [-1, 1] (symmetric halves). */
+const GL20_X = [
+  0.0765265211334973, 0.2277858511416451, 0.3737060887154195, 0.5108670019508271,
+  0.6360536807265150, 0.7463319064601508, 0.8391169718222188, 0.9122344282513259,
+  0.9639719272779138, 0.9931285991850949,
+];
+const GL20_W = [
+  0.1527533871307258, 0.1491729864726037, 0.1420961093183820, 0.1316886384491766,
+  0.1181945319615184, 0.1019301198172404, 0.0832767415767048, 0.0626720483341091,
+  0.0406014298003869, 0.0176140071391521,
+];
+
+/**
+ * Standard bivariate normal CDF: P(X <= h, Y <= k) with correlation rho.
+ *
+ * Uses the classic one-dimensional reduction
+ *   Phi2(h,k,rho) = Phi(h)Phi(k) + (1/2pi) * integral_0^rho f(r) dr,
+ *   f(r) = (1-r^2)^-1/2 * exp(-(h^2 - 2 r h k + k^2) / (2(1-r^2)))
+ * evaluated by 20-node Gauss-Legendre quadrature, which is smooth and accurate
+ * for |rho| well away from 1 — the range that matters for correlated prop legs.
+ */
+export function bivariateNormalCdf(h: number, k: number, rho: number): number {
+  const r = Math.max(-0.999999, Math.min(0.999999, rho));
+  const base = normalCdf(h) * normalCdf(k);
+  if (r === 0) return base;
+  const half = r / 2;
+  let sum = 0;
+  for (let i = 0; i < GL20_X.length; i++) {
+    for (const sign of [-1, 1]) {
+      const t = half + half * sign * GL20_X[i];
+      const om = 1 - t * t;
+      sum += GL20_W[i] * Math.exp(-(h * h - 2 * t * h * k + k * k) / (2 * om)) / Math.sqrt(om);
+    }
+  }
+  return Math.max(0, Math.min(1, base + (half * sum) / (2 * Math.PI)));
+}

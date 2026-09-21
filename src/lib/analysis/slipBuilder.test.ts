@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { buildSuggestedSlips, pickToSlipCandidate, whyLineFor, type SlipCandidate } from "./slipBuilder";
+import {
+  buildSuggestedSlips,
+  correlatedPairsFor,
+  pickToSlipCandidate,
+  stackRho,
+  whyLineFor,
+  QB_STACK_RHO,
+  type SlipCandidate,
+} from "./slipBuilder";
 import type { SerializedPick } from "@/lib/dto";
 import { makeGameKey } from "./parlayCorrelation";
 
@@ -11,6 +19,7 @@ function cand(
   conf: number,
   direction: "OVER" | "UNDER" = "OVER",
   teamId: string | null = null,
+  propType = "Receiving Yards",
 ): SlipCandidate {
   return {
     pickId: id,
@@ -18,7 +27,7 @@ function cand(
     team,
     opponent: opp,
     gameKey: makeGameKey(team, opp, "2026-09-13"),
-    propType: "Receiving Yards",
+    propType,
     direction,
     confidenceScore: conf,
     riskLevel: "Medium",
@@ -55,7 +64,8 @@ describe("buildSuggestedSlips", () => {
     expect(ids).not.toContain("f"); // conflicts with b
     expect(ids).toEqual(["a", "b", "e", "c"]);
     expect(four.flags).toHaveLength(1);
-    expect(four.flags[0]).toMatch(/Charlie TE shares a game/);
+    expect(four.flags[0].tone).toBe("info");
+    expect(four.flags[0].text).toMatch(/opposing teams/);
   });
 
   // ---- Underdog platform rules ----
@@ -104,6 +114,54 @@ describe("buildSuggestedSlips", () => {
     expect(two.multiplier).toBe(3);
     expect(two.analysis.legCount).toBe(2);
     expect(two.analysis.combinedHitEstimate).toBeCloseTo(0.8 * 0.78, 5);
+  });
+
+  // ---- QB/receiver stacking ----
+  //
+  // Team-mates are legal on Underdog as long as some leg comes from another
+  // team, and a passer stacked with his own receiver is positively correlated
+  // (+0.34 measured). Against a multiplier priced as if legs were independent
+  // that raises P(all hit) for free, so the builder should reach for it.
+
+  it("detects a QB stacked with his own receiver, and only that", () => {
+    const qb = cand("q", "Echo QB", "Chiefs", "Broncos", 70, "OVER", "KC", "Passing Yards");
+    const wr = cand("w", "Whiskey WR", "Chiefs", "Broncos", 68, "OVER", "KC", "Receiving Yards");
+    expect(stackRho(qb, wr)).toBe(QB_STACK_RHO);
+    expect(stackRho(wr, qb)).toBe(QB_STACK_RHO);
+
+    // Opposite directions are not the same bet on the same game script.
+    expect(stackRho(qb, { ...wr, direction: "UNDER" })).toBe(0);
+    // A receiver on the other team is a different offence entirely.
+    expect(stackRho(qb, { ...wr, teamId: "DEN" })).toBe(0);
+    // Two receivers sharing a QB measured at +0.003 — not a stack.
+    expect(stackRho(wr, { ...wr, pickId: "w2", playerName: "X-ray WR" })).toBe(0);
+    // Unknown team means unproven, so no claim is made.
+    expect(stackRho(qb, { ...wr, teamId: null })).toBe(0);
+  });
+
+  it("prefers a stack partner over a higher-confidence unrelated pick", () => {
+    const pool = [
+      cand("qb", "Echo QB", "Chiefs", "Broncos", 70, "OVER", "KC", "Passing Yards"),
+      cand("far", "Bravo RB", "Lions", "Saints", 69, "OVER", "DET"), // higher conf than the stack partner
+      cand("wr", "Whiskey WR", "Chiefs", "Broncos", 60, "OVER", "KC", "Receiving Yards"),
+    ];
+    const [three] = buildSuggestedSlips(pool, [3]);
+    expect(three.legs.map((l) => l.pickId)).toEqual(["qb", "wr", "far"]);
+
+    const good = three.flags.filter((f) => f.tone === "good");
+    expect(good).toHaveLength(1);
+    expect(good[0].text).toMatch(/same-team stack/);
+    expect(correlatedPairsFor(three.legs)).toEqual([{ i: 0, j: 1, rho: QB_STACK_RHO }]);
+  });
+
+  it("still refuses a stack that would leave the entry on a single team", () => {
+    // QB + his own receiver alone is two legs from one team — rejected by the
+    // platform no matter how well correlated it is.
+    const oneTeam = [
+      cand("qb", "Echo QB", "Chiefs", "Broncos", 70, "OVER", "KC", "Passing Yards"),
+      cand("wr", "Whiskey WR", "Chiefs", "Broncos", 68, "OVER", "KC", "Receiving Yards"),
+    ];
+    expect(buildSuggestedSlips(oneTeam, [2])).toEqual([]);
   });
 
   it("is deterministic across calls", () => {

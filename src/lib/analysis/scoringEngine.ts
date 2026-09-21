@@ -24,7 +24,11 @@ import { adjustmentsFrom, estimateProbability } from "./probabilityModel";
 // v1.3.0: the two sides of a prop now sum to 100 — direction-blind terms
 // (parlay suitability, an "active" bonus) removed and asymmetric ones squared
 // up; the Underdog edge measures line softness rather than the market's lean.
-export const SCORING_MODEL_VERSION = "v1.3.0";
+// v1.4.0: per-prop dispersion priors measured from nflverse weekly data
+// (2022-2024) replace the single "all yardage is 0.55" bucket, which understated
+// how erratic receiving and rushing yards are and badly overstated the spread of
+// passing volume. Probabilities from earlier versions are not comparable.
+export const SCORING_MODEL_VERSION = "v1.4.0";
 
 /** NFL: full recent-form weight needs at least this many current-season games. */
 const NFL_FULL_FORM_GAMES = 4;

@@ -29,14 +29,51 @@ const COUNT_PROPS = new Set([
 ]);
 
 /**
- * Typical coefficient of variation per prop family, used to shrink a noisy
- * sample standard deviation. Derived from the structure of the stat, not fitted
- * to results: yardage carries per-play variance that counts do not.
+ * Typical coefficient of variation per prop type, used to shrink a noisy sample
+ * standard deviation toward a structural prior.
+ *
+ * These are measured, not assumed. Source: nflverse weekly player stats,
+ * 2022-2024 regular season, residual of each game against the player's own
+ * trailing-6-game average, restricted to players with a baseline big enough to
+ * carry a real prop line. A residual taken against a 6-game average inherits
+ * that average's own estimation error, inflating the spread by sqrt(7/6) ≈ 1.08,
+ * so the measured figures are divided by that before use.
+ *
+ *   prop              n     mean   measured CV   used here   previously
+ *   Receiving Yards   4013   54.3      0.66         0.61        0.55
+ *   Rushing Yards     1868   58.8      0.61         0.57        0.55
+ *   Passing Yards     1321  229.8      0.36         0.33        0.55
+ *   Rush+Rec Yards    1939   75.6      0.54         0.50        0.50
+ *   Receptions        3506    4.6      0.53         0.49        0.45
+ *   Pass TDs          1081    1.6      0.74         0.69        0.45
+ *   Completions       1264   21.1      0.32         0.30        0.45
+ *   Pass Attempts     1216   32.6      0.30         0.28        0.45
+ *   Rush Attempts     1762   13.7      0.43         0.40        0.45
+ *
+ * The single "all yardage is 0.55" bucket this replaces was wrong in both
+ * directions at once: it understated how erratic receiving and rushing yards
+ * are, and badly overstated the spread of passing volume, which is the steadiest
+ * stat on the board. Understating dispersion inflates confidence; overstating it
+ * buries real edges at 50%.
  */
+const CV_PRIOR: Record<string, number> = {
+  "Receiving Yards": 0.61,
+  "Rushing Yards": 0.57,
+  "Passing Yards": 0.33,
+  "Rush+Rec Yards": 0.5,
+  Receptions: 0.49,
+  "Pass TDs": 0.69,
+  Completions: 0.3,
+  "Pass Attempts": 0.28,
+  "Rush Attempts": 0.4,
+};
+
+/** Fallbacks for prop types outside the measured table (other sports). */
 function cvPrior(propType: string): number {
+  const measured = CV_PRIOR[propType];
+  if (measured != null) return measured;
   if (COUNT_PROPS.has(propType)) return 0.45;
-  if (propType === "Rush+Rec Yards") return 0.5;
-  return 0.55; // receiving / rushing / passing yards
+  return 0.55;
 }
 
 /**

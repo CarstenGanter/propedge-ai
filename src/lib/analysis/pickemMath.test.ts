@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { breakEvenPerLeg, marginalLegRequirement, slipEconomics } from "./pickemMath";
+import {
+  breakEvenPerLeg,
+  compareSlipSizes,
+  jointHitProbability,
+  marginalLegRequirement,
+  slipEconomics,
+} from "./pickemMath";
 
 describe("breakEvenPerLeg", () => {
   it("matches the known standard-payout bars", () => {
@@ -88,5 +94,91 @@ describe("marginalLegRequirement", () => {
 
   it("moves with a boosted ladder", () => {
     expect(marginalLegRequirement(6, 12)).toBeCloseTo(0.5, 6);
+  });
+});
+
+describe("compareSlipSizes", () => {
+  const STANDARD = { 2: 3, 3: 6, 4: 10, 5: 20 };
+
+  it("computes the per-leg bar for each size", () => {
+    const rows = compareSlipSizes(STANDARD);
+    expect(rows.map((r) => r.size)).toEqual([2, 3, 4, 5]);
+    expect(rows[0].breakEvenPerLeg).toBeCloseTo(0.5774, 4); // 3^(-1/2)
+    expect(rows[1].breakEvenPerLeg).toBeCloseTo(0.5503, 4); // 6^(-1/3)
+    expect(rows[2].breakEvenPerLeg).toBeCloseTo(0.5623, 4); // 10^(-1/4)
+    expect(rows[3].breakEvenPerLeg).toBeCloseTo(0.5493, 4); // 20^(-1/5)
+  });
+
+  it("flags the 4-leg tier as dominated — the bar does not fall monotonically", () => {
+    const rows = compareSlipSizes(STANDARD);
+    const four = rows.find((r) => r.size === 4)!;
+    // 5-leg has the lowest bar of all, so it is what dominates the 4-leg tier.
+    expect(four.dominatedBy).toBe(5);
+    // The 2-leg tier is the most expensive of all and is dominated too.
+    expect(rows.find((r) => r.size === 2)!.dominatedBy).toBe(5);
+    // Nothing dominates the cheapest size.
+    expect(rows.find((r) => r.size === 5)!.dominatedBy).toBeNull();
+  });
+
+  it("re-ranks when the multipliers change rather than hardcoding a rule", () => {
+    // If the 4-leg tier paid 16x it would beat every other size.
+    const rows = compareSlipSizes({ 2: 3, 3: 6, 4: 16, 5: 20 });
+    expect(rows.find((r) => r.size === 4)!.dominatedBy).toBeNull();
+    expect(rows.find((r) => r.size === 3)!.dominatedBy).toBe(4);
+  });
+
+  it("ignores unusable multipliers", () => {
+    expect(compareSlipSizes({ 1: 2, 2: 0, 3: 6 }).map((r) => r.size)).toEqual([3]);
+  });
+});
+
+describe("jointHitProbability", () => {
+  it("equals the independent product when nothing is correlated", () => {
+    expect(jointHitProbability([0.6, 0.55, 0.5])).toBeCloseTo(0.6 * 0.55 * 0.5, 10);
+    expect(jointHitProbability([0.6, 0.55], [{ i: 0, j: 1, rho: 0 }])).toBeCloseTo(0.33, 10);
+  });
+
+  it("raises P(all hit) when legs are positively correlated", () => {
+    const independent = 0.56 * 0.56;
+    const correlated = jointHitProbability([0.56, 0.56], [{ i: 0, j: 1, rho: 0.3 }]);
+    expect(correlated).toBeGreaterThan(independent);
+    // Worked example from the research: two 56% legs at rho=0.3 clear the 3x
+    // break-even (1/3) that the same legs miss when treated as independent.
+    expect(independent).toBeLessThan(1 / 3);
+    expect(correlated).toBeGreaterThan(1 / 3);
+  });
+
+  it("is monotonic in rho and lowers P(all) when negatively correlated", () => {
+    const at = (rho: number) => jointHitProbability([0.55, 0.6], [{ i: 0, j: 1, rho }]);
+    expect(at(-0.3)).toBeLessThan(at(0));
+    expect(at(0)).toBeLessThan(at(0.3));
+    expect(at(0.3)).toBeLessThan(at(0.6));
+  });
+
+  it("stays a probability at the extremes", () => {
+    expect(jointHitProbability([0.99, 0.99], [{ i: 0, j: 1, rho: 0.95 }])).toBeLessThanOrEqual(1);
+    expect(jointHitProbability([0.01, 0.01], [{ i: 0, j: 1, rho: 0.95 }])).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("slipEconomics with correlated legs", () => {
+  it("separates the structural uplift from an implausible per-leg claim", () => {
+    const pairs = [{ i: 0, j: 1, rho: 0.3 }];
+    const econ = slipEconomics(3, [0.56, 0.56], { correlatedPairs: pairs });
+    expect(econ.correlationUplift).toBeGreaterThan(0);
+    // The average leg is unchanged; only the joint probability moves.
+    expect(econ.rawPerLeg).toBeCloseTo(0.56, 6);
+    expect(econ.modelPerLeg!).toBeGreaterThan(econ.rawPerLeg!);
+    // Correlation flips the verdict without either leg improving.
+    expect(slipEconomics(3, [0.56, 0.56]).verdict).toBe("negative");
+    expect(econ.verdict).toBe("positive");
+  });
+
+  it("does not let correlation trip the overconfidence guard", () => {
+    // Legs are individually plausible; the uplift must not read as overconfidence.
+    const econ = slipEconomics(6, [0.6, 0.6, 0.6], { correlatedPairs: [{ i: 0, j: 1, rho: 0.3 }] });
+    expect(econ.overconfident).toBe(false);
+    // A genuinely implausible per-leg claim still trips it.
+    expect(slipEconomics(6, [0.7, 0.7, 0.7]).overconfident).toBe(true);
   });
 });
