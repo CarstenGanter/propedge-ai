@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, ClipboardList, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { setUnderdogLines, type UnderdogLineEntry } from "@/server/actions/picks";
+import { setUnderdogAvailability, setUnderdogLines, type UnderdogLineEntry } from "@/server/actions/picks";
 import { cn } from "@/lib/utils/cn";
 import type { SerializedPick } from "@/lib/dto";
 
@@ -25,6 +25,15 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
   );
 
   const entered = picks.filter((p) => p.prop.underdogLine != null).length;
+  const absent = picks.filter((p) => p.prop.underdogAvailable === false).length;
+
+  function markAvailability(pickId: string, available: boolean | null) {
+    setMsg(null);
+    startTransition(async () => {
+      await setUnderdogAvailability([pickId], available);
+      router.refresh();
+    });
+  }
 
   function save() {
     const entries: UnderdogLineEntry[] = [];
@@ -63,6 +72,15 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
             <CardDescription className="mt-1">
               {entered} of {picks.length} picks have your line. Picks are scored against the sportsbook
               number until you enter the one Underdog actually posts.
+              {absent > 0 && (
+                <>
+                  {" "}
+                  <span className="text-warning">
+                    {absent} marked not on Underdog
+                  </span>{" "}
+                  and excluded from slips.
+                </>
+              )}
             </CardDescription>
           </div>
           <ChevronDown className={cn("mt-1 h-4 w-4 shrink-0 transition-transform", open && "rotate-180")} />
@@ -78,7 +96,8 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                   <th className="pb-2 pr-3 font-medium">Pick</th>
                   <th className="pb-2 pr-3 text-right font-medium">Book line</th>
                   <th className="pb-2 pr-3 text-right font-medium">Your line</th>
-                  <th className="pb-2 text-right font-medium">Edge</th>
+                  <th className="pb-2 pr-3 text-right font-medium">Edge</th>
+                  <th className="pb-2 text-right font-medium">On Underdog?</th>
                 </tr>
               </thead>
               <tbody>
@@ -90,9 +109,15 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                     typed != null && Number.isFinite(typed)
                       ? Math.round((p.prop.direction === "OVER" ? 1 : -1) * (reference - typed) * 10) / 10
                       : null;
+                  const missing = p.prop.underdogAvailable === false;
                   return (
-                    <tr key={p.id} className="border-b border-border/40 last:border-0">
-                      <td className="py-2 pr-3 font-medium">{p.prop.playerName}</td>
+                    <tr
+                      key={p.id}
+                      className={cn("border-b border-border/40 last:border-0", missing && "opacity-45")}
+                    >
+                      <td className="py-2 pr-3 font-medium">
+                        <span className={cn(missing && "line-through")}>{p.prop.playerName}</span>
+                      </td>
                       <td className="py-2 pr-3 text-muted-foreground">
                         {p.prop.direction === "OVER" ? "Higher" : "Lower"} {p.prop.propType}
                       </td>
@@ -112,7 +137,7 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                       </td>
                       <td
                         className={cn(
-                          "py-2 text-right tabular-nums",
+                          "py-2 pr-3 text-right tabular-nums",
                           liveEdge == null
                             ? "text-muted-foreground"
                             : liveEdge >= 0.4
@@ -123,6 +148,26 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                         )}
                       >
                         {liveEdge == null ? "—" : `${liveEdge > 0 ? "+" : ""}${liveEdge}`}
+                      </td>
+                      <td className="py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => markAvailability(p.id, missing ? null : false)}
+                          disabled={pending}
+                          className={cn(
+                            "rounded-md border px-2 py-1 text-xs transition-colors disabled:opacity-50",
+                            missing
+                              ? "border-warning/40 bg-warning/10 text-warning"
+                              : "border-border text-muted-foreground hover:border-warning/40 hover:text-warning",
+                          )}
+                          title={
+                            missing
+                              ? "Marked absent from Underdog. Click to undo."
+                              : "Mark this prop as not offered on Underdog — it will be excluded from slips."
+                          }
+                        >
+                          {missing ? "Not offered ✕" : "Not offered?"}
+                        </button>
                       </td>
                     </tr>
                   );

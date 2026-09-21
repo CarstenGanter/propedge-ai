@@ -81,6 +81,11 @@ export interface SlipCandidate extends ParlayLegInput {
   whyLine: string;
   /** The player's own team id, when resolved. Null means unknown. */
   teamId: string | null;
+  /**
+   * Whether the platform posts this prop. null means nobody has checked, which
+   * is treated as playable — the alternative is hiding picks on a guess.
+   */
+  available?: boolean | null;
 }
 
 export interface SlipFlag {
@@ -121,6 +126,7 @@ export function pickToSlipCandidate(p: SerializedPick): SlipCandidate {
     date: p.prop.date,
     whyLine: whyLineFor(p),
     teamId: p.prop.playerTeamId,
+    available: p.prop.underdogAvailable,
   };
 }
 
@@ -162,9 +168,12 @@ export function buildSuggestedSlips(
 ): SuggestedSlip[] {
   const allowSameGame = opts?.allowSameGame ?? true;
   const multipliers = opts?.multipliers ?? PICKEM_MULTIPLIERS;
-  const sorted = [...candidates].sort(
-    (a, b) => b.confidenceScore - a.confidenceScore || a.playerName.localeCompare(b.playerName),
-  );
+  // A prop confirmed absent from the platform cannot be part of an entry, so it
+  // is dropped before ranking rather than suggested and rejected at the app.
+  // Unchecked props stay in: absence of evidence is not evidence of absence.
+  const sorted = [...candidates]
+    .filter((c) => c.available !== false)
+    .sort((a, b) => b.confidenceScore - a.confidenceScore || a.playerName.localeCompare(b.playerName));
   const out: SuggestedSlip[] = [];
 
   for (const size of sizes) {

@@ -164,6 +164,27 @@ describe("buildSuggestedSlips", () => {
     expect(buildSuggestedSlips(oneTeam, [2])).toEqual([]);
   });
 
+  // ---- platform availability ----
+
+  it("never suggests a prop confirmed absent from the platform", () => {
+    const pool = [
+      { ...cand("gone", "Echo QB", "Chiefs", "Broncos", 90, "OVER", "KC", "Passing Yards"), available: false },
+      cand("a", "Alpha WR", "Bengals", "Buccaneers", 70, "OVER", "CIN"),
+      cand("b", "Bravo RB", "Lions", "Saints", 68, "OVER", "DET"),
+    ];
+    const [two] = buildSuggestedSlips(pool, [2]);
+    // The absent prop outranks both survivors and is still excluded.
+    expect(two.legs.map((l) => l.pickId)).toEqual(["a", "b"]);
+  });
+
+  it("treats an unchecked prop as playable rather than hiding it on a guess", () => {
+    const pool = [
+      { ...cand("unknown", "Echo QB", "Chiefs", "Broncos", 90, "OVER", "KC"), available: null },
+      cand("a", "Alpha WR", "Bengals", "Buccaneers", 70, "OVER", "CIN"),
+    ];
+    expect(buildSuggestedSlips(pool, [2])[0].legs.map((l) => l.pickId)).toEqual(["unknown", "a"]);
+  });
+
   it("is deterministic across calls", () => {
     const a = buildSuggestedSlips(cands).map((s) => s.legs.map((l) => l.pickId));
     const b = buildSuggestedSlips([...cands].reverse()).map((s) => s.legs.map((l) => l.pickId));

@@ -35,6 +35,8 @@ export interface SerializedProp {
   propType: string;
   line: number;
   underdogLine: number | null;
+  /** Does the pick'em platform post this prop? null = never checked. */
+  underdogAvailable: boolean | null;
   marketLine: number | null;
   marketProjection: number | null;
   direction: Direction;
@@ -131,6 +133,7 @@ export function serializeProp(p: PlayerProp): SerializedProp {
     propType: p.propType,
     line: p.line,
     underdogLine: p.underdogLine,
+    underdogAvailable: p.underdogAvailable ?? null,
     marketLine: market.marketLine,
     marketProjection: market.projection,
     direction: p.direction as Direction,

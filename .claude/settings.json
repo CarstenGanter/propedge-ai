@@ -97,7 +97,9 @@
       "WebFetch(domain:www.legalsportsreport.com)",
       "WebFetch(domain:www.gamblinginsider.com)",
       "WebFetch(domain:oddsreference.com)",
-      "Bash(curl -s -o games.csv https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv)"
+      "Bash(curl -s -o games.csv https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv)",
+      "Bash(sqlite3 \"file:prisma/dev.db?mode=ro\")",
+      "Bash(sqlite3 \"file:prisma/dev.db?mode=ro\" \"SELECT nflMarketsJson FROM AppSettings LIMIT 1;\")"
     ]
   }
 }

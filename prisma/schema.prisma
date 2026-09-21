@@ -29,6 +29,12 @@ model PlayerProp {
   propType        String
   line            Float // sharp-market consensus line (from The Odds API)
   underdogLine    Float? // the line Underdog actually offers (user-entered)
+  // Whether the pick'em platform posts this prop at all. Props come from a
+  // sportsbook feed, which carries markets and players pick'em sites do not, so
+  // the board can otherwise recommend a bet that cannot be placed. Three states
+  // on purpose: null = nobody has looked, true = seen on the platform,
+  // false = confirmed absent. Only an observation sets this, never a guess.
+  underdogAvailable Boolean?
   direction       String // OVER | UNDER
   source          String
   projection      Float?

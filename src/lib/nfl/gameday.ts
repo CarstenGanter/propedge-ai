@@ -12,6 +12,7 @@ import { findNflGame, getNflSlate, previousNflSlateDate, resolveNflSlateDate, ty
 import { getCachedNflGameContext, type NflGameContext } from "./gameContext";
 import { getDefenseAggMeta } from "./defenseCache";
 import { nflSeasonForDate } from "./slate";
+import { marketsToDrop } from "@/lib/analysis/availability";
 
 export interface NflGamedayGame {
   game: NflGame;
@@ -35,6 +36,12 @@ export interface NflGamedayData {
   /** Minutes until the earliest remaining kickoff, or null if all have started. */
   minutesToKickoff: number | null;
   pendingPropCount: number;
+  /**
+   * Markets you pay for every slate that the pick'em platform has never once
+   * been seen to post. Credits are charged per market per game, so these are a
+   * standing cost with no possible return.
+   */
+  marketsToDrop: string[];
   contextsCached: number;
   credits: { remaining: number; at: string } | null;
   defense: { season: number; games: number; updatedAt: string } | null;
@@ -82,7 +89,18 @@ export async function getNflGamedayData(date: string, today: string): Promise<Nf
   });
 
   const { season } = nflSeasonForDate(date);
-  const defenseMeta = await getDefenseAggMeta(season);
+  const [defenseMeta, availabilityRows] = await Promise.all([
+    getDefenseAggMeta(season),
+    // Every NFL prop ever checked, not just this slate — one game is far too
+    // little evidence to retire a market on.
+    prisma.playerProp.findMany({
+      where: { sport: "NFL", underdogAvailable: { not: null } },
+      select: { propType: true, underdogAvailable: true },
+    }),
+  ]);
+  const droppable = marketsToDrop(
+    availabilityRows.map((r) => ({ propType: r.propType, available: r.underdogAvailable })),
+  ).filter((m) => settings.nflMarkets.includes(m));
 
   return {
     date,
@@ -102,6 +120,7 @@ export async function getNflGamedayData(date: string, today: string): Promise<Nf
       return Math.round((Math.min(...upcoming) - Date.now()) / 60000);
     })(),
     pendingPropCount,
+    marketsToDrop: droppable,
     contextsCached: contexts.filter(Boolean).length,
     credits: credits ? { remaining: credits.remaining, at: credits.at } : null,
     defense: defenseMeta ? { season, games: defenseMeta.games, updatedAt: defenseMeta.updatedAt } : null,

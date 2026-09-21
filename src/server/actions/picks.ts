@@ -75,14 +75,54 @@ export async function setUnderdogLines(
 ): Promise<{ ok: boolean; updated: number; failed: number }> {
   let updated = 0;
   let failed = 0;
+  const seenOnPlatform: string[] = [];
   for (const e of entries) {
     const r = await applyUnderdogLine(e.pickId, e.line).catch(() => ({ ok: false }));
-    if (r.ok) updated++;
-    else failed++;
+    if (r.ok) {
+      updated++;
+      // Typing a line means you read it off the platform, so the prop is
+      // offered. Recorded here rather than asked for twice.
+      if (e.line != null) seenOnPlatform.push(e.pickId);
+    } else failed++;
+  }
+  if (seenOnPlatform.length > 0) {
+    const picks = await prisma.pick.findMany({
+      where: { id: { in: seenOnPlatform } },
+      select: { playerPropId: true },
+    });
+    await prisma.playerProp.updateMany({
+      where: { id: { in: picks.map((p) => p.playerPropId) } },
+      data: { underdogAvailable: true },
+    });
   }
   revalidateAll();
   revalidatePath("/nfl");
   return { ok: failed === 0, updated, failed };
+}
+
+/**
+ * Record whether the pick'em platform posts this prop at all.
+ *
+ * Kept separate from the line so the two facts never get confused: a prop can
+ * be offered at a line you have not typed in yet, and one you marked absent
+ * should not silently come back the moment a line is entered. Pass null to undo.
+ */
+export async function setUnderdogAvailability(
+  pickIds: string[],
+  available: boolean | null,
+): Promise<{ ok: boolean; updated: number }> {
+  if (pickIds.length === 0) return { ok: true, updated: 0 };
+  const picks = await prisma.pick.findMany({
+    where: { id: { in: pickIds } },
+    select: { playerPropId: true },
+  });
+  const r = await prisma.playerProp.updateMany({
+    where: { id: { in: picks.map((p) => p.playerPropId) } },
+    data: { underdogAvailable: available },
+  });
+  revalidateAll();
+  revalidatePath("/nfl");
+  return { ok: true, updated: r.count };
 }
 
 export async function deletePickAction(pickId: string): Promise<{ ok: boolean }> {

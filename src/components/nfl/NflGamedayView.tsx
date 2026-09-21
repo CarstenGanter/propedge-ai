@@ -124,6 +124,19 @@ export function NflGamedayView({ data }: { data: NflGamedayData }) {
       {!s.oddsConfigured && <Note tone="warning">No ODDS_API_KEY in .env — props can only come from CSV/manual entry.</Note>}
       {msg && <Note>{msg}</Note>}
 
+      {/* Credits are charged per market per game, so a market the platform never
+          posts is a standing cost with no possible return. */}
+      {data.marketsToDrop.length > 0 && (
+        <Note tone="warning">
+          {data.marketsToDrop.join(" and ")} {data.marketsToDrop.length === 1 ? "has" : "have"} never
+          once been seen on Underdog across the props you checked, yet {data.marketsToDrop.length === 1 ? "it is" : "they are"}{" "}
+          still fetched every slate — about {data.marketsToDrop.length * Math.max(data.games.length, 1)} credit
+          {data.marketsToDrop.length * Math.max(data.games.length, 1) === 1 ? "" : "s"} on this one. Untick{" "}
+          {data.marketsToDrop.length === 1 ? "it" : "them"} in Settings → NFL gameday to stop paying for{" "}
+          {data.marketsToDrop.length === 1 ? "it" : "them"}.
+        </Note>
+      )}
+
       {/* Closing-line value only exists if the closing line gets recorded, and
           the window for that is the hour or two before kickoff. Surface it here
           rather than expecting a trip to Analytics at exactly the right time. */}
