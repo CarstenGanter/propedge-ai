@@ -13,9 +13,12 @@ import {
 import { summarizeLineEdge, MIN_DECIDED_FOR_SIGNAL, type LineEdgeSummary } from "@/lib/analysis/lineEdge";
 import { getSettings } from "@/lib/settings";
 import {
+  assessRate,
+  avgConfidenceWinnersVsLosers,
   computeRecord,
   computeTeamRecord,
   cumulativePLSeries,
+  defaultSport,
   filterRecords,
   groupRecords,
   profitLossBy,
@@ -23,12 +26,16 @@ import {
   recordByLeague,
   recordByPropType,
   recordBySport,
+  significantGroups,
   summarizeBankroll,
   teamRecordByLeague,
-  avgConfidenceWinnersVsLosers,
+  wilsonInterval,
   type AccuracyScope,
   type GroupedRecord,
+  type RateAssessment,
 } from "@/lib/analytics";
+import { breakEvenPerLeg } from "@/lib/analysis/pickemMath";
+import { PICKEM_MULTIPLIERS } from "@/lib/analysis/slipBuilder";
 import { AccuracyFilterBar } from "@/components/AccuracyFilterBar";
 import { LEAGUE_LABELS, type League } from "@/lib/teamLeagues";
 import { computeCalibration, recentTrend } from "@/lib/analysis/calibration";
@@ -64,7 +71,14 @@ export default async function AnalyticsPage({
   // results never inflate a real hit rate.
   const realRecords = allRecords.filter((r) => !r.isDemo);
   const sportsPresent = [...new Set(realRecords.map((r) => r.sport))].sort();
-  const sport = sportsPresent.includes(sportParam) ? sportParam : "All";
+  // Default to the sport actually being bet rather than pooling every sport the
+  // board has ever touched. A retired sport averaged into the headline answers a
+  // question nobody asked, and can dominate it outright.
+  const sport = sportsPresent.includes(sportParam)
+    ? sportParam
+    : params.sport === "All"
+      ? "All"
+      : defaultSport(realRecords);
   const records = filterRecords(allRecords, { scope, sport });
   const mineCount = filterRecords(allRecords, { scope: "mine", sport }).length;
   const allCount = filterRecords(allRecords, { scope: "all", sport }).length;
@@ -126,9 +140,12 @@ export default async function AnalyticsPage({
   const trend = recentTrend(records);
   const confSplit = avgConfidenceWinnersVsLosers(records);
 
-  const decidedGroups = [...bySport, ...byPropType].filter((g) => g.record.hits + g.record.misses >= 3);
-  const best = [...decidedGroups].sort((a, b) => b.record.hitRate - a.record.hitRate)[0];
-  const worst = [...decidedGroups].sort((a, b) => a.record.hitRate - b.record.hitRate)[0];
+  // The bar a leg has to clear, not zero. Pick'em pays nothing for being good;
+  // it pays for being above a specific number set by the multiplier.
+  const REFERENCE_LEGS = 3;
+  const barPercent = (breakEvenPerLeg(PICKEM_MULTIPLIERS[REFERENCE_LEGS], REFERENCE_LEGS) ?? 0.55) * 100;
+  const verdict = assessRate(overall.hits, overall.misses, barPercent);
+  const significance = significantGroups([...byPropType, ...byDirection]);
 
   return (
     <div className="space-y-6">
@@ -161,33 +178,38 @@ export default async function AnalyticsPage({
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Overall record" value={`${overall.hits}-${overall.misses}`} sub={`${overall.pushes + overall.voids} push/void`} />
-        <StatCard label="Hit rate" value={formatPercent(overall.hitRate)} accent="primary" />
+        <StatCard
+          label="Hit rate"
+          value={verdict.hitRate == null ? "—" : formatPercent(verdict.hitRate)}
+          sub={verdict.interval ? `95% range ${verdict.interval.low.toFixed(0)}–${verdict.interval.high.toFixed(0)}%` : undefined}
+          accent="primary"
+        />
         <StatCard label="ROI" value={formatPercent(summary.roi)} accent={summary.roi >= 0 ? "success" : "danger"} />
         <StatCard label="All-time P/L" value={formatSignedCurrency(summary.profitLoss)} accent={summary.profitLoss >= 0 ? "success" : "danger"} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <BarVerdictCard verdict={verdict} bar={barPercent} legs={REFERENCE_LEGS} />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SignificanceCard significance={significance} />
         <Card>
-          <CardHeader><CardTitle>Best category</CardTitle></CardHeader>
-          <CardContent>
-            {best ? (
-              <p className="text-sm"><span className="font-semibold text-success">{best.key}</span> — {formatPercent(best.record.hitRate)} ({best.record.hits}-{best.record.misses})</p>
-            ) : <p className="text-sm text-muted-foreground">Need ≥3 decided picks in a category.</p>}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Worst category</CardTitle></CardHeader>
-          <CardContent>
-            {worst ? (
-              <p className="text-sm"><span className="font-semibold text-danger">{worst.key}</span> — {formatPercent(worst.record.hitRate)} ({worst.record.hits}-{worst.record.misses})</p>
-            ) : <p className="text-sm text-muted-foreground">Need ≥3 decided picks in a category.</p>}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Confidence signal</CardTitle></CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Winning picks averaged <span className="font-semibold text-success">{confSplit.winners}</span> confidence vs{" "}
-            <span className="font-semibold text-danger">{confSplit.losers}</span> for losers.
+          <CardHeader>
+            <CardTitle>Confidence signal</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Whether a higher model score actually means a better pick.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              Winning picks averaged <span className="font-semibold text-success">{confSplit.winners}</span> vs{" "}
+              <span className="font-semibold text-danger">{confSplit.losers}</span> for losers, over{" "}
+              {confSplit.winnerCount + confSplit.loserCount} decided picks.
+            </p>
+            <p className="text-xs">
+              A gap here is only meaningful if it is large and consistent. Compare the confidence tiers
+              on the Accuracy tab — if the top tier does not out-hit the bottom, the score is not yet
+              carrying information, whatever this average says.
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -366,6 +388,152 @@ export default async function AnalyticsPage({
   );
 }
 
+/**
+ * The headline judgement: is this record above the bar it has to clear, and is
+ * there enough of it to believe? A bare hit rate cannot answer either question.
+ */
+function BarVerdictCard({
+  verdict,
+  bar,
+  legs,
+}: {
+  verdict: RateAssessment;
+  bar: number;
+  legs: number;
+}) {
+  const multiplier = PICKEM_MULTIPLIERS[legs];
+  if (verdict.decided === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Are these picks good enough to bet?</CardTitle>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Nothing settled yet. A {legs}-leg slip at {multiplier}× needs every leg to hit{" "}
+            {formatPercent(bar, 1)} just to break even.
+          </p>
+        </CardHeader>
+      </Card>
+    );
+  }
+  const { hitRate, interval } = verdict;
+  // Written out rather than interpolated: Tailwind only emits classes it can
+  // see as literal strings, so `text-${tone}` would render unstyled.
+  const toneClass = verdict.clearsBar
+    ? "text-success"
+    : verdict.belowBar
+      ? "text-danger"
+      : "text-warning";
+  const headline = verdict.clearsBar
+    ? "Yes — the whole range clears the bar."
+    : verdict.belowBar
+      ? "No — the whole range sits below the bar."
+      : "Not yet provable either way.";
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Are these picks good enough to bet?</CardTitle>
+        <p className="mt-1 max-w-3xl text-xs text-muted-foreground">
+          Pick&apos;em pays nothing for a good hit rate — it pays for clearing the break-even bar set by
+          your multiplier. A {legs}-leg slip at {multiplier}× needs {formatPercent(bar, 1)} per leg.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span className={cn("text-xl font-bold", toneClass)}>{headline}</span>
+        </div>
+        <div className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+          <span className="text-muted-foreground">This record</span>
+          <span className="tabular-nums">
+            {formatPercent(hitRate ?? 0)} over {verdict.decided} decided pick
+            {verdict.decided === 1 ? "" : "s"}
+            {interval && (
+              <span className="text-muted-foreground">
+                {" "}
+                — could plausibly be anywhere from {interval.low.toFixed(1)}% to {interval.high.toFixed(1)}%
+              </span>
+            )}
+          </span>
+          <span className="text-muted-foreground">Bar to clear</span>
+          <span className="tabular-nums">{formatPercent(bar, 1)} per leg</span>
+        </div>
+        <p className="text-xs leading-snug text-muted-foreground">
+          {verdict.clearsBar
+            ? "Even the pessimistic end of the range is above break-even, so this is evidenced rather than hoped for."
+            : verdict.belowBar
+              ? "Even the optimistic end of the range falls short. These picks have not been profitable at this multiplier."
+              : `The range spans the bar, so this record is consistent with a real edge and with a coin flip alike. Separating the two from results alone takes on the order of a thousand slips — which is why closing-line value, on the Model quality tab, is the measurement worth watching instead.`}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Replaces a "best/worst category" leaderboard. Ranking ~15 categories at
+ * n=5..18 nominates a winner and a loser every time regardless of whether
+ * anything is real, and with that many comparisons about one spurious result is
+ * expected by chance. Reporting the count of categories that actually separate
+ * from chance is the honest version of the same card.
+ */
+function SignificanceCard({
+  significance,
+}: {
+  significance: { separating: GroupedRecord[]; tested: number; nearest: GroupedRecord | null };
+}) {
+  const { separating, tested, nearest } = significance;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Anything here beating chance?</CardTitle>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Categories whose 95% range excludes 50%. Tested {tested} categor{tested === 1 ? "y" : "ies"}{" "}
+          with enough decided picks to test.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm">
+        {separating.length === 0 ? (
+          <>
+            <p className="font-semibold text-warning">Nothing yet.</p>
+            <p className="text-xs leading-snug text-muted-foreground">
+              No category has separated from a coin flip. That is the expected state this early and not
+              a sign anything is broken — sample sizes here are in the teens, where a 60% and a 45% rate
+              are statistically the same result.
+              {nearest && (
+                <>
+                  {" "}
+                  Closest is <span className="font-medium text-foreground">{nearest.key}</span> at{" "}
+                  {formatPercent(nearest.record.hitRate, 0)} ({nearest.record.hits}-{nearest.record.misses}).
+                </>
+              )}
+            </p>
+          </>
+        ) : (
+          <>
+            {separating.map(({ key, record }) => {
+              const ci = wilsonInterval(record.hits, record.hits + record.misses);
+              return (
+                <div key={key} className="grid grid-cols-[1fr_auto] items-baseline gap-3">
+                  <span className="truncate font-medium">{key}</span>
+                  <span className="tabular-nums">
+                    {formatPercent(record.hitRate, 0)}{" "}
+                    <span className="text-xs text-muted-foreground">
+                      ({ci ? `${ci.low.toFixed(0)}–${ci.high.toFixed(0)}%` : "—"}, {record.hits}-{record.misses})
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
+            <p className="pt-1 text-xs leading-snug text-muted-foreground">
+              With {tested} categories tested at once, roughly one spurious result is expected by chance.
+              Treat a single separating category as a lead, not a finding.
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ClvCard({
   title,
   clv,
@@ -524,6 +692,7 @@ function RecordTable({ groups, showSample = false }: { groups: GroupedRecord[]; 
       {rows.map(({ key, record }) => {
         const decided = record.hits + record.misses;
         const enough = decided >= MIN_SAMPLE;
+        const ci = wilsonInterval(record.hits, decided);
         return (
           <div key={key} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 text-sm">
             <span className="truncate">
@@ -538,12 +707,31 @@ function RecordTable({ groups, showSample = false }: { groups: GroupedRecord[]; 
             </span>
             <span
               className={cn(
-                "w-24 text-right font-medium tabular-nums",
-                enough ? "text-foreground" : "text-muted-foreground",
+                "w-32 text-right tabular-nums",
+                enough ? "font-medium text-foreground" : "text-muted-foreground",
               )}
-              title={enough ? undefined : `Only ${decided} decided pick(s) — too few to read a rate from.`}
+              title={
+                ci
+                  ? `${decided} decided — the true rate is 95% likely to be between ${ci.low.toFixed(0)}% and ${ci.high.toFixed(0)}%.`
+                  : undefined
+              }
             >
-              {!decided ? "—" : enough ? formatPercent(record.hitRate, 0) : `${decided} decided`}
+              {!decided ? (
+                "—"
+              ) : enough ? (
+                <>
+                  {formatPercent(record.hitRate, 0)}
+                  {/* The range is the honest part: without it a rate off 6 picks
+                      and a rate off 600 are indistinguishable on the page. */}
+                  {ci && (
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      {ci.low.toFixed(0)}–{ci.high.toFixed(0)}
+                    </span>
+                  )}
+                </>
+              ) : (
+                `${decided} decided`
+              )}
             </span>
           </div>
         );

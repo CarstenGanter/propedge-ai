@@ -98,9 +98,123 @@ export function computeRecord(picks: PickRecord[]): Record4 {
   return r;
 }
 
+// ---- Uncertainty ----
+//
+// A hit rate quoted without its interval reads as fact whatever it rests on:
+// 59.5% off 37 picks and 59.5% off 3,700 look identical on the page and mean
+// entirely different things. Every rate shown to a person should carry one.
+
+export interface Interval {
+  /** Lower bound, as a percentage 0..100. */
+  low: number;
+  /** Upper bound, as a percentage 0..100. */
+  high: number;
+}
+
+/**
+ * Wilson score interval for a binomial proportion, as percentages.
+ *
+ * Preferred over the textbook normal interval because it stays inside [0, 1]
+ * and keeps its coverage at the small samples this app actually has — a 5-of-7
+ * record breaks the normal approximation outright.
+ */
+export function wilsonInterval(hits: number, decided: number, z = 1.96): Interval | null {
+  if (!Number.isFinite(hits) || !Number.isFinite(decided) || decided <= 0 || hits < 0 || hits > decided) {
+    return null;
+  }
+  const p = hits / decided;
+  const z2 = z * z;
+  const denom = 1 + z2 / decided;
+  const centre = (p + z2 / (2 * decided)) / denom;
+  const half = (z / denom) * Math.sqrt((p * (1 - p)) / decided + z2 / (4 * decided * decided));
+  return {
+    low: Math.max(0, (centre - half) * 100),
+    high: Math.min(100, (centre + half) * 100),
+  };
+}
+
+export interface RateAssessment {
+  decided: number;
+  /** Percentage 0..100, or null when nothing is decided. */
+  hitRate: number | null;
+  interval: Interval | null;
+  /** The whole interval sits above the break-even bar — a real, evidenced edge. */
+  clearsBar: boolean;
+  /** The whole interval sits below the bar — evidenced as unprofitable. */
+  belowBar: boolean;
+  /** The interval excludes 50% — distinguishable from a coin flip. */
+  separatesFromChance: boolean;
+}
+
+/**
+ * Judge a record against the bar it has to clear, rather than against zero.
+ *
+ * Fixed-multiplier pick'em pays nothing for being good; it pays for being above
+ * a specific number. A 59% hit rate is a winning record at 6x and a losing one
+ * at 3x, so a bare rate cannot be read without the bar beside it.
+ */
+export function assessRate(hits: number, misses: number, barPercent: number): RateAssessment {
+  const decided = hits + misses;
+  const interval = wilsonInterval(hits, decided);
+  return {
+    decided,
+    hitRate: decided > 0 ? (hits / decided) * 100 : null,
+    interval,
+    clearsBar: interval != null && interval.low > barPercent,
+    belowBar: interval != null && interval.high < barPercent,
+    separatesFromChance: interval != null && (interval.low > 50 || interval.high < 50),
+  };
+}
+
 export interface GroupedRecord {
   key: string;
   record: Record4;
+}
+
+/**
+ * Which groups are actually distinguishable from chance.
+ *
+ * Reported as a count rather than a leaderboard on purpose. Picking the highest
+ * and lowest of ~15 categories at n=5..18 nominates a "best" and a "worst"
+ * every single time, whether or not anything separates from a coin flip — and
+ * with that many simultaneous comparisons roughly one spurious winner is
+ * expected by chance alone.
+ */
+export function significantGroups(groups: GroupedRecord[], minDecided = 5): {
+  separating: GroupedRecord[];
+  tested: number;
+  /** Closest to separating, for a "nothing yet, but watch this" line. */
+  nearest: GroupedRecord | null;
+} {
+  const tested = groups.filter((g) => g.record.hits + g.record.misses >= minDecided);
+  const separating = tested.filter(
+    (g) => assessRate(g.record.hits, g.record.misses, 50).separatesFromChance,
+  );
+  // Nearest = furthest from 50% among those tested; ties broken by sample size.
+  const nearest =
+    [...tested].sort(
+      (a, b) =>
+        Math.abs(b.record.hitRate - 50) - Math.abs(a.record.hitRate - 50) ||
+        b.record.hits + b.record.misses - (a.record.hits + a.record.misses),
+    )[0] ?? null;
+  return { separating, tested: tested.length, nearest };
+}
+
+/**
+ * The sport to show by default: the one being played with real money, falling
+ * back to whatever was picked most recently. Averaging a sport you no longer
+ * bet into the headline answers a question nobody asked.
+ */
+export function defaultSport(records: PickRecord[]): string {
+  const real = records.filter((r) => r.placedReal && !r.isDemo);
+  const pool = real.length > 0 ? real : records.filter((r) => !r.isDemo);
+  if (pool.length === 0) return "All";
+  const counts = new Map<string, { n: number; latest: string }>();
+  for (const r of pool) {
+    const cur = counts.get(r.sport) ?? { n: 0, latest: "" };
+    counts.set(r.sport, { n: cur.n + 1, latest: r.date > cur.latest ? r.date : cur.latest });
+  }
+  return [...counts.entries()].sort((a, b) => b[1].n - a[1].n || b[1].latest.localeCompare(a[1].latest))[0][0];
 }
 
 export function groupRecords(
