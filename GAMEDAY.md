@@ -139,6 +139,44 @@ Legal on Underdog as long as some other leg comes from a different team, which t
 Two things that are **not** correlated and need no thought: receivers who share a quarterback
 (+0.003), and legs from two different games (−0.002).
 
+### When to enter your picks
+
+**Night games (Thu / Sun / Mon):** late afternoon, **3–5 hours before kickoff**.
+**Sunday 1pm slate:** **Sunday morning, 10–11 AM ET**.
+**Never before Friday** for a Sunday game.
+
+Two Underdog rules set up the trade-off:
+
+- Your pick **locks at the number you submitted**. Later line moves never touch you — which argues
+  for entering early.
+- A player who doesn't play **voids that leg and recalculates the entry at the lower payout**. A
+  3-leg at 6× becomes a 2-leg at 3× — which argues for entering late.
+
+The second one wins, by a lot:
+
+| | EV at 56% per leg |
+|---|---|
+| 3-leg @ 6× | **+5.4%** |
+| 2-leg @ 3× (what a void leaves) | **−5.9%** |
+
+**One voided leg costs 11.3 points of EV.** Catching a softer line on one leg is worth about 5.6
+points — but across 42 entered lines Underdog was softer only twice (and *tougher* four times), so
+the expected gain from hunting early lines is about **0.27 points**. Void risk above roughly 2.4%
+erases it, and a single questionable tag carries far more than that.
+
+Entering late also makes the picks themselves better: ESPN game injury reports fill in Wednesday
+through Sunday, so a Wednesday pick is scored on less information.
+
+Don't cut it too fine either. Entering 20 minutes before kickoff leaves no line movement to measure,
+so closing-line value reads zero and you learn nothing that week.
+
+**The one exception is opportunistic.** Browsing Underdog is free. If you happen to see an obviously
+stale number, take it — that's a divergence event. Just don't go hunting on a schedule for something
+that appears 5% of the time.
+
+> Caveat: every line ever entered here was entered close to game time, so there are **no observations
+> of Underdog's early-week numbers**. "Early lines aren't softer" is an inference, not a measurement.
+
 ### When to skip
 
 **Skip whenever the board is thin.** A one-game slate often can't produce three picks worth
