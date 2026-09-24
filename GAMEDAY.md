@@ -1,0 +1,230 @@
+# NFL Gameday — the weekly routine
+
+Everything needed to go from "there's a game tonight" to a slip, without asking anyone.
+Read the [Decision rules](#decision-rules) at least once; the rest is mechanical.
+
+---
+
+## Quick checklist
+
+1. `npm run dev` → open **localhost:3000/nfl**
+2. **Load game context (free)**
+3. **Fetch props** — confirm the credit estimate
+4. **Re-rank picks (free)**
+5. **Enter your pick'em lines** ← the step that matters most
+6. Mark anything missing as **Not offered?**
+7. Build a **3-leg** slip (never 4)
+8. Tick **I actually placed this slip** before saving
+9. **3 hours before kickoff**: Capture closing lines → **+ props**
+
+---
+
+## Step by step
+
+### 1. Start the app
+
+```bash
+npm run dev
+```
+
+Open **localhost:3000/nfl**. It resolves to the next slate on its own — you should not need to
+pick a date. The header shows the week, the game count, and your remaining Odds API credits.
+
+### 2. Load game context — free
+
+Click **Load game context (free)**.
+
+Pulls injury reports, the DraftKings spread/total, venue and weather from ESPN and Open-Meteo.
+Costs **zero credits**, so there is never a reason to skip or delay it.
+
+Weather is only fetched for outdoor stadiums. A dome showing no weather data is correct, not a bug.
+
+### 3. Fetch props — costs credits
+
+Click **Fetch props**. The estimate appears *before* you confirm:
+
+> `N games × 6 markets = N×6 credits`
+
+**Roughly 6 credits per game.** A single Thursday or Monday game is ~6; a full Sunday slate is ~90.
+You have 500 per month. The floor setting (25) stops a fetch that would leave you too low.
+
+### 4. Re-rank — free
+
+Click **Re-rank picks (free)**. Scores every stored prop and builds the board. No credits, so run it
+again any time you change a line.
+
+### 5. Enter your pick'em lines ⚠️
+
+Open **Enter your pick'em lines** and type the number Underdog actually posts for each pick.
+
+**This is the highest-value step in the whole routine.** Picks are scored against the *sportsbook*
+line until you do it. If Underdog posts something different, the model is answering the wrong
+question. This is how the James Cook edge was found — 100.5 on Underdog against 102 at the book —
+and it hit.
+
+The **Edge** column updates as you type. Positive means Underdog is offering a softer number than
+the books, which is the edge actually worth having.
+
+### 6. Mark anything that isn't there
+
+If a recommended prop doesn't exist on Underdog, click **Not offered?** on that row.
+
+It greys out, drops from slip suggestions, and — after the same market comes up empty 8 times — the
+app tells you to stop fetching that market and how many credits it's wasting. Props are pulled from
+a sportsbook feed, which carries markets pick'em sites don't, so this will keep happening until the
+data says which markets to drop.
+
+Entering a line already records the prop as available. You only ever click for the missing ones.
+
+### 7. Build the slip
+
+The **Suggested slips** panel shows a break-even ladder up top. Pick your size from
+[the rules below](#slip-size), then **Save slip**.
+
+Tick **I actually placed this slip on Underdog** if you really bet it. Untracked bets are why the
+"picks I took" numbers stay thin.
+
+### 8. Capture closing lines — 3 hours before kickoff
+
+A prompt appears at the top of the NFL page inside the **3 hours before the first kickoff**, with the
+button on it. Two options:
+
+| Button | Covers | Cost |
+|---|---|---|
+| Capture closing lines | Team picks only | free |
+| **+ props** | **Player props — the one you want** | ~6 credits/game |
+
+**30–60 minutes before kickoff is ideal.** Doing it right after generating picks is pointless: the
+closing line would equal the entry line and every reading would be zero.
+
+Why bother: it compares the market's implied probability when you took the pick against where the
+market closed. That converges in *dozens* of bets. Win rate takes **thousands**. It is the only
+measurement that will tell you whether this works within a season.
+
+Results land under **Analytics → Model quality → Closing Line Value**.
+
+---
+
+## Decision rules
+
+### Slip size
+
+Break-even per leg is `multiplier^(-1/legs)` — exact, and depends on nothing but the multiplier.
+
+| Legs | Multiplier | Break-even per leg | |
+|---|---|---|---|
+| 2 | 3× | 57.7% | worst size |
+| **3** | **6×** | **55.0%** | **default** |
+| 4 | 10× | 56.2% | **never** |
+| 5 | 20× | 54.9% | lowest bar |
+
+**Never play 4 legs.** The 4-leg tier asks more per leg than either 3 or 5. The 3rd leg you add
+needs 50% to earn its place, the 5th needs 50% — but the 4th needs **60%**.
+
+> ⚠️ The app assumes 2-leg = 3×. Several sources say Underdog now pays **3.5×**, which would drop the
+> 2-leg bar to 53.5%. Underdog's payout pages block automated checking. **Read the multiplier in the
+> app** — it's also the only place per-pick boosts and discounts show up.
+
+### Stacking a QB with his own receiver
+
+If the board offers a quarterback's passing prop and one of his own receivers **on the same side**,
+that pairing is worth taking. Their outcomes are correlated at **+0.34** (measured, n=3,620), and the
+fixed multiplier prices them as if independent — so it raises the odds the whole slip lands for free.
+
+The builder now seeks these automatically and marks them **green** with the uplift shown. Green is
+good. It is not a warning.
+
+Legal on Underdog as long as some other leg comes from a different team, which the builder enforces.
+
+Two things that are **not** correlated and need no thought: receivers who share a quarterback
+(+0.003), and legs from two different games (−0.002).
+
+### When to skip
+
+**Skip whenever the board is thin.** A one-game slate often can't produce three picks worth
+defending. Reaching for a third leg you don't believe in is exactly how the multiplier wins.
+
+No bet is a free option. There is always next week.
+
+### Weather
+
+Only matters for **outdoor** stadiums with **wind ≥ 15 mph**. At that threshold unders on game
+totals historically hit ~57%, but forecasts verify only about 21% of the time at one day out, so most
+of that edge is gone by the time you can act on it.
+
+Temperature is **dead** — no usable pattern, including in freezing games. Don't fade a cold game.
+
+Domes: weather never applies. SoFi and Lambeau both look "outdoor" in some feeds; the app's own
+stadium table is the authority.
+
+---
+
+## Reading the numbers honestly
+
+**Break-even is exact.** It comes from the multiplier alone. Trust it.
+
+**Expected value is not.** It leans on the confidence score as though it were a probability. Use it to
+rank slips against each other, never as a promised return. When the model claims more than 62% per
+leg the app greys it out and says so — prop markets aren't loose enough for an edge that size.
+
+**Your record proves nothing yet.** The NFL board is 22-15 (59.5%), and the 95% range runs 43.5% to
+73.7% — which contains both a real edge and a coin flip. At a genuine 56% per-leg rate it takes on the
+order of a *thousand* 3-leg slips to tell skill from luck. This is why closing-line value matters.
+
+**Confidence score is unproven.** On NFL picks there's no detectable relationship between the score
+and outcomes in either direction. It isn't noise-free ranking — treat it as a suggestion.
+
+---
+
+## Credits
+
+- **~6 per game** per prop fetch (6 markets × 1 game)
+- **~6 per game** again if you capture closing lines with **+ props**
+- Full Sunday ≈ 90; Thursday or Monday ≈ 6
+- **500/month.** Non-game days cost nothing — the daily job skips them.
+- Check remaining in the `/nfl` header. Floor is 25.
+
+Free forever: ESPN schedule, box scores, injuries, gamelogs; Open-Meteo weather; nflverse stats;
+loading game context; re-ranking.
+
+---
+
+## Troubleshooting
+
+**Site won't load / connection refused**
+```bash
+npm run dev
+```
+
+**Every page 500s, usually right after I changed the schema**
+
+A migration stales the running dev server's Prisma client. Restart it:
+```bash
+pkill -f "next dev" && npm run dev
+```
+
+**`/nfl` shows no games**
+
+Use **Next slate**. The schedule comes from ESPN and costs nothing. If a real game is missing, the
+date is probably being read in the wrong timezone — slates are keyed to **Eastern**, so a Sunday night
+game stays on Sunday.
+
+**Fetch button is disabled**
+
+Either no `ODDS_API_KEY` in `.env`, or the estimate would take you below the credit floor.
+
+**Picks look wrong / stale after changing a line**
+
+Click **Re-rank picks (free)**. Costs nothing.
+
+---
+
+## Health check
+
+```bash
+npm test          # should be all green
+npx tsc --noEmit  # should print nothing
+```
+
+Settings that should stay as they are: scoring profile **distribution**, sports **NFL only**, demo
+mode **off**, web research **on**.
