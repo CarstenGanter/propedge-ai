@@ -115,7 +115,15 @@
       "Read(//Users/carstenganter/Library/LaunchAgents/**)",
       "Bash(cp __TRACKED_VAR__/locktest.ts src/jobs/_locktest.ts)",
       "Bash(node --conditions=react-server --env-file=.env --import tsx src/jobs/_locktest.ts)",
-      "Bash(rm src/jobs/_locktest.ts)"
+      "Bash(rm src/jobs/_locktest.ts)",
+      "Bash(ls -la ~/Code 2>/dev/null || echo \"~/Code does not exist yet\"; cd \"/Users/carstenganter/Documents/For Fucks/Vibe Code/propedge-ai\" && echo \"=== tracked files mentioning the old path ===\" && git grep -l \"Documents/For Fucks\" -- . ':!*.md' | head; git grep -c \"Documents/For Fucks\" -- .claude/settings.json 2>/dev/null; echo \"=== .env references ===\"; grep -c \"Documents\" .env; echo \"=== is the old path itself a symlink? ===\"; ls -ld \"/Users/carstenganter/Documents/For Fucks/Vibe Code/propedge-ai\"; du -sh . 2>/dev/null)",
+      "Read(//Users/carstenganter/**)",
+      "Read(//Users/carstenganter/Code/propedge-ai/**)",
+      "Bash(rm -rf .next tsconfig.tsbuildinfo)",
+      "Read(//Users/carstenganter/Code/propedge-ai/scripts/**)",
+      "Read(//Users/carstenganter/.claude/projects/-Users-carstenganter-Documents-For-Fucks-Vibe-Code-propedge-ai/memory/**)",
+      "Bash(mkdir -p /Users/carstenganter/.claude/projects/-Users-carstenganter-Code-propedge-ai/memory)",
+      "Bash(cp -n /Users/carstenganter/.claude/projects/-Users-carstenganter-Documents-For-Fucks-Vibe-Code-propedge-ai/memory/* /Users/carstenganter/.claude/projects/-Users-carstenganter-Code-propedge-ai/memory/)"
     ]
   }
 }

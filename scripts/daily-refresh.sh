@@ -7,8 +7,10 @@
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" >/dev/null 2>&1
 
-# Absolute path to the project (edit if you move it).
-PROJECT_DIR="/Users/carstenganter/Documents/For Fucks/Vibe Code/propedge-ai"
+# The project is the folder above this script, resolved through any symlink,
+# so moving the repo never breaks the job. Keep it out of ~/Documents, Desktop
+# and Downloads: macOS stops background jobs from reading those folders.
+PROJECT_DIR="${0:A:h:h}"
 cd "$PROJECT_DIR" || exit 1
 
 echo "----- $(date) -----" >> daily-refresh.log

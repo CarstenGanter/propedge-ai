@@ -15,7 +15,7 @@ Read the [Decision rules](#decision-rules) at least once; the rest is mechanical
 6. Mark anything missing as **Not offered?**
 7. Build a **3-leg** slip (never 4)
 8. Tick **I actually placed this slip** before saving
-9. **3 hours before kickoff**: Capture closing lines → **+ props**
+9. Leave your Mac awake at kickoff — closing lines capture themselves
 
 ---
 
@@ -91,24 +91,27 @@ The **Suggested slips** panel shows a break-even ladder up top. Pick your size f
 Tick **I actually placed this slip on Underdog** if you really bet it. Untracked bets are why the
 "picks I took" numbers stay thin.
 
-### 8. Capture closing lines — 3 hours before kickoff
+### 8. Closing lines — automatic now
 
-A prompt appears at the top of the NFL page inside the **3 hours before the first kickoff**, with the
-button on it. Two options:
+**You don't need to do anything.** Closing lines are captured automatically 20–60 minutes before
+each kickoff, once per game, by two schedulers that share a lock so they never pay twice:
 
-| Button | Covers | Cost |
+| | Runs when | Days |
 |---|---|---|
-| Capture closing lines | Team picks only | free |
-| **+ props** | **Player props — the one you want** | ~6 credits/game |
+| Background job (launchd) | Mac is awake, even with the app closed | Sun, Mon, Thu |
+| In-app scheduler | The app (`npm run dev`) is running | every day |
 
-**30–60 minutes before kickoff is ideal.** Doing it right after generating picks is pointless: the
-closing line would equal the entry line and every reading would be zero.
+Each check costs nothing unless a game with uncaptured picks is actually due; the capture itself
+costs the same ~6 credits per game as doing it by hand.
 
-Why bother: it compares the market's implied probability when you took the pick against where the
-market closed. That converges in *dozens* of bets. Win rate takes **thousands**. It is the only
-measurement that will tell you whether this works within a season.
+**The one requirement: your Mac has to be awake at kickoff.** A sleeping Mac runs neither.
 
-Results land under **Analytics → Model quality → Closing Line Value**.
+Check it worked: `logs/auto-capture.log` shows a line per run, and captured picks appear under
+**Analytics → Model quality → Closing Line Value**. The manual button on the NFL page still works
+as a backup.
+
+Why it matters: it compares the market's implied probability when you took the pick against where
+the market closed. That converges in *dozens* of bets; win rate takes **thousands**.
 
 ---
 
@@ -235,6 +238,20 @@ loading game context; re-ranking.
 ---
 
 ## Troubleshooting
+
+**Project location**
+
+The project lives in `~/Code/propedge-ai`. The old Documents path still works (it's a link), but
+open the new one in VS Code. Background jobs can't run from Documents, Desktop or Downloads.
+
+**Closing lines didn't capture**
+
+Check `logs/auto-capture.log`. If the background job stopped after a node upgrade, re-run:
+```bash
+zsh scripts/install-auto-capture.sh
+```
+Late-season Saturday games are covered by the in-app scheduler only (app must be running), unless
+you add Saturday (`6`) to `DAYS` in that script.
 
 **Site won't load / connection refused**
 ```bash

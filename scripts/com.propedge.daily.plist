@@ -19,7 +19,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/zsh</string>
-    <string>/Users/carstenganter/Documents/For Fucks/Vibe Code/propedge-ai/scripts/daily-refresh.sh</string>
+    <string>/Users/carstenganter/Code/propedge-ai/scripts/daily-refresh.sh</string>
   </array>
 
   <key>StartCalendarInterval</key>
@@ -31,8 +31,8 @@
   </dict>
 
   <key>StandardOutPath</key>
-  <string>/Users/carstenganter/Documents/For Fucks/Vibe Code/propedge-ai/daily-refresh.log</string>
+  <string>/Users/carstenganter/Code/propedge-ai/daily-refresh.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/carstenganter/Documents/For Fucks/Vibe Code/propedge-ai/daily-refresh.log</string>
+  <string>/Users/carstenganter/Code/propedge-ai/daily-refresh.log</string>
 </dict>
 </plist>

@@ -14,6 +14,13 @@ PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 REPO="${0:A:h:h}"
 DAYS=(0 1 4)   # launchd weekdays: 0 = Sunday, 1 = Monday, 4 = Thursday
 
+case "$REPO" in
+  "$HOME/Documents"*|"$HOME/Desktop"*|"$HOME/Downloads"*)
+    echo "Refusing to install: $REPO is in a folder macOS blocks background jobs from reading."
+    echo "Move the repo (e.g. to ~/Code) and run this again."
+    exit 1 ;;
+esac
+
 if [[ "$1" == "uninstall" ]]; then
   launchctl bootout "gui/$UID/$LABEL" 2>/dev/null || true
   rm -f "$PLIST"
@@ -21,10 +28,10 @@ if [[ "$1" == "uninstall" ]]; then
   exit 0
 fi
 
-# node is invoked directly rather than through a shell script, so that macOS
-# privacy controls (the repo lives in ~/Documents) only need to trust one binary.
-# launchd does not see nvm, so the path is recorded now; re-run this installer
-# after upgrading node.
+# The repo must live outside ~/Documents, Desktop and Downloads: macOS privacy
+# controls stop launchd jobs from reading those folders, and the job fails before
+# it starts (exit 78). launchd does not see nvm, so node's path is recorded now;
+# re-run this installer after upgrading node or moving the repo.
 NODE="$(command -v node)"
 NODE_BIN="$(dirname "$NODE")"
 
