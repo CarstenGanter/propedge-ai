@@ -101,7 +101,18 @@
       "Bash(sqlite3 \"file:prisma/dev.db?mode=ro\")",
       "Bash(sqlite3 \"file:prisma/dev.db?mode=ro\" \"SELECT nflMarketsJson FROM AppSettings LIMIT 1;\")",
       "Bash(python3 -c \"import json;print\\(json.load\\(open\\('package.json'\\)\\)['scripts']\\)\")",
-      "Bash(grep -iE \"^\\\\.env\\($|\\\\.\\)\")"
+      "Bash(grep -iE \"^\\\\.env\\($|\\\\.\\)\")",
+      "Bash(sqlite3 -separator ',' \"file:prisma/dev.db?mode=ro\" \"SELECT p.confidenceScore, p.entryProb, p.status, pp.propType, pp.line, pp.direction, pp.date FROM Pick p JOIN PlayerProp pp ON pp.id=p.playerPropId WHERE pp.sport='NFL' AND p.scoringProfile='distribution' AND p.status IN \\('hit','miss'\\) AND p.entryProb IS NOT NULL;\")",
+      "Bash(chmod +x scripts/*.sh)",
+      "Bash(zsh scripts/install-auto-capture.sh)",
+      "Bash(plutil -lint ~/Library/LaunchAgents/com.propedge.autocapture.plist)",
+      "Bash(:)",
+      "Bash(launchctl kickstart *)",
+      "Bash(launchctl print *)",
+      "Bash(rm scripts/auto-capture.sh)",
+      "Bash(rm -f logs/launchd.log)",
+      "Bash(zsh scripts/install-auto-capture.sh uninstall)",
+      "Read(//Users/carstenganter/Library/LaunchAgents/**)"
     ]
   }
 }

@@ -13,7 +13,8 @@
     "seed": "node --conditions=react-server --import tsx prisma/seed.ts",
     "daily": "node --conditions=react-server --env-file=.env --import tsx src/jobs/run-daily.ts",
     "capture": "node --conditions=react-server --env-file=.env --import tsx src/jobs/run-capture.ts",
-    "db:reset": "prisma migrate reset --force"
+    "db:reset": "prisma migrate reset --force",
+    "capture:auto": "node --conditions=react-server --env-file=.env --import tsx src/jobs/run-auto-capture.ts"
   },
   "prisma": {
     "seed": "node --conditions=react-server --import tsx prisma/seed.ts"

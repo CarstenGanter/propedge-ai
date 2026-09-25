@@ -37,6 +37,8 @@ export interface SerializedProp {
   underdogLine: number | null;
   /** Does the pick'em platform post this prop? null = never checked. */
   underdogAvailable: boolean | null;
+  /** Underdog's per-pick payout tag; null = standard or not entered. */
+  underdogPickMultiplier: number | null;
   marketLine: number | null;
   marketProjection: number | null;
   direction: Direction;
@@ -76,6 +78,8 @@ export interface SerializedPick {
   isDemo: boolean;
   /** True once a closing line was recorded for this pick (drives CLV). */
   closingCaptured: boolean;
+  /** Engine that scored this pick; only "distribution" makes confidence a probability. */
+  scoringProfile: string;
   /** Value of the entered Underdog line vs the sharp-market fair value (>0 = soft). */
   underdogEdge: number | null;
   prop: SerializedProp;
@@ -134,6 +138,7 @@ export function serializeProp(p: PlayerProp): SerializedProp {
     line: p.line,
     underdogLine: p.underdogLine,
     underdogAvailable: p.underdogAvailable ?? null,
+    underdogPickMultiplier: p.underdogPickMultiplier ?? null,
     marketLine: market.marketLine,
     marketProjection: market.projection,
     direction: p.direction as Direction,
@@ -177,6 +182,7 @@ export function serializePick(
     placedReal: pick.placedReal,
     isDemo: pick.isDemo,
     closingCaptured: pick.closingProb != null,
+    scoringProfile: pick.scoringProfile,
     underdogEdge: computeUnderdogEdge(prop),
     prop,
   };

@@ -185,6 +185,37 @@ describe("buildSuggestedSlips", () => {
     expect(buildSuggestedSlips(pool, [2])[0].legs.map((l) => l.pickId)).toEqual(["unknown", "a"]);
   });
 
+  // ---- per-pick payout tags ----
+
+  it("ranks by value at the actual payout, not raw probability", () => {
+    // 65% at 0.85x is worth 55.3; 58% at full payout is worth 58.
+    const pool = [
+      { ...cand("fav", "Favourite WR", "Chiefs", "Broncos", 65, "UNDER", "KC"), pickMultiplier: 0.85 },
+      cand("a", "Alpha WR", "Bengals", "Buccaneers", 58, "OVER", "CIN"),
+      cand("b", "Bravo RB", "Lions", "Saints", 57, "OVER", "DET"),
+    ];
+    const [two] = buildSuggestedSlips(pool, [2]);
+    expect(two.legs.map((l) => l.pickId)).toEqual(["a", "b"]);
+  });
+
+  it("prices the entry at the standard rung times every tag, and says what a tagged leg needs", () => {
+    const pool = [
+      { ...cand("fav", "Favourite WR", "Chiefs", "Broncos", 70, "UNDER", "KC"), pickMultiplier: 0.85 },
+      cand("a", "Alpha WR", "Bengals", "Buccaneers", 58, "OVER", "CIN"),
+      cand("b", "Bravo RB", "Lions", "Saints", 57, "OVER", "DET"),
+    ];
+    const [three] = buildSuggestedSlips(pool, [3]);
+    expect(three.baseMultiplier).toBe(6);
+    expect(three.multiplier).toBeCloseTo(5.1, 6);
+    const note = three.flags.find((f) => /Favourite WR pays 0.85/.test(f.text));
+    expect(note?.text).toMatch(/needs 64\.7%/);
+  });
+
+  it("leaves an untagged slip at the standard rung", () => {
+    const [two] = buildSuggestedSlips(cands, [2]);
+    expect(two.multiplier).toBe(two.baseMultiplier);
+  });
+
   it("is deterministic across calls", () => {
     const a = buildSuggestedSlips(cands).map((s) => s.legs.map((l) => l.pickId));
     const b = buildSuggestedSlips([...cands].reverse()).map((s) => s.legs.map((l) => l.pickId));

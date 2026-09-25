@@ -388,6 +388,11 @@ export interface FetchPropsOptions {
   toSlate?: (iso: string) => string;
   /** Restrict to these prop types (labels from PROP_TYPES); default = every market for the sport. */
   propTypes?: string[];
+  /**
+   * Keep only events whose kickoff passes this test. Applied before any paid
+   * request, so an event it rejects costs nothing — the event list is free.
+   */
+  eventFilter?: (commenceISO: string) => boolean;
 }
 
 function defaultToSlate(iso: string): string {
@@ -435,6 +440,10 @@ export async function fetchPlayerProps(
     let candidates = events.filter((e) => new Date(e.commence_time).getTime() > Date.now() - 3 * 3600_000);
     if (options.slateDate) {
       candidates = filterEventsForSlate(candidates, options.slateDate, options.toSlate ?? defaultToSlate);
+    }
+    if (options.eventFilter) {
+      const keep = options.eventFilter;
+      candidates = candidates.filter((e) => keep(e.commence_time));
     }
     const upcoming = candidates.slice(0, perComp);
     totalEvents += upcoming.length;

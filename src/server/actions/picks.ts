@@ -62,8 +62,10 @@ export async function setUnderdogLine(
 
 export interface UnderdogLineEntry {
   pickId: string;
-  /** null clears the stored line and re-scores against the market line. */
-  line: number | null;
+  /** null clears the stored line and re-scores against the market line; omit to leave it. */
+  line?: number | null;
+  /** Underdog's per-pick payout tag (e.g. 0.85); null clears it; omit to leave it. */
+  pickMultiplier?: number | null;
 }
 
 /**
@@ -77,12 +79,27 @@ export async function setUnderdogLines(
   let failed = 0;
   const seenOnPlatform: string[] = [];
   for (const e of entries) {
-    const r = await applyUnderdogLine(e.pickId, e.line).catch(() => ({ ok: false }));
-    if (r.ok) {
+    let ok = true;
+    // A line change re-scores the pick; a payout tag does not change the
+    // probability, only what the pick is worth, so it is a plain update.
+    if (e.line !== undefined) {
+      const r = await applyUnderdogLine(e.pickId, e.line).catch(() => ({ ok: false }));
+      ok = r.ok;
+    }
+    if (ok && e.pickMultiplier !== undefined) {
+      const pick = await prisma.pick.findUnique({ where: { id: e.pickId }, select: { playerPropId: true } });
+      if (pick) {
+        await prisma.playerProp.update({
+          where: { id: pick.playerPropId },
+          data: { underdogPickMultiplier: e.pickMultiplier },
+        });
+      } else ok = false;
+    }
+    if (ok) {
       updated++;
-      // Typing a line means you read it off the platform, so the prop is
-      // offered. Recorded here rather than asked for twice.
-      if (e.line != null) seenOnPlatform.push(e.pickId);
+      // Typing a line or a tag means you read it off the platform, so the prop
+      // is offered. Recorded here rather than asked for twice.
+      if (e.line != null || e.pickMultiplier != null) seenOnPlatform.push(e.pickId);
     } else failed++;
   }
   if (seenOnPlatform.length > 0) {

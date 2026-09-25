@@ -35,6 +35,11 @@ model PlayerProp {
   // on purpose: null = nobody has looked, true = seen on the platform,
   // false = confirmed absent. Only an observation sets this, never a guess.
   underdogAvailable Boolean?
+  // Underdog's per-pick payout tag: below 1 (e.g. 0.85) on a side it judges
+  // likely, above 1 on an unlikely one. It multiplies the whole entry's payout,
+  // and lands hardest on exactly the lopsided picks the model likes most. Null
+  // means standard (1.0) or not yet entered.
+  underdogPickMultiplier Float?
   direction       String // OVER | UNDER
   source          String
   projection      Float?

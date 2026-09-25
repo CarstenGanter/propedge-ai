@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   breakEvenPerLeg,
   compareSlipSizes,
+  entryMultiplier,
   jointHitProbability,
+  legRequirement,
   marginalLegRequirement,
   slipEconomics,
 } from "./pickemMath";
@@ -180,5 +182,28 @@ describe("slipEconomics with correlated legs", () => {
     expect(econ.overconfident).toBe(false);
     // A genuinely implausible per-leg claim still trips it.
     expect(slipEconomics(6, [0.7, 0.7, 0.7]).overconfident).toBe(true);
+  });
+});
+
+describe("per-pick multipliers", () => {
+  it("multiplies every tag into the entry payout", () => {
+    expect(entryMultiplier(6, [0.85, 0.85, null])).toBeCloseTo(4.335, 6);
+    expect(entryMultiplier(6, [1.2, 1, 1])).toBeCloseTo(7.2, 6);
+  });
+
+  it("treats missing or nonsense tags as standard", () => {
+    expect(entryMultiplier(6, [null, undefined, 0, -1, Number.NaN])).toBe(6);
+  });
+
+  it("raises the per-leg bar on a discounted pick and lowers it on a boosted one", () => {
+    expect(legRequirement(6, 3, null)!).toBeCloseTo(0.5503, 4);
+    expect(legRequirement(6, 3, 0.85)!).toBeCloseTo(0.6474, 4);
+    expect(legRequirement(6, 3, 1.2)!).toBeCloseTo(0.4586, 4);
+  });
+
+  it("shows how discounts move the whole entry's break-even", () => {
+    // Two 0.85x picks turn a 55.0% bar into a 61.3% one.
+    const discounted = breakEvenPerLeg(entryMultiplier(6, [0.85, 0.85, 1]), 3)!;
+    expect(discounted).toBeCloseTo(0.6133, 3);
   });
 });

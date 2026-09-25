@@ -99,6 +99,35 @@ export function breakEvenPerLeg(multiplier: number, legs: number): number | null
   return Math.pow(1 / multiplier, 1 / legs);
 }
 
+/** A per-pick tag is usable when it is a positive finite number; anything else means standard. */
+function tag(m: number | null | undefined): number {
+  return m != null && Number.isFinite(m) && m > 0 ? m : 1;
+}
+
+/**
+ * The multiplier an entry actually pays: the standard rung for its size, times
+ * every per-pick tag on it.
+ *
+ * Underdog tags individual picks — below 1 on a side it judges likely, above 1
+ * on an unlikely one — and those tags multiply straight into the payout. A
+ * 3-leg at 6x with two 0.85x picks pays 6 x 0.85 x 0.85 = 4.34x, and its
+ * break-even rises from 55.0% to 61.3% per leg. Pricing it at 6x overrates it.
+ */
+export function entryMultiplier(base: number, pickMultipliers: (number | null | undefined)[]): number {
+  return pickMultipliers.reduce<number>((acc, m) => acc * tag(m), base);
+}
+
+/**
+ * The hit rate one leg needs to pull its weight in an entry of `legs` at
+ * `base`, given its own tag: the standard per-leg bar divided by the tag. A
+ * 0.85x pick on a 3-leg needs 55.0% / 0.85 = 64.7%; a 1.2x pick only 45.9%.
+ * Above 1 means no probability can justify the pick at that size.
+ */
+export function legRequirement(base: number, legs: number, pickMultiplier: number | null | undefined): number | null {
+  const bar = breakEvenPerLeg(base, legs);
+  return bar == null ? null : bar / tag(pickMultiplier);
+}
+
 export function slipEconomics(
   multiplier: number,
   legProbabilities: number[],

@@ -11,7 +11,7 @@ Read the [Decision rules](#decision-rules) at least once; the rest is mechanical
 2. **Load game context (free)**
 3. **Fetch props** — confirm the credit estimate
 4. **Re-rank picks (free)**
-5. **Enter your pick'em lines** ← the step that matters most
+5. **Enter your pick'em lines and Payout × tags** ← the step that matters most
 6. Mark anything missing as **Not offered?**
 7. Build a **3-leg** slip (never 4)
 8. Tick **I actually placed this slip** before saving
@@ -64,6 +64,13 @@ and it hit.
 
 The **Edge** column updates as you type. Positive means Underdog is offering a softer number than
 the books, which is the edge actually worth having.
+
+**Also enter the Payout × tag** — the small multiplier Underdog shows under a pick (e.g. `0.85x` on a
+side it rates likely, `1.2x` on one it rates unlikely). Leave it blank for standard. It multiplies
+the whole entry's payout, so the **Needs** column then shows what each pick must hit to earn a place
+on a 3-leg slip — green when the model clears it, red when it doesn't. A 65% pick tagged 0.85× needs
+64.7%, which is why the strongest-looking picks are often barely worth taking. Slips are ranked on
+this value, not raw probability, once tags are in.
 
 ### 6. Mark anything that isn't there
 

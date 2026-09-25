@@ -46,3 +46,6 @@ next-env.d.ts
 
 # daily job log
 /daily-refresh.log
+
+# scheduled job output
+/logs/

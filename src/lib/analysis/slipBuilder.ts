@@ -1,6 +1,6 @@
 import type { SerializedPick } from "@/lib/dto";
 import { analyzeParlay, makeGameKey, type ParlayAnalysis, type ParlayLegInput } from "./parlayCorrelation";
-import type { CorrelatedPair } from "./pickemMath";
+import { entryMultiplier, legRequirement, type CorrelatedPair } from "./pickemMath";
 
 /**
  * Suggested pick'em slips (pure, tested).
@@ -86,6 +86,8 @@ export interface SlipCandidate extends ParlayLegInput {
    * is treated as playable — the alternative is hiding picks on a guess.
    */
   available?: boolean | null;
+  /** Underdog's per-pick payout tag (e.g. 0.85). Null or missing means standard. */
+  pickMultiplier?: number | null;
 }
 
 export interface SlipFlag {
@@ -98,7 +100,10 @@ export interface SuggestedSlip {
   size: number;
   legs: SlipCandidate[];
   analysis: ParlayAnalysis;
+  /** What the entry actually pays: the standard rung times every per-pick tag. */
   multiplier: number;
+  /** The standard rung for this size, before per-pick tags. */
+  baseMultiplier: number;
   flags: SlipFlag[];
 }
 
@@ -127,6 +132,7 @@ export function pickToSlipCandidate(p: SerializedPick): SlipCandidate {
     whyLine: whyLineFor(p),
     teamId: p.prop.playerTeamId,
     available: p.prop.underdogAvailable,
+    pickMultiplier: p.prop.underdogPickMultiplier,
   };
 }
 
@@ -171,9 +177,15 @@ export function buildSuggestedSlips(
   // A prop confirmed absent from the platform cannot be part of an entry, so it
   // is dropped before ranking rather than suggested and rejected at the app.
   // Unchecked props stay in: absence of evidence is not evidence of absence.
+  // Ranked by what a leg is worth at its own payout, not by raw probability.
+  // A pick's contribution to the entry's expected value is p x its tag, so a
+  // 65% pick tagged 0.85x (worth 55.3) sits below a 58% pick at full payout.
+  // Ranking on probability alone favours exactly the lopsided picks Underdog
+  // discounts — which is how a board fills up with low-line favourites.
+  const value = (c: SlipCandidate) => c.confidenceScore * (c.pickMultiplier && c.pickMultiplier > 0 ? c.pickMultiplier : 1);
   const sorted = [...candidates]
     .filter((c) => c.available !== false)
-    .sort((a, b) => b.confidenceScore - a.confidenceScore || a.playerName.localeCompare(b.playerName));
+    .sort((a, b) => value(b) - value(a) || a.playerName.localeCompare(b.playerName));
   const out: SuggestedSlip[] = [];
 
   for (const size of sizes) {
@@ -205,15 +217,35 @@ export function buildSuggestedSlips(
     if (legs.length < size) continue; // can't fill this size honestly
     if (!spansTwoTeams(legs)) continue; // Underdog rejects single-team entries
 
+    const base = multipliers[size] ?? 1;
     out.push({
       size,
       legs,
       analysis: analyzeParlay(legs),
-      multiplier: multipliers[size] ?? 1,
-      flags: flagsFor(legs),
+      baseMultiplier: base,
+      multiplier: entryMultiplier(base, legs.map((l) => l.pickMultiplier)),
+      flags: [...flagsFor(legs), ...tagFlags(legs, base)],
     });
   }
   return out;
+}
+
+/** Notes for legs carrying a per-pick payout tag, with what each then has to hit. */
+function tagFlags(legs: SlipCandidate[], base: number): SlipFlag[] {
+  return legs
+    .filter((l) => l.pickMultiplier != null && l.pickMultiplier > 0 && l.pickMultiplier !== 1)
+    .map((l) => {
+      const m = l.pickMultiplier as number;
+      const need = legRequirement(base, legs.length, m);
+      const needText = need == null ? "" : need >= 1 ? " — no hit rate can justify it at this size" : `, so it needs ${(need * 100).toFixed(1)}% to earn its place`;
+      return {
+        tone: "info" as const,
+        text:
+          `${l.playerName} pays ${m}× on Underdog` +
+          (m < 1 ? " (a discount — Underdog also rates this side likely)" : " (a boost — Underdog rates this side unlikely)") +
+          needText + ".",
+      };
+    });
 }
 
 /** Plain-language notes about dependencies between the chosen legs. */

@@ -47,6 +47,17 @@ export async function captureClosingLines(opts?: {
   date?: string;
   includeProps?: boolean;
   maxEventsPerSport?: number;
+  /** Also re-price moneyline team picks (default true). */
+  includeTeamPicks?: boolean;
+  /**
+   * Skip picks that already have a closing line. The scheduled job runs many
+   * times a day, and must never pay twice for the same game.
+   */
+  onlyUncaptured?: boolean;
+  /** Only re-price events whose kickoff passes this test (see nfl/autoCapture). */
+  eventFilter?: (commenceISO: string) => boolean;
+  /** Restrict prop capture to these sports. */
+  sports?: Sport[];
 }): Promise<CaptureSummary> {
   if (!hasKey("ODDS_API_KEY")) {
     return { ok: false, teamPicksUpdated: 0, propPicksUpdated: 0, creditsRemaining: null, error: "No ODDS_API_KEY set in .env" };
@@ -56,9 +67,12 @@ export async function captureClosingLines(opts?: {
   let creditsRemaining: number | null = null;
 
   // ---- Team picks (moneyline) — cheap bulk fetch per league ----
-  const teamPicks = await prisma.teamPick.findMany({
-    where: { date, status: "pending", isDemo: false },
-  });
+  const teamPicks =
+    opts?.includeTeamPicks === false
+      ? []
+      : await prisma.teamPick.findMany({
+          where: { date, status: "pending", isDemo: false },
+        });
   const leagues = [...new Set(teamPicks.map((p) => p.league))].filter(isLeague) as League[];
   let teamPicksUpdated = 0;
 
@@ -87,11 +101,18 @@ export async function captureClosingLines(opts?: {
   let propPicksUpdated = 0;
   if (opts?.includeProps !== false) {
     const picks = await prisma.pick.findMany({
-      where: { date, status: "pending", isDemo: false },
+      where: {
+        date,
+        status: "pending",
+        isDemo: false,
+        ...(opts?.onlyUncaptured ? { closingProb: null } : {}),
+      },
       include: { playerProp: true },
     });
     const marketPicks = picks.filter((p) => p.playerProp.source === "The Odds API");
-    const sports = [...new Set(marketPicks.map((p) => p.playerProp.sport))].filter(oddsApiSupportsSport) as Sport[];
+    const sports = [...new Set(marketPicks.map((p) => p.playerProp.sport))]
+      .filter(oddsApiSupportsSport)
+      .filter((s) => !opts?.sports || opts.sports.includes(s as Sport)) as Sport[];
 
     for (const sport of sports) {
       const sportPicks = marketPicks.filter((p) => p.playerProp.sport === sport);
@@ -100,6 +121,7 @@ export async function captureClosingLines(opts?: {
       const res = await fetchPlayerProps(apiKey, sport, {
         maxEvents: opts?.maxEventsPerSport ?? 8,
         propTypes,
+        eventFilter: opts?.eventFilter,
         ...(sport === "NFL" ? { slateDate: date, toSlate: toNflSlateDate } : {}),
       });
       if (res.status.remaining != null) creditsRemaining = res.status.remaining;

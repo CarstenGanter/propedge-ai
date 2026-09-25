@@ -8,6 +8,11 @@ import { Button } from "@/components/ui/button";
 import { setUnderdogAvailability, setUnderdogLines, type UnderdogLineEntry } from "@/server/actions/picks";
 import { cn } from "@/lib/utils/cn";
 import type { SerializedPick } from "@/lib/dto";
+import { legRequirement } from "@/lib/analysis/pickemMath";
+import { PICKEM_MULTIPLIERS } from "@/lib/analysis/slipBuilder";
+
+/** The slip size the "Needs" column is measured against. */
+const REFERENCE_LEGS = 3;
 
 /**
  * Enter the whole slate's pick'em lines at once. Scoring a pick against the
@@ -22,6 +27,9 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
   const [msg, setMsg] = React.useState<string | null>(null);
   const [draft, setDraft] = React.useState<Record<string, string>>(() =>
     Object.fromEntries(picks.map((p) => [p.id, p.prop.underdogLine?.toString() ?? ""])),
+  );
+  const [tagDraft, setTagDraft] = React.useState<Record<string, string>>(() =>
+    Object.fromEntries(picks.map((p) => [p.id, p.prop.underdogPickMultiplier?.toString() ?? ""])),
   );
 
   const entered = picks.filter((p) => p.prop.underdogLine != null).length;
@@ -38,11 +46,15 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
   function save() {
     const entries: UnderdogLineEntry[] = [];
     for (const p of picks) {
+      const entry: UnderdogLineEntry = { pickId: p.id };
       const raw = (draft[p.id] ?? "").trim();
       const line = raw === "" ? null : Number(raw);
-      if (raw !== "" && !Number.isFinite(line)) continue;
-      if (line === (p.prop.underdogLine ?? null)) continue; // unchanged
-      entries.push({ pickId: p.id, line });
+      if ((raw === "" || Number.isFinite(line)) && line !== (p.prop.underdogLine ?? null)) entry.line = line;
+      const rawTag = (tagDraft[p.id] ?? "").trim();
+      const tag = rawTag === "" ? null : Number(rawTag);
+      const tagValid = rawTag === "" || (Number.isFinite(tag) && (tag as number) > 0);
+      if (tagValid && tag !== (p.prop.underdogPickMultiplier ?? null)) entry.pickMultiplier = tag;
+      if (entry.line !== undefined || entry.pickMultiplier !== undefined) entries.push(entry);
     }
     if (entries.length === 0) {
       setMsg("No changes to save.");
@@ -52,7 +64,7 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
     startTransition(async () => {
       const r = await setUnderdogLines(entries);
       setMsg(
-        `Saved ${r.updated} line${r.updated === 1 ? "" : "s"} and re-scored those picks.` +
+        `Saved ${r.updated} pick${r.updated === 1 ? "" : "s"}.` +
           (r.failed ? ` ${r.failed} failed.` : ""),
       );
       router.refresh();
@@ -97,6 +109,8 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                   <th className="pb-2 pr-3 text-right font-medium">Book line</th>
                   <th className="pb-2 pr-3 text-right font-medium">Your line</th>
                   <th className="pb-2 pr-3 text-right font-medium">Edge</th>
+                  <th className="pb-2 pr-3 text-right font-medium" title="Underdog's per-pick payout tag, e.g. 0.85. Blank = standard.">Payout ×</th>
+                  <th className="pb-2 pr-3 text-right font-medium" title={`Hit rate this pick needs to earn its place on a ${REFERENCE_LEGS}-leg slip, after its payout tag.`}>Needs</th>
                   <th className="pb-2 text-right font-medium">On Underdog?</th>
                 </tr>
               </thead>
@@ -149,6 +163,20 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                       >
                         {liveEdge == null ? "—" : `${liveEdge > 0 ? "+" : ""}${liveEdge}`}
                       </td>
+                      <td className="py-2 pr-3 text-right">
+                        <input
+                          type="number"
+                          step="0.05"
+                          min="0.05"
+                          inputMode="decimal"
+                          value={tagDraft[p.id] ?? ""}
+                          onChange={(e) => setTagDraft((d) => ({ ...d, [p.id]: e.target.value }))}
+                          placeholder="1.00"
+                          aria-label={`Payout multiplier for ${p.prop.playerName}`}
+                          className="h-8 w-16 rounded-md border border-border bg-input/60 px-2 text-right text-sm tabular-nums"
+                        />
+                      </td>
+                      <NeedsCell pick={p} tagRaw={tagDraft[p.id] ?? ""} />
                       <td className="py-2 text-right">
                         <button
                           type="button"
@@ -176,6 +204,13 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
             </table>
           </div>
           <p className="text-xs text-muted-foreground">
+            <strong className="font-medium text-foreground/80">Payout ×</strong> is the small multiplier
+            Underdog shows under a pick — below 1 when it rates that side likely, above 1 when unlikely.
+            It multiplies the whole entry&apos;s payout, so <strong className="font-medium text-foreground/80">Needs</strong>{" "}
+            shows the hit rate each pick must reach to earn a place on a {REFERENCE_LEGS}-leg slip, in green
+            when the model clears it.
+          </p>
+          <p className="text-xs text-muted-foreground">
             Edge is your line versus the market&apos;s fair value. Positive means Underdog is offering a
             softer number than the books, which is the edge worth taking. Leave a row blank to score it
             against the book line.
@@ -190,5 +225,37 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
         </CardContent>
       )}
     </Card>
+  );
+}
+
+/**
+ * What this pick has to hit to pull its weight on a reference-size slip, after
+ * its payout tag, set against the model's probability when it has one. The
+ * comparison is the point: a 65% pick tagged 0.85x needs 64.7%, so it is barely
+ * worth taking despite looking like the strongest pick on the board.
+ */
+function NeedsCell({ pick, tagRaw }: { pick: SerializedPick; tagRaw: string }) {
+  const typed = tagRaw.trim() === "" ? null : Number(tagRaw);
+  const tag = typed != null && Number.isFinite(typed) && typed > 0 ? typed : null;
+  const need = legRequirement(PICKEM_MULTIPLIERS[REFERENCE_LEGS], REFERENCE_LEGS, tag);
+  // Only the probability profile produces a number that can be compared to a hit rate.
+  const model = pick.scoringProfile === "distribution" ? pick.confidenceScore / 100 : null;
+  const clears = need != null && model != null ? model >= need : null;
+  return (
+    <td
+      className={cn(
+        "py-2 pr-3 text-right tabular-nums",
+        clears == null ? "text-muted-foreground" : clears ? "text-success" : "text-danger",
+      )}
+      title={
+        need == null
+          ? undefined
+          : model == null
+            ? `Needs ${(need * 100).toFixed(1)}%. The model score for this pick is not a probability, so it cannot be compared.`
+            : `Needs ${(need * 100).toFixed(1)}%; the model gives it ${(model * 100).toFixed(0)}%.`
+      }
+    >
+      {need == null ? "—" : need >= 1 ? "n/a" : `${(need * 100).toFixed(1)}%`}
+    </td>
   );
 }

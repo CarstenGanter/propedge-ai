@@ -223,6 +223,15 @@ function SlipCard({
             × {formatCurrency(defaultStake)} → {formatCurrency(payout.projectedPayout)}
           </span>
         </span>
+        {Math.abs(slip.multiplier - slip.baseMultiplier) > 1e-9 && (
+          <>
+            <span />
+            <span className="text-muted-foreground">
+              {slip.baseMultiplier}× standard × this slip&apos;s per-pick tags ={" "}
+              {Number(slip.multiplier.toFixed(3))}×
+            </span>
+          </>
+        )}
 
         <span className="text-muted-foreground">Break-even</span>
         <span>
