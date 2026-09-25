@@ -55,3 +55,26 @@ export async function getOddsCredits(): Promise<OddsCreditsSnapshot | null> {
   const hit = await cacheGet<OddsCreditsSnapshot>(ODDS_CREDITS_KEY);
   return hit?.value ?? null;
 }
+
+/**
+ * A cross-process lock held in the same table. Two things capture closing lines
+ * on a schedule — the running web app and a launchd job — and if both fired in
+ * the same minute each would see the game as uncaptured and pay for it. SQLite
+ * serialises writes and the key is unique, so exactly one `create` can win.
+ * A holder that crashes is released once the lock is older than `ttlMs`.
+ */
+export async function tryAcquireLock(key: string, holder: string, ttlMs: number): Promise<boolean> {
+  await prisma.providerCache.deleteMany({
+    where: { key, updatedAt: { lt: new Date(Date.now() - ttlMs) } },
+  });
+  // INSERT OR IGNORE is atomic and reports 0 rows when the key is taken, which
+  // avoids provoking (and logging) a unique-constraint error on every contention.
+  const json = JSON.stringify({ holder, at: new Date().toISOString() });
+  const inserted = await prisma.$executeRaw`
+    INSERT OR IGNORE INTO "ProviderCache" ("key", "json", "updatedAt") VALUES (${key}, ${json}, ${new Date()})`;
+  return inserted === 1;
+}
+
+export async function releaseLock(key: string): Promise<void> {
+  await prisma.providerCache.deleteMany({ where: { key } });
+}

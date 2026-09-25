@@ -112,7 +112,10 @@
       "Bash(rm scripts/auto-capture.sh)",
       "Bash(rm -f logs/launchd.log)",
       "Bash(zsh scripts/install-auto-capture.sh uninstall)",
-      "Read(//Users/carstenganter/Library/LaunchAgents/**)"
+      "Read(//Users/carstenganter/Library/LaunchAgents/**)",
+      "Bash(cp __TRACKED_VAR__/locktest.ts src/jobs/_locktest.ts)",
+      "Bash(node --conditions=react-server --env-file=.env --import tsx src/jobs/_locktest.ts)",
+      "Bash(rm src/jobs/_locktest.ts)"
     ]
   }
 }
