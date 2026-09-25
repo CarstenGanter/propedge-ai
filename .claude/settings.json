@@ -99,7 +99,9 @@
       "WebFetch(domain:oddsreference.com)",
       "Bash(curl -s -o games.csv https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv)",
       "Bash(sqlite3 \"file:prisma/dev.db?mode=ro\")",
-      "Bash(sqlite3 \"file:prisma/dev.db?mode=ro\" \"SELECT nflMarketsJson FROM AppSettings LIMIT 1;\")"
+      "Bash(sqlite3 \"file:prisma/dev.db?mode=ro\" \"SELECT nflMarketsJson FROM AppSettings LIMIT 1;\")",
+      "Bash(python3 -c \"import json;print\\(json.load\\(open\\('package.json'\\)\\)['scripts']\\)\")",
+      "Bash(grep -iE \"^\\\\.env\\($|\\\\.\\)\")"
     ]
   }
 }
