@@ -11,11 +11,10 @@ import {
   buildSuggestedSlips,
   correlatedPairsFor,
   pickToSlipCandidate,
-  PICKEM_MULTIPLIERS,
   type SuggestedSlip,
 } from "@/lib/analysis/slipBuilder";
 import { parlayPayout } from "@/lib/analysis/parlayCorrelation";
-import { compareSlipSizes, slipEconomics } from "@/lib/analysis/pickemMath";
+import { slipEconomics, STANDARD_PICK_PAYOUT } from "@/lib/analysis/pickemMath";
 import { createParlay } from "@/server/actions/parlays";
 import { setPicksTakenFlag } from "@/server/actions/bankroll";
 import { formatCurrency } from "@/lib/utils/format";
@@ -56,7 +55,7 @@ export function NflSlipsPanel({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <SizeLadder />
+        <PricingNote />
         {slips.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {pendingPicks.length < 2 ? "Need at least two pending picks to suggest a slip." : "Not enough independent picks to build a slip."}
@@ -72,37 +71,24 @@ export function NflSlipsPanel({
 }
 
 /**
- * The per-leg bar for each slip size. Multipliers do not scale smoothly with leg
- * count, so some sizes ask for a better hit rate than a neighbouring size — the
- * 4-leg tier being the usual trap. Shown up front because it decides slip size
- * before any pick is considered.
+ * How Underdog prices an entry. It prices each pick and pays the product, so the
+ * bar is set per pick, not per slip size — which retires the old "never four
+ * legs" rule, a quirk of fixed ladders that Underdog's per-pick pricing does not
+ * have. Shown up front because it decides which picks are worth having at all.
  */
-function SizeLadder() {
-  const rows = compareSlipSizes(PICKEM_MULTIPLIERS);
-  const dominated = rows.filter((r) => r.dominatedBy != null);
+function PricingNote() {
+  const standardBar = (100 / STANDARD_PICK_PAYOUT).toFixed(1);
   return (
-    <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-xs">
-      <p className="font-semibold">Break-even by slip size</p>
-      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-        {rows.map((r) => (
-          <span key={r.size} className={cn("tabular-nums", r.dominatedBy != null && "text-warning")}>
-            {r.size} legs @ {r.multiplier}× → <strong>{(r.breakEvenPerLeg * 100).toFixed(1)}%</strong>
-          </span>
-        ))}
-      </div>
-      {dominated.length > 0 && (
-        <p className="mt-2 flex items-start gap-1.5 leading-snug text-warning">
-          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-          <span>
-            {dominated.map((r) => `${r.size}-leg`).join(" and ")} asks a higher hit rate per leg than{" "}
-            {dominated.map((r) => `${r.dominatedBy}-leg`).join(" and ")} does, so there is no per-leg rate
-            at which it profits and the cheaper size does not. Prefer the sizes in white.
-          </span>
-        </p>
-      )}
-      <p className="mt-1.5 text-muted-foreground">
-        These follow from the multipliers above. Underdog changes them and applies per-pick boosts and
-        discounts, so check the payout shown in the app and edit the multiplier on any slip below.
+    <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-xs leading-snug">
+      <p className="font-semibold">How the slip is priced</p>
+      <p className="mt-1 text-muted-foreground">
+        Underdog pays a price for each pick and the slip pays their product. A standard pick pays{" "}
+        {STANDARD_PICK_PAYOUT}× and needs {standardBar}%; favourites pay less and need more. So every leg has
+        to beat its own price, whatever the slip size. Enter each pick&apos;s payout in the line table and
+        picks priced too short for their probability drop out of these suggestions.
+      </p>
+      <p className="mt-1 text-muted-foreground">
+        Same-game slips pay a little under the product (1–7% so far), so type in the total Underdog shows.
       </p>
     </div>
   );
@@ -227,8 +213,8 @@ function SlipCard({
           <>
             <span />
             <span className="text-muted-foreground">
-              {slip.baseMultiplier}× standard × this slip&apos;s per-pick tags ={" "}
-              {Number(slip.multiplier.toFixed(3))}×
+              Product of this slip&apos;s pick payouts ({Number(slip.multiplier.toFixed(3))}×), versus{" "}
+              {slip.baseMultiplier}× for {slip.size} standard picks
             </span>
           </>
         )}

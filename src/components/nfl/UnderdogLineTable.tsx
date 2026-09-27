@@ -8,11 +8,7 @@ import { Button } from "@/components/ui/button";
 import { setUnderdogAvailability, setUnderdogLines, type UnderdogLineEntry } from "@/server/actions/picks";
 import { cn } from "@/lib/utils/cn";
 import type { SerializedPick } from "@/lib/dto";
-import { legRequirement } from "@/lib/analysis/pickemMath";
-import { PICKEM_MULTIPLIERS } from "@/lib/analysis/slipBuilder";
-
-/** The slip size the "Needs" column is measured against. */
-const REFERENCE_LEGS = 3;
+import { pickBreakEven, STANDARD_PICK_PAYOUT } from "@/lib/analysis/pickemMath";
 
 /**
  * Enter the whole slate's pick'em lines at once. Scoring a pick against the
@@ -109,8 +105,8 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                   <th className="pb-2 pr-3 text-right font-medium">Book line</th>
                   <th className="pb-2 pr-3 text-right font-medium">Your line</th>
                   <th className="pb-2 pr-3 text-right font-medium">Edge</th>
-                  <th className="pb-2 pr-3 text-right font-medium" title="Underdog's per-pick payout tag, e.g. 0.85. Blank = standard.">Payout ×</th>
-                  <th className="pb-2 pr-3 text-right font-medium" title={`Hit rate this pick needs to earn its place on a ${REFERENCE_LEGS}-leg slip, after its payout tag.`}>Needs</th>
+                  <th className="pb-2 pr-3 text-right font-medium" title={`What Underdog pays for this pick, e.g. 1.71. Blank = a standard ${STANDARD_PICK_PAYOUT}x pick.`}>Payout</th>
+                  <th className="pb-2 pr-3 text-right font-medium" title="Hit rate this pick needs to be worth its payout: 1 ÷ payout.">Needs</th>
                   <th className="pb-2 text-right font-medium">On Underdog?</th>
                 </tr>
               </thead>
@@ -171,7 +167,7 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                           inputMode="decimal"
                           value={tagDraft[p.id] ?? ""}
                           onChange={(e) => setTagDraft((d) => ({ ...d, [p.id]: e.target.value }))}
-                          placeholder="1.00"
+                          placeholder={String(STANDARD_PICK_PAYOUT)}
                           aria-label={`Payout multiplier for ${p.prop.playerName}`}
                           className="h-8 w-16 rounded-md border border-border bg-input/60 px-2 text-right text-sm tabular-nums"
                         />
@@ -204,11 +200,11 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
             </table>
           </div>
           <p className="text-xs text-muted-foreground">
-            <strong className="font-medium text-foreground/80">Payout ×</strong> is the small multiplier
-            Underdog shows under a pick — below 1 when it rates that side likely, above 1 when unlikely.
-            It multiplies the whole entry&apos;s payout, so <strong className="font-medium text-foreground/80">Needs</strong>{" "}
-            shows the hit rate each pick must reach to earn a place on a {REFERENCE_LEGS}-leg slip, in green
-            when the model clears it.
+            <strong className="font-medium text-foreground/80">Payout</strong> is what Underdog pays for
+            each pick — {STANDARD_PICK_PAYOUT}× for a standard one, less for a side it rates likely, more for
+            one it rates unlikely. A slip pays the product. <strong className="font-medium text-foreground/80">Needs</strong>{" "}
+            is 1 ÷ payout: the hit rate that pick must reach to be worth taking, whatever the slip size.
+            Green when the model clears it.
           </p>
           <p className="text-xs text-muted-foreground">
             Edge is your line versus the market&apos;s fair value. Positive means Underdog is offering a
@@ -229,33 +225,31 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
 }
 
 /**
- * What this pick has to hit to pull its weight on a reference-size slip, after
- * its payout tag, set against the model's probability when it has one. The
- * comparison is the point: a 65% pick tagged 0.85x needs 64.7%, so it is barely
- * worth taking despite looking like the strongest pick on the board.
+ * What this pick has to hit to be worth its price — one over its payout — set
+ * against the model's probability when it has one. The comparison is the point:
+ * a 55% pick paying 1.55x needs 64.5%, so it loses value despite looking likely.
  */
 function NeedsCell({ pick, tagRaw }: { pick: SerializedPick; tagRaw: string }) {
   const typed = tagRaw.trim() === "" ? null : Number(tagRaw);
-  const tag = typed != null && Number.isFinite(typed) && typed > 0 ? typed : null;
-  const need = legRequirement(PICKEM_MULTIPLIERS[REFERENCE_LEGS], REFERENCE_LEGS, tag);
+  const payout = typed != null && Number.isFinite(typed) && typed > 0 ? typed : null;
+  const need = pickBreakEven(payout);
   // Only the probability profile produces a number that can be compared to a hit rate.
   const model = pick.scoringProfile === "distribution" ? pick.confidenceScore / 100 : null;
-  const clears = need != null && model != null ? model >= need : null;
+  const clears = model != null ? model >= need : null;
   return (
     <td
       className={cn(
         "py-2 pr-3 text-right tabular-nums",
-        clears == null ? "text-muted-foreground" : clears ? "text-success" : "text-danger",
+        payout == null ? "text-muted-foreground" : clears == null ? "text-muted-foreground" : clears ? "text-success" : "text-danger",
       )}
       title={
-        need == null
-          ? undefined
-          : model == null
-            ? `Needs ${(need * 100).toFixed(1)}%. The model score for this pick is not a probability, so it cannot be compared.`
-            : `Needs ${(need * 100).toFixed(1)}%; the model gives it ${(model * 100).toFixed(0)}%.`
+        (payout == null ? `Assuming a standard ${STANDARD_PICK_PAYOUT}x pick. ` : "") +
+        (model == null
+          ? `Needs ${(need * 100).toFixed(1)}%. The model score for this pick is not a probability, so it cannot be compared.`
+          : `Needs ${(need * 100).toFixed(1)}%; the model gives it ${(model * 100).toFixed(0)}%.`)
       }
     >
-      {need == null ? "—" : need >= 1 ? "n/a" : `${(need * 100).toFixed(1)}%`}
+      {(need * 100).toFixed(1)}%
     </td>
   );
 }

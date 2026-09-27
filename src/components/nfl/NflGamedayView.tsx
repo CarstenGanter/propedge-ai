@@ -171,7 +171,7 @@ export function NflGamedayView({ data }: { data: NflGamedayData }) {
               </Note>
             )}
             {data.games.map((g) => (
-              <NflGameCard key={g.game.eventId} entry={g} profile={s.profile} />
+              <NflGameCard key={g.game.eventId} entry={g} profile={s.profile} date={data.date} />
             ))}
             {data.unmatchedPicks.length > 0 && (
               <div className="space-y-2">

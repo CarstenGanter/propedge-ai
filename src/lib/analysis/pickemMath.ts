@@ -99,33 +99,50 @@ export function breakEvenPerLeg(multiplier: number, legs: number): number | null
   return Math.pow(1 / multiplier, 1 / legs);
 }
 
-/** A per-pick tag is usable when it is a positive finite number; anything else means standard. */
-function tag(m: number | null | undefined): number {
-  return m != null && Number.isFinite(m) && m > 0 ? m : 1;
+/**
+ * What Underdog pays for a standard pick, observed from real entries: three
+ * standard picks showed as 1.87x each and the entry as 6.5x (1.87^3 = 6.54), and
+ * 1.87^2 = 3.5x is the 2-pick rung. It is the per-pick price whenever a pick's
+ * own payout has not been entered.
+ */
+export const STANDARD_PICK_PAYOUT = 1.87;
+
+/** A payout is usable when it is a positive finite number; anything else means standard. */
+function price(payout: number | null | undefined): number {
+  return payout != null && Number.isFinite(payout) && payout > 0 ? payout : STANDARD_PICK_PAYOUT;
 }
 
 /**
- * The multiplier an entry actually pays: the standard rung for its size, times
- * every per-pick tag on it.
+ * The multiplier an entry pays: the product of each pick's own payout.
  *
- * Underdog tags individual picks — below 1 on a side it judges likely, above 1
- * on an unlikely one — and those tags multiply straight into the payout. A
- * 3-leg at 6x with two 0.85x picks pays 6 x 0.85 x 0.85 = 4.34x, and its
- * break-even rises from 55.0% to 61.3% per leg. Pricing it at 6x overrates it.
+ * Underdog prices every pick individually — below the standard 1.87x on a side
+ * it judges likely, above it on an unlikely one — and the entry pays their
+ * product. Observed on 2026-09-27: 1.87 x 1.87 x 1.87 showed as 6.5x across
+ * different games, while same-game entries came in slightly under the product
+ * (5.69 -> 5.61x, 4.72 -> 4.41x). So for a same-game slip this is an upper
+ * bound, and the total the app shows should be preferred.
  */
-export function entryMultiplier(base: number, pickMultipliers: (number | null | undefined)[]): number {
-  return pickMultipliers.reduce<number>((acc, m) => acc * tag(m), base);
+export function entryMultiplier(payouts: (number | null | undefined)[]): number {
+  return payouts.reduce<number>((acc, m) => acc * price(m), 1);
 }
 
 /**
- * The hit rate one leg needs to pull its weight in an entry of `legs` at
- * `base`, given its own tag: the standard per-leg bar divided by the tag. A
- * 0.85x pick on a 3-leg needs 55.0% / 0.85 = 64.7%; a 1.2x pick only 45.9%.
- * Above 1 means no probability can justify the pick at that size.
+ * The hit rate a pick needs to be worth its place: one over its payout. A pick
+ * paying 1.71x needs 58.5%; a standard 1.87x pick 53.5%; a 1.55x favourite
+ * 64.5%. Because the entry pays the product, this holds whatever the slip size —
+ * each leg has to earn its own price.
  */
-export function legRequirement(base: number, legs: number, pickMultiplier: number | null | undefined): number | null {
-  const bar = breakEvenPerLeg(base, legs);
-  return bar == null ? null : bar / tag(pickMultiplier);
+export function pickBreakEven(payout: number | null | undefined): number {
+  return 1 / price(payout);
+}
+
+/**
+ * A pick's contribution to the entry's expected value: its probability times its
+ * payout. Above 1 the pick adds value to any slip it joins; below 1 it drags
+ * every slip down, however likely it is to hit.
+ */
+export function pickValue(probability: number, payout: number | null | undefined): number {
+  return probability * price(payout);
 }
 
 export function slipEconomics(

@@ -16,6 +16,8 @@ import { marketsToDrop } from "@/lib/analysis/availability";
 
 export interface NflGamedayGame {
   game: NflGame;
+  /** Kicked off as of when the page was built — computed here so rendering never reads the clock. */
+  started: boolean;
   context: NflGameContext | null;
   picks: SerializedPick[];
   teamPick: SerializedTeamPick | null;
@@ -85,7 +87,7 @@ export async function getNflGamedayData(date: string, today: string): Promise<Nf
     const teamPick =
       nflTeamPicks.find((t) => teamsMatch(t.homeTeam, game.home.name) && teamsMatch(t.awayTeam, game.away.name)) ??
       null;
-    return { game, context: contexts[i], picks: gamePicks, teamPick };
+    return { game, started: Date.parse(game.kickoffISO) <= Date.now(), context: contexts[i], picks: gamePicks, teamPick };
   });
 
   const { season } = nflSeasonForDate(date);

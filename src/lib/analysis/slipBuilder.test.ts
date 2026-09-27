@@ -111,7 +111,7 @@ describe("buildSuggestedSlips", () => {
 
   it("attaches pick'em multipliers and a parlay analysis", () => {
     const [two] = buildSuggestedSlips(cands, [2]);
-    expect(two.multiplier).toBe(3);
+    expect(two.multiplier).toBe(3.5); // two standard 1.87x picks
     expect(two.analysis.legCount).toBe(2);
     expect(two.analysis.combinedHitEstimate).toBeCloseTo(0.8 * 0.78, 5);
   });
@@ -185,35 +185,55 @@ describe("buildSuggestedSlips", () => {
     expect(buildSuggestedSlips(pool, [2])[0].legs.map((l) => l.pickId)).toEqual(["unknown", "a"]);
   });
 
-  // ---- per-pick payout tags ----
+  // ---- per-pick payouts ----
+  // Underdog prices each pick and pays the product. A favourite pays less, so it
+  // has to be ranked on probability x payout, not probability.
 
   it("ranks by value at the actual payout, not raw probability", () => {
-    // 65% at 0.85x is worth 55.3; 58% at full payout is worth 58.
+    // 65% at 1.55x is worth 1.01; 60% at the standard 1.87x is worth 1.12.
     const pool = [
-      { ...cand("fav", "Favourite WR", "Chiefs", "Broncos", 65, "UNDER", "KC"), pickMultiplier: 0.85 },
-      cand("a", "Alpha WR", "Bengals", "Buccaneers", 58, "OVER", "CIN"),
-      cand("b", "Bravo RB", "Lions", "Saints", 57, "OVER", "DET"),
+      { ...cand("fav", "Favourite WR", "Chiefs", "Broncos", 65, "UNDER", "KC"), pickMultiplier: 1.55 },
+      cand("a", "Alpha WR", "Bengals", "Buccaneers", 60, "OVER", "CIN"),
+      cand("b", "Bravo RB", "Lions", "Saints", 59, "OVER", "DET"),
     ];
     const [two] = buildSuggestedSlips(pool, [2]);
     expect(two.legs.map((l) => l.pickId)).toEqual(["a", "b"]);
   });
 
-  it("prices the entry at the standard rung times every tag, and says what a tagged leg needs", () => {
+  it("leaves out a pick priced too short for its probability", () => {
+    // The Kyren Williams leg from 2026-09-27: 55% at 1.55x is worth 0.85.
     const pool = [
-      { ...cand("fav", "Favourite WR", "Chiefs", "Broncos", 70, "UNDER", "KC"), pickMultiplier: 0.85 },
-      cand("a", "Alpha WR", "Bengals", "Buccaneers", 58, "OVER", "CIN"),
-      cand("b", "Bravo RB", "Lions", "Saints", 57, "OVER", "DET"),
+      { ...cand("short", "Kyren Williams", "Broncos", "Rams", 55, "UNDER", "LAR"), pickMultiplier: 1.55 },
+      cand("a", "Alpha WR", "Bengals", "Buccaneers", 54, "OVER", "CIN"),
+      cand("b", "Bravo RB", "Lions", "Saints", 54, "OVER", "DET"),
     ];
-    const [three] = buildSuggestedSlips(pool, [3]);
-    expect(three.baseMultiplier).toBe(6);
-    expect(three.multiplier).toBeCloseTo(5.1, 6);
-    const note = three.flags.find((f) => /Favourite WR pays 0.85/.test(f.text));
-    expect(note?.text).toMatch(/needs 64\.7%/);
+    const ids = buildSuggestedSlips(pool, [2])[0].legs.map((l) => l.pickId);
+    expect(ids).not.toContain("short");
   });
 
-  it("leaves an untagged slip at the standard rung", () => {
+  it("prices a priced slip from its picks' payouts and says what each needs", () => {
+    // The slip actually placed on 2026-09-27. Engram at 56% and 1.78x is worth
+    // 0.997 — a hair under break-even — so the builder leaves him out, and the
+    // best it can honestly offer is the two legs that clear their price.
+    const pool = [
+      { ...cand("h", "RJ Harvey", "Broncos", "Rams", 62, "OVER", "DEN"), pickMultiplier: 1.71 },
+      { ...cand("e", "Evan Engram", "Broncos", "Rams", 56, "OVER", "DEN"), pickMultiplier: 1.78 },
+      { ...cand("p", "Colby Parkinson", "Broncos", "Rams", 56, "OVER", "LAR"), pickMultiplier: 1.87 },
+    ];
+    expect(buildSuggestedSlips(pool, [3])).toEqual([]);
+    const [two] = buildSuggestedSlips(pool, [2]);
+    expect(two.legs.map((l) => l.pickId)).toEqual(["h", "p"]);
+    expect(two.multiplier).toBeCloseTo(1.71 * 1.87, 6);
+    expect(two.baseMultiplier).toBe(3.5);
+    const texts = two.flags.map((f) => f.text).join(" ");
+    expect(texts).toMatch(/RJ Harvey pays 1.71× — needs 58\.5%, model says 62%/);
+    expect(texts).toMatch(/same-game entries/);
+  });
+
+  it("leaves an unpriced slip at the standard rung", () => {
     const [two] = buildSuggestedSlips(cands, [2]);
     expect(two.multiplier).toBe(two.baseMultiplier);
+    expect(two.flags.some((f) => /pays/.test(f.text))).toBe(false);
   });
 
   it("is deterministic across calls", () => {

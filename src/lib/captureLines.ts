@@ -54,8 +54,8 @@ export async function captureClosingLines(opts?: {
    * times a day, and must never pay twice for the same game.
    */
   onlyUncaptured?: boolean;
-  /** Only re-price events whose kickoff passes this test (see nfl/autoCapture). */
-  eventFilter?: (commenceISO: string) => boolean;
+  /** Only re-price events that pass this test — nothing is paid for the rest. */
+  eventFilter?: (event: { commence_time: string; home_team: string; away_team: string }) => boolean;
   /** Restrict prop capture to these sports. */
   sports?: Sport[];
 }): Promise<CaptureSummary> {

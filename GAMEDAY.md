@@ -11,9 +11,9 @@ Read the [Decision rules](#decision-rules) at least once; the rest is mechanical
 2. **Load game context (free)**
 3. **Fetch props** — confirm the credit estimate
 4. **Re-rank picks (free)**
-5. **Enter your pick'em lines and Payout × tags** ← the step that matters most
+5. **Enter your pick'em lines and each pick's Payout** ← the step that matters most
 6. Mark anything missing as **Not offered?**
-7. Build a **3-leg** slip (never 4)
+7. Build a slip from picks that beat their **Needs** — green in the line table
 8. Tick **I actually placed this slip** before saving
 9. Leave your Mac awake at kickoff — closing lines capture themselves
 
@@ -53,6 +53,12 @@ You have 500 per month. The floor setting (25) stops a fetch that would leave yo
 Click **Re-rank picks (free)**. Scores every stored prop and builds the board. No credits, so run it
 again any time you change a line.
 
+The board keeps the day's **top 10**, so a whole game — usually the night game — can miss it. Don't
+re-rank to get it back once games have started; open that game's card and use **All props in this
+game (free)** instead. It scores the game's props (already fetched, no credits) and **Add** puts any
+one of them on the board, leaving every other pick alone. A re-rank now keeps closing lines and any
+pick you took or put in a slip, but it still rebuilds the rest of the board.
+
 ### 5. Enter your pick'em lines ⚠️
 
 Open **Enter your pick'em lines** and type the number Underdog actually posts for each pick.
@@ -65,12 +71,15 @@ and it hit.
 The **Edge** column updates as you type. Positive means Underdog is offering a softer number than
 the books, which is the edge actually worth having.
 
-**Also enter the Payout × tag** — the small multiplier Underdog shows under a pick (e.g. `0.85x` on a
-side it rates likely, `1.2x` on one it rates unlikely). Leave it blank for standard. It multiplies
-the whole entry's payout, so the **Needs** column then shows what each pick must hit to earn a place
-on a 3-leg slip — green when the model clears it, red when it doesn't. A 65% pick tagged 0.85× needs
-64.7%, which is why the strongest-looking picks are often barely worth taking. Slips are ranked on
-this value, not raw probability, once tags are in.
+**Also enter each pick's Payout** — the multiplier Underdog shows for that pick (e.g. `1.71`). A
+standard pick pays **1.87×**; Underdog pays less for a side it rates likely and more for one it rates
+unlikely. Leave it blank for a standard pick.
+
+**Needs** is then `1 ÷ payout` — the hit rate that pick must reach to be worth taking — green when
+the model clears it, red when it doesn't. Real example from 2026-09-27: Kyren Williams Lower 2.5
+receptions paid 1.55×, so it needed **64.5%**; the model gave it 55%. It *looked* like a solid pick
+and was the worst leg on the slip. Picks priced too short for their probability drop out of the
+suggested slips automatically.
 
 ### 6. Mark anything that isn't there
 
@@ -85,8 +94,9 @@ Entering a line already records the prop as available. You only ever click for t
 
 ### 7. Build the slip
 
-The **Suggested slips** panel shows a break-even ladder up top. Pick your size from
-[the rules below](#slip-size), then **Save slip**.
+The **Suggested slips** panel builds slips from picks that beat their price. Each slip's multiplier
+is the product of its picks' payouts. **Same-game slips pay a little under that product** (we've seen
+1–7%), so type in the total Underdog shows before saving. See [Slip size](#slip-size).
 
 Tick **I actually placed this slip on Underdog** if you really bet it. Untracked bets are why the
 "picks I took" numbers stay thin.
@@ -101,8 +111,10 @@ each kickoff, once per game, by two schedulers that share a lock so they never p
 | Background job (launchd) | Mac is awake, even with the app closed | Sun, Mon, Thu |
 | In-app scheduler | The app (`npm run dev`) is running | every day |
 
-Each check costs nothing unless a game with uncaptured picks is actually due; the capture itself
-costs the same ~6 credits per game as doing it by hand.
+Each check costs nothing unless a game with uncaptured picks is actually due. A capture buys only
+the games your picks are in, only the markets they use, and **each game at most once** — typically
+1–3 credits per game. (The first version re-bought games it had already done and wasted ~130 credits
+on 2026-09-27; that is fixed and was verified live the same night: 3 picks, 1 game, 1 credit.)
 
 **The one requirement: your Mac has to be awake at kickoff.** A sleeping Mac runs neither.
 
@@ -119,27 +131,31 @@ the market closed. That converges in *dozens* of bets; win rate takes **thousand
 
 ### Slip size
 
-Break-even per leg is `multiplier^(-1/legs)` — exact, and depends on nothing but the multiplier.
+**Underdog prices each pick and pays the product.** Confirmed from real entries: three standard picks
+at 1.87× each showed as 6.5× (1.87³ = 6.54), and two standard picks are 3.5× (1.87²).
 
-| Legs | Multiplier | Break-even per leg | |
-|---|---|---|---|
-| 2 | 3× | 57.7% | worst size |
-| **3** | **6×** | **55.0%** | **default** |
-| 4 | 10× | 56.2% | **never** |
-| 5 | 20× | 54.9% | lowest bar |
+That means **every leg has to beat its own price, whatever the slip size** — `1 ÷ payout`:
 
-**Never play 4 legs.** The 4-leg tier asks more per leg than either 3 or 5. The 3rd leg you add
-needs 50% to earn its place, the 5th needs 50% — but the 4th needs **60%**.
+| Payout | Needs |
+|---|---|
+| 1.55× (heavy favourite) | 64.5% |
+| 1.71× | 58.5% |
+| **1.87× (standard)** | **53.5%** |
+| 2.00× | 50.0% |
 
-> ⚠️ The app assumes 2-leg = 3×. Several sources say Underdog now pays **3.5×**, which would drop the
-> 2-leg bar to 53.5%. Underdog's payout pages block automated checking. **Read the multiplier in the
-> app** — it's also the only place per-pick boosts and discounts show up.
+So size is a question of **how many picks genuinely clear their Needs**, not a bar that changes with
+size. Two good legs beat three where the third is marginal. More legs means more variance, not a
+lower bar.
+
+> The old "never play 4 legs" rule is **retired**. It came from a fixed 3× / 6× / 10× / 20× ladder,
+> where the 4-leg rung was a bad deal. Underdog's per-pick pricing has no such hole.
 
 ### Stacking a QB with his own receiver
 
 If the board offers a quarterback's passing prop and one of his own receivers **on the same side**,
-that pairing is worth taking. Their outcomes are correlated at **+0.34** (measured, n=3,620), and the
-fixed multiplier prices them as if independent — so it raises the odds the whole slip lands for free.
+that pairing is worth taking. Their outcomes are correlated at **+0.34** (measured, n=3,620). That
+lifts the chance both land by roughly 15% relative, while Underdog only trims same-game entries by a
+few percent — so the stack still comes out ahead.
 
 The builder now seeks these automatically and marks them **green** with the uplift shown. Green is
 good. It is not a warning.
@@ -159,20 +175,21 @@ Two Underdog rules set up the trade-off:
 
 - Your pick **locks at the number you submitted**. Later line moves never touch you — which argues
   for entering early.
-- A player who doesn't play **voids that leg and recalculates the entry at the lower payout**. A
-  3-leg at 6× becomes a 2-leg at 3× — which argues for entering late.
+- A player who doesn't play **voids that leg** and the entry pays on the rest — which argues for
+  entering late.
 
-The second one wins, by a lot:
+With per-pick pricing a void just removes that leg's payout from the product:
 
-| | EV at 56% per leg |
+| Standard picks at 56% each | EV |
 |---|---|
-| 3-leg @ 6× | **+5.4%** |
-| 2-leg @ 3× (what a void leaves) | **−5.9%** |
+| 3-leg | **+14.8%** |
+| 2-leg (what a void leaves) | **+9.7%** |
 
-**One voided leg costs 11.3 points of EV.** Catching a softer line on one leg is worth about 5.6
-points — but across 42 entered lines Underdog was softer only twice (and *tougher* four times), so
-the expected gain from hunting early lines is about **0.27 points**. Void risk above roughly 2.4%
-erases it, and a single questionable tag carries far more than that.
+**One voided leg costs about 5 points of EV.** (An earlier version of this page said 11, which was
+true under the old fixed 6× → 3× ladder, not under per-pick pricing.) Hunting early lines gains about
+**0.27 points** — across 42 entered lines Underdog was softer only twice and *tougher* four times —
+so void risk above roughly 5% erases it. Healthy starters sit near that line; anyone with a
+questionable tag is well past it. Late is still the default, by a smaller margin than it used to be.
 
 Entering late also makes the picks themselves better: ESPN game injury reports fill in Wednesday
 through Sunday, so a Wednesday pick is scored on less information.

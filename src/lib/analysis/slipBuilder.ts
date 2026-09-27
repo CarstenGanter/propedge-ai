@@ -1,6 +1,6 @@
 import type { SerializedPick } from "@/lib/dto";
 import { analyzeParlay, makeGameKey, type ParlayAnalysis, type ParlayLegInput } from "./parlayCorrelation";
-import { entryMultiplier, legRequirement, type CorrelatedPair } from "./pickemMath";
+import { entryMultiplier, pickBreakEven, pickValue, STANDARD_PICK_PAYOUT, type CorrelatedPair } from "./pickemMath";
 
 /**
  * Suggested pick'em slips (pure, tested).
@@ -29,8 +29,16 @@ import { entryMultiplier, legRequirement, type CorrelatedPair } from "./pickemMa
  * apart.
  */
 
-/** Standard Underdog "Standard" payouts by leg count (editable in the builder). */
-export const PICKEM_MULTIPLIERS: Record<number, number> = { 2: 3, 3: 6, 4: 10, 5: 20 };
+/**
+ * What an entry of standard picks pays, by leg count. Underdog prices each pick
+ * (see STANDARD_PICK_PAYOUT) and pays the product, so these are 1.87^n. The 2-
+ * and 3-leg figures are confirmed from real entries (3.5x, 6.5x); 4 and 5 follow
+ * the same rule but have not been seen yet. An entry with its picks' own payouts
+ * entered is priced from those instead.
+ */
+export const PICKEM_MULTIPLIERS: Record<number, number> = Object.fromEntries(
+  [2, 3, 4, 5].map((n) => [n, Math.round(STANDARD_PICK_PAYOUT ** n * 10) / 10]),
+);
 
 const QB_PASS_PROPS = new Set(["Passing Yards", "Pass TDs", "Completions", "Pass Attempts"]);
 const RECEIVER_PROPS = new Set(["Receiving Yards", "Receptions", "Rush+Rec Yards"]);
@@ -86,7 +94,7 @@ export interface SlipCandidate extends ParlayLegInput {
    * is treated as playable — the alternative is hiding picks on a guess.
    */
   available?: boolean | null;
-  /** Underdog's per-pick payout tag (e.g. 0.85). Null or missing means standard. */
+  /** What Underdog pays for this pick (e.g. 1.71). Null or missing means a standard 1.87x pick. */
   pickMultiplier?: number | null;
 }
 
@@ -177,14 +185,20 @@ export function buildSuggestedSlips(
   // A prop confirmed absent from the platform cannot be part of an entry, so it
   // is dropped before ranking rather than suggested and rejected at the app.
   // Unchecked props stay in: absence of evidence is not evidence of absence.
-  // Ranked by what a leg is worth at its own payout, not by raw probability.
-  // A pick's contribution to the entry's expected value is p x its tag, so a
-  // 65% pick tagged 0.85x (worth 55.3) sits below a 58% pick at full payout.
-  // Ranking on probability alone favours exactly the lopsided picks Underdog
-  // discounts — which is how a board fills up with low-line favourites.
-  const value = (c: SlipCandidate) => c.confidenceScore * (c.pickMultiplier && c.pickMultiplier > 0 ? c.pickMultiplier : 1);
+  //
+  // Ranked by what a leg is worth at its own payout — probability times payout —
+  // not by raw probability. Underdog pays less for the sides it rates likely, so
+  // ranking on probability alone favours exactly the short-priced favourites,
+  // which is how a board fills up with low-line Unders. A 65% pick paying 1.55x
+  // (worth 1.01) sits below a 60% pick at the standard 1.87x (worth 1.12).
+  //
+  // A pick whose entered payout is too short for its probability (value below
+  // 1) is left out entirely: it lowers the expected value of any slip it joins.
+  // Unpriced picks stay in at the standard payout.
+  const value = (c: SlipCandidate) => pickValue(c.confidenceScore / 100, c.pickMultiplier);
   const sorted = [...candidates]
     .filter((c) => c.available !== false)
+    .filter((c) => c.pickMultiplier == null || value(c) >= 1)
     .sort((a, b) => value(b) - value(a) || a.playerName.localeCompare(b.playerName));
   const out: SuggestedSlip[] = [];
 
@@ -218,34 +232,41 @@ export function buildSuggestedSlips(
     if (!spansTwoTeams(legs)) continue; // Underdog rejects single-team entries
 
     const base = multipliers[size] ?? 1;
+    const priced = legs.some((l) => l.pickMultiplier != null);
     out.push({
       size,
       legs,
       analysis: analyzeParlay(legs),
       baseMultiplier: base,
-      multiplier: entryMultiplier(base, legs.map((l) => l.pickMultiplier)),
-      flags: [...flagsFor(legs), ...tagFlags(legs, base)],
+      // Priced from the picks' own payouts once any are entered; otherwise the
+      // standard rung (which may be overridden, e.g. for another platform).
+      multiplier: priced ? entryMultiplier(legs.map((l) => l.pickMultiplier)) : base,
+      flags: [...flagsFor(legs), ...payoutFlags(legs)],
     });
   }
   return out;
 }
 
-/** Notes for legs carrying a per-pick payout tag, with what each then has to hit. */
-function tagFlags(legs: SlipCandidate[], base: number): SlipFlag[] {
-  return legs
-    .filter((l) => l.pickMultiplier != null && l.pickMultiplier > 0 && l.pickMultiplier !== 1)
-    .map((l) => {
-      const m = l.pickMultiplier as number;
-      const need = legRequirement(base, legs.length, m);
-      const needText = need == null ? "" : need >= 1 ? " — no hit rate can justify it at this size" : `, so it needs ${(need * 100).toFixed(1)}% to earn its place`;
-      return {
-        tone: "info" as const,
-        text:
-          `${l.playerName} pays ${m}× on Underdog` +
-          (m < 1 ? " (a discount — Underdog also rates this side likely)" : " (a boost — Underdog rates this side unlikely)") +
-          needText + ".",
-      };
+/** Notes on pricing: what each priced leg needs, and Underdog's same-game trim. */
+function payoutFlags(legs: SlipCandidate[]): SlipFlag[] {
+  const flags: SlipFlag[] = legs
+    .filter((l) => l.pickMultiplier != null && l.pickMultiplier > 0)
+    .map((l) => ({
+      tone: "info" as const,
+      text:
+        `${l.playerName} pays ${l.pickMultiplier}× — needs ${(pickBreakEven(l.pickMultiplier) * 100).toFixed(1)}%, ` +
+        `model says ${Math.round(l.confidenceScore)}%.`,
+    }));
+  const games = new Set(legs.map((l) => l.gameKey));
+  if (games.size < legs.length && legs.some((l) => l.pickMultiplier != null)) {
+    flags.push({
+      tone: "info",
+      text:
+        "Some legs share a game, and Underdog pays a little under the product for same-game entries " +
+        "(seen: 1–7%). Type in the total the app shows.",
     });
+  }
+  return flags;
 }
 
 /** Plain-language notes about dependencies between the chosen legs. */

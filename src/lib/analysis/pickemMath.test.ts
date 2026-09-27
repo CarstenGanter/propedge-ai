@@ -4,7 +4,9 @@ import {
   compareSlipSizes,
   entryMultiplier,
   jointHitProbability,
-  legRequirement,
+  pickBreakEven,
+  pickValue,
+  STANDARD_PICK_PAYOUT,
   marginalLegRequirement,
   slipEconomics,
 } from "./pickemMath";
@@ -185,25 +187,26 @@ describe("slipEconomics with correlated legs", () => {
   });
 });
 
-describe("per-pick multipliers", () => {
-  it("multiplies every tag into the entry payout", () => {
-    expect(entryMultiplier(6, [0.85, 0.85, null])).toBeCloseTo(4.335, 6);
-    expect(entryMultiplier(6, [1.2, 1, 1])).toBeCloseTo(7.2, 6);
+describe("per-pick payouts", () => {
+  it("prices an entry as the product of each pick's payout", () => {
+    // The user's real 2026-09-27 SNF slip: shown as 5.61x after a small same-game trim.
+    expect(entryMultiplier([1.71, 1.78, 1.87])).toBeCloseTo(5.692, 3);
+    // Three standard picks: shown as 6.5x.
+    expect(entryMultiplier([null, null, null])).toBeCloseTo(6.54, 2);
   });
 
-  it("treats missing or nonsense tags as standard", () => {
-    expect(entryMultiplier(6, [null, undefined, 0, -1, Number.NaN])).toBe(6);
+  it("treats missing or nonsense payouts as a standard pick", () => {
+    expect(entryMultiplier([null, undefined, 0, -1, Number.NaN])).toBeCloseTo(STANDARD_PICK_PAYOUT ** 5, 6);
   });
 
-  it("raises the per-leg bar on a discounted pick and lowers it on a boosted one", () => {
-    expect(legRequirement(6, 3, null)!).toBeCloseTo(0.5503, 4);
-    expect(legRequirement(6, 3, 0.85)!).toBeCloseTo(0.6474, 4);
-    expect(legRequirement(6, 3, 1.2)!).toBeCloseTo(0.4586, 4);
+  it("sets each pick's bar at one over its payout", () => {
+    expect(pickBreakEven(1.71)).toBeCloseTo(0.5848, 4);
+    expect(pickBreakEven(1.55)).toBeCloseTo(0.6452, 4); // the Kyren Williams leg that was swapped out
+    expect(pickBreakEven(null)).toBeCloseTo(0.5348, 4);
   });
 
-  it("shows how discounts move the whole entry's break-even", () => {
-    // Two 0.85x picks turn a 55.0% bar into a 61.3% one.
-    const discounted = breakEvenPerLeg(entryMultiplier(6, [0.85, 0.85, 1]), 3)!;
-    expect(discounted).toBeCloseTo(0.6133, 3);
+  it("scores a pick by probability times payout, so a likely favourite can still lose value", () => {
+    expect(pickValue(0.62, 1.71)).toBeGreaterThan(1); // +EV
+    expect(pickValue(0.55, 1.55)).toBeLessThan(1); // likely, but priced too short
   });
 });

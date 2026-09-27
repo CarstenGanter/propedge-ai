@@ -32,6 +32,53 @@ export function propToScorable(p: PlayerProp): ScorablePropInput {
   };
 }
 
+type Analysis = ReturnType<typeof analyzeProp>;
+
+/**
+ * The row a scored prop becomes on the board. Shared by the full re-rank and by
+ * adding a single prop from outside the top N, so both produce identical picks.
+ */
+export function pickCreateData(
+  prop: PlayerProp,
+  analysis: Analysis,
+  entryProb: number | null,
+  rank: number,
+  settings: { defaultStake: number; scoringProfile: string },
+) {
+  return {
+    playerPropId: prop.id,
+    date: prop.date,
+    entryProb,
+    confidenceScore: analysis.confidenceScore,
+    edgeScore: analysis.edgeScore,
+    riskLevel: analysis.riskLevel,
+    rank,
+    recommendedStake: recommendedStake(analysis.riskLevel, settings.defaultStake),
+    reasoningSummary: analysis.reasoningSummary,
+    deepDiveAnalysis: analysis.deepDiveAnalysis,
+    verdict: analysis.verdict,
+    scoreBreakdownJson: JSON.stringify(analysis.scoreBreakdown),
+    evidenceJson: JSON.stringify(analysis.evidence),
+    warningsJson: JSON.stringify(analysis.warnings),
+    reasonsForJson: JSON.stringify(analysis.reasonsFor),
+    reasonsAgainstJson: JSON.stringify(analysis.reasonsAgainst),
+    tagsJson: JSON.stringify(analysis.tags),
+    modelVersion: SCORING_MODEL_VERSION,
+    scoringProfile: settings.scoringProfile,
+    isDemo: prop.isDemo,
+    evidence: {
+      create: analysis.evidence.map((e) => ({
+        category: e.category,
+        title: e.title,
+        summary: e.summary,
+        sourceUrl: e.sourceUrl,
+        sourceName: e.sourceName,
+        confidenceImpact: e.confidenceImpact,
+      })),
+    },
+  };
+}
+
 export interface GenerationSummary {
   date: string;
   created: number;
@@ -82,6 +129,14 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
     list.push({ parlayId: l.parlayId, status: l.status });
     legsByProp.set(l.pick.playerPropId, list);
   }
+
+  // Closing lines are captured once, near kickoff, and cost credits. A re-rank
+  // after that point used to delete them along with the pick rows.
+  const closingBefore = await prisma.pick.findMany({
+    where: { date, status: "pending", closingProb: { not: null } },
+    select: { playerPropId: true, closingProb: true, closingCapturedAt: true },
+  });
+  const closingByProp = new Map(closingBefore.map((c) => [c.playerPropId, c]));
 
   // Drop existing pending picks for the date so we can re-rank cleanly.
   await prisma.pick.deleteMany({ where: { date, status: "pending" } });
@@ -196,46 +251,26 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
       b.analysis.edgeScore - a.analysis.edgeScore,
   );
 
-  const top = candidates.slice(0, settings.maxDailyPicks);
+  // The top N, plus anything you took or put in a slip. Those are real bets;
+  // letting a re-rank drop them orphaned slips and stranded stakes.
+  const committed = (id: string) => takenStakes.has(id) || legsByProp.has(id);
+  const top = [
+    ...candidates.slice(0, settings.maxDailyPicks),
+    ...candidates.slice(settings.maxDailyPicks).filter((c) => committed(c.prop.id)),
+  ];
 
   let rank = 1;
   let restored = 0;
   let relinkedLegs = 0;
   for (const { prop, analysis, entryProb } of top) {
     const wasTaken = takenStakes.get(prop.id);
+    const closing = closingByProp.get(prop.id);
     const created = await prisma.pick.create({
       data: {
-        playerPropId: prop.id,
-        date,
-        entryProb,
+        ...pickCreateData(prop, analysis, entryProb, rank++, settings),
         placedReal: wasTaken != null,
-        confidenceScore: analysis.confidenceScore,
-        edgeScore: analysis.edgeScore,
-        riskLevel: analysis.riskLevel,
-        rank: rank++,
-        recommendedStake: recommendedStake(analysis.riskLevel, settings.defaultStake),
-        reasoningSummary: analysis.reasoningSummary,
-        deepDiveAnalysis: analysis.deepDiveAnalysis,
-        verdict: analysis.verdict,
-        scoreBreakdownJson: JSON.stringify(analysis.scoreBreakdown),
-        evidenceJson: JSON.stringify(analysis.evidence),
-        warningsJson: JSON.stringify(analysis.warnings),
-        reasonsForJson: JSON.stringify(analysis.reasonsFor),
-        reasonsAgainstJson: JSON.stringify(analysis.reasonsAgainst),
-        tagsJson: JSON.stringify(analysis.tags),
-        modelVersion: SCORING_MODEL_VERSION,
-        scoringProfile: settings.scoringProfile,
-        isDemo: prop.isDemo,
-        evidence: {
-          create: analysis.evidence.map((e) => ({
-            category: e.category,
-            title: e.title,
-            summary: e.summary,
-            sourceUrl: e.sourceUrl,
-            sourceName: e.sourceName,
-            confidenceImpact: e.confidenceImpact,
-          })),
-        },
+        closingProb: closing?.closingProb ?? null,
+        closingCapturedAt: closing?.closingCapturedAt ?? null,
       },
     });
 

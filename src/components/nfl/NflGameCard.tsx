@@ -6,6 +6,7 @@ import { ChevronDown, Clock, CloudRain, ExternalLink, Home, MapPin, Trophy, Wind
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PickCard } from "@/components/PickCard";
+import { MoreGameProps } from "./MoreGameProps";
 import { formatGameDateTime } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
 import type { NflGamedayGame } from "@/lib/nfl/gameday";
@@ -19,7 +20,7 @@ function statusVariant(s: NflInjuryEntry["status"]): "danger" | "warning" | "mut
   return "success";
 }
 
-export function NflGameCard({ entry, profile }: { entry: NflGamedayGame; profile: ScoringProfile }) {
+export function NflGameCard({ entry, profile, date }: { entry: NflGamedayGame; profile: ScoringProfile; date: string }) {
   const { game, context, picks, teamPick } = entry;
   const [showInjuries, setShowInjuries] = React.useState(false);
   const a = context?.assessment;
@@ -159,6 +160,11 @@ export function NflGameCard({ entry, profile }: { entry: NflGamedayGame; profile
           picks.map((p) => <PickCard key={p.id} pick={p} profile={profile} />)
         )}
       </div>
+      <MoreGameProps
+        date={date}
+        gameId={game.eventId}
+        started={entry.started}
+      />
     </Card>
   );
 }

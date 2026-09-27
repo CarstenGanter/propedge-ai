@@ -389,10 +389,10 @@ export interface FetchPropsOptions {
   /** Restrict to these prop types (labels from PROP_TYPES); default = every market for the sport. */
   propTypes?: string[];
   /**
-   * Keep only events whose kickoff passes this test. Applied before any paid
-   * request, so an event it rejects costs nothing — the event list is free.
+   * Keep only events that pass this test. Applied before any paid request, so
+   * an event it rejects costs nothing — the event list is free.
    */
-  eventFilter?: (commenceISO: string) => boolean;
+  eventFilter?: (event: { commence_time: string; home_team: string; away_team: string }) => boolean;
 }
 
 function defaultToSlate(iso: string): string {
@@ -443,7 +443,7 @@ export async function fetchPlayerProps(
     }
     if (options.eventFilter) {
       const keep = options.eventFilter;
-      candidates = candidates.filter((e) => keep(e.commence_time));
+      candidates = candidates.filter((e) => keep(e));
     }
     const upcoming = candidates.slice(0, perComp);
     totalEvents += upcoming.length;

@@ -10,6 +10,7 @@ import {
   type NflPrepareSummary,
 } from "@/lib/nfl/ingest";
 import { generatePicksForDate, type GenerationSummary } from "@/lib/generate";
+import { addPropToBoard, scoreGameProps, type ScoredProp } from "@/lib/addToBoard";
 
 function revalidateNfl() {
   for (const p of ["/nfl", "/picks", "/parlays", "/results", "/analytics", "/"]) revalidatePath(p);
@@ -43,4 +44,19 @@ export async function generateNflPicksAction(date: string): Promise<GenerationSu
   const summary = await generatePicksForDate(date);
   revalidateNfl();
   return summary;
+}
+
+/** Free: score every stored prop in one game, without touching the board. */
+export async function scoreGamePropsAction(date: string, gameId: string): Promise<ScoredProp[]> {
+  return scoreGameProps(date, gameId);
+}
+
+/**
+ * Free: put one prop on the board as a pick, leaving every other pick alone.
+ * Unlike a re-rank this is safe after games have started.
+ */
+export async function addPropToBoardAction(propId: string): Promise<{ ok: boolean; error?: string }> {
+  const r = await addPropToBoard(propId);
+  revalidateNfl();
+  return { ok: r.ok, error: r.error };
 }
