@@ -10,6 +10,9 @@ leagues.
 > involve risk, and past performance does not ensure future results. Confidence scores are model
 > estimates — not financial advice.**
 
+**Using it on an NFL game day?** Follow [GAMEDAY.md](GAMEDAY.md) — the weekly routine step by step,
+what each step costs, and the decision rules (payouts, stacks, timing, when to skip).
+
 Nothing here is a "lock" or "guaranteed" pick. The app ranks by **model confidence** and always
 displays risk. Bankroll tracking is **simulated** unless you explicitly mark an entry as actually
 placed.
@@ -19,10 +22,12 @@ placed.
 ## Features
 
 - **Prop ingestion** — CSV upload, manual entry form, and a provider abstraction for future APIs.
-- **Explainable scoring engine** — a deterministic 0–100 confidence model across 9 weighted
-  categories (recent form, season baseline, matchup, role/usage, injury/news, market edge,
-  sentiment, historical splits, parlay suitability) with a full score breakdown, evidence list,
-  reasons for/against, warnings, and a cautious written verdict.
+- **Explainable scoring engine** — three profiles (Settings → Scoring model). **Probability**
+  (recommended) models each player's per-game distribution — negative binomial for counts, Student-t
+  for yardage, with measured dispersion per prop type — anchors it on the de-vigged market, and
+  reads P(beats the line) off the tail. **Balanced** and **Market** are 0–100 weighted blends across
+  categories (form, baseline, matchup, role/usage, injury/news, market, sentiment, splits). Every pick
+  carries a score breakdown, sourced evidence, reasons for/against, warnings and a written verdict.
 - **Daily pick generation** — ranks all available props and selects the top 5–10, filtering out
   ruled-out players, low-volume/insufficient-data props, and anything below your confidence
   threshold.
@@ -38,10 +43,12 @@ placed.
 - **Team Picks (game winners)** — auto-discovers today's games across 8 leagues and recommends which
   team wins, from de-vigged market probability + recent form + value (model vs. market), with
   moneyline P/L tracking and ESPN auto-settlement.
-- **Analytics** — accuracy by sport/league/prop type/confidence tier/direction, team win-rate by
-  league, P/L breakdowns, a **confidence calibration** chart, a rolling performance trend, and a
-  **Model quality** tab that scores the model honestly: **Closing Line Value (CLV)**, plus **Brier /
-  log-loss / skill-vs-coin-flip** for both props and team picks.
+- **Analytics** — judged against what matters for pick'em: a **verdict against the break-even bar**
+  ("clears it / below it / not yet provable"), **95% Wilson intervals on every rate**, a count of
+  categories that actually separate from chance (instead of a best/worst leaderboard that always
+  names a winner), and it defaults to the sport you actually bet. Plus P/L, calibration (probability
+  picks only), a trend chart, and a **Model quality** tab with **Closing Line Value (CLV)** and
+  **Brier / log-loss / skill-vs-coin-flip**.
 - **Extras** — pick tags, personal notes, an avoid list, model versioning, and CSV export.
 - **Demo mode** — clearly-labeled synthetic data so you can explore the whole app offline.
 
@@ -77,7 +84,9 @@ Then open **Settings → Load demo data** at any time to (re)populate the app, o
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run seed` | Load labeled demo data |
 | `npm run daily` | Headless fetch + generate (props & team picks) |
-| `npm run capture` | Capture closing lines for CLV (run near game time; `--props` also captures prop lines) |
+| `npm run capture` | Capture closing lines for CLV by hand (`npm run capture -- --props` also captures prop lines) |
+| `npm run capture:auto` | One pass of the automatic closing-line capture (what the scheduler runs) |
+| `npm run lint` | ESLint |
 | `npm run db:reset` | Reset the SQLite database |
 
 ---
@@ -124,49 +133,52 @@ comparison available", etc.) and tempers confidence — it never fabricates stat
 
 ## NFL Gameday
 
-The **NFL Gameday** tab (`/nfl`) is the game-day workflow for Underdog/PrizePicks-style pick'em:
-open it in the morning, fetch the slate, and get ranked player picks grouped by game with sourced
-evidence, plus ready-made 2/3/4-leg slips.
+The **NFL Gameday** tab (`/nfl`) is the game-day workflow for Underdog-style pick'em: fetch the
+slate, get ranked player picks grouped by game with sourced evidence, price them against what
+Underdog actually pays, and build slips. The step-by-step routine is in [GAMEDAY.md](GAMEDAY.md).
 
-- **Slate-aware.** The page opens on today's games, or the next game day if there are none. NFL slate
-  dates use **US Eastern time**, so Sunday Night Football stays on Sunday wherever your machine is.
-- **Credit-safe fetching.** Player props are the only paid call. Before spending anything, the page
-  shows an estimate — *"13 games × 6 markets = 78 credits, ≈422 left (floor 25)"* — and you confirm.
-  Only games **on that slate date** are fetched, and only the markets you enabled in
-  **Settings → NFL gameday**. On days with no NFL games the daily job fetches **nothing** (0 credits).
-- **Free research** (no key, no credits), all of it sourced and linked on each pick:
+- **Slate-aware.** Opens on today's games, or the next game day. Slate dates use **US Eastern time**,
+  so Sunday Night Football stays on Sunday wherever your machine is.
+- **Credit-safe fetching.** Player props are the only paid call. The page shows the estimate first —
+  *"14 games × 6 markets = 84 credits, ≈267 left (floor 25)"* — and you confirm. Only that slate's
+  games and the markets enabled in **Settings → NFL gameday** are fetched; days without NFL games
+  cost nothing.
+- **Free research** (no key, no credits), sourced and linked on each pick:
 
   | Signal | Source |
   | --- | --- |
-  | Game logs, usage (targets / carries / attempts) | ESPN athlete gamelog — blended with **last season** in the first weeks, clearly labeled |
-  | Opponent defense rank vs the stat | **ESPN box scores aggregated** over the season (pass yds, rush yds, completions, pass TDs, total yds allowed per game, plus plays faced for pace) |
-  | Player status, teammate absences | **ESPN game injury report** (the official Wed–Sun report) + RotoWire practice notes + recent headlines |
-  | Kickoff weather | **Open-Meteo** at the kickoff hour for outdoor stadiums (wind ≥15 mph, precip ≥60%, or ≤25°F flags the passing game); domes never flagged |
-  | Home/away, rest days | ESPN gamelog dates |
-  | Market probability | The Odds API de-vigged no-vig probability |
+  | Game logs | ESPN athlete gamelog — blended with **last season** in the first weeks, clearly labeled |
+  | Usage: snap share, targets, carries | **nflverse** weekly stats and snap counts (free GitHub-release CSVs) |
+  | Opponent defense | **ESPN box scores aggregated** by stat and **by position group** (vs WR/TE/RB), with plays faced for pace |
+  | Player status, teammate absences | **ESPN game injury report** (Wed–Sun) + RotoWire notes + headlines |
+  | Kickoff weather | **Open-Meteo** at kickoff for outdoor stadiums; domes never flagged |
+  | Market probability | The Odds API, de-vigged, with fewer-book markets trusted less |
 
-- **Honest in the early season.** Until a player has four games of the current season, recent form is
-  blended with last year *and weighted down*, with a warning saying so. Opponent-defense ranks fall
-  back to the prior season and disclose it.
-- **Suggested slips.** 2/3/4-leg tickets built from the top picks: never the same player twice, never
-  opposite sides of the same game, different games preferred, and same-game legs explicitly flagged as
-  positively correlated. Each leg shows a one-line "why" taken from its evidence. Open it in the
-  Parlay Builder or save it directly.
+- **Per-pick pricing.** Underdog prices every pick individually — **1.87× for a standard pick**, less
+  for a side it rates likely — and a slip pays the product (same-game slips a few percent under). In
+  the line table you enter each pick's **Line** and **Payout**; **Needs** shows `1 ÷ payout`, green
+  when the model clears it. **Not offered?** marks a prop Underdog doesn't carry; after 8 empty
+  checks of a market the page tells you to stop paying for it.
+- **Suggested slips.** Built from picks ranked by **probability × payout**, so short-priced
+  favourites don't crowd the board, and picks priced below their value are left out. Enforces
+  Underdog's rules (never the same player twice; at least two teams) and **seeks a QB stacked with
+  his own receiver** — measured correlation +0.34, which the fixed payout doesn't fully charge for.
+- **All props in this game (free).** The board keeps the day's top 10, so a game can miss it. Each
+  game card can score every prop already fetched for that game and **Add** one to the board without
+  re-ranking — safe after kickoff, when a re-rank would rebuild everything.
 - **Settlement.** NFL box scores are read by stat group and machine key (`passingYards`,
   `rushingYards`, `receivingYards`, `receptions`, `passingTouchdowns`, `completions/passingAttempts`,
-  `rushingAttempts`), so passing/rushing/receiving yards no longer collide on the generic "YDS" label
-  and Pass TDs, Completions, attempts and Rush+Rec Yards settle automatically.
+  `rushingAttempts`), with suffix-safe name matching, so every NFL prop type settles automatically.
 
-**Credit budget.** The free tier is 500 credits/month. Six markets across a full week
-(~15 games) is ~90 credits/week. Settings → NFL gameday shows the arithmetic live and lets you trade
-markets against a max-games cap; the credit floor blocks any fetch that would drop you below it.
+**Credit budget.** The free tier is 500 credits/month. A full Sunday is ~84 credits for props; a
+Thursday or Monday game ~6. Closing-line capture adds roughly 1–3 credits per game with picks.
 
 ---
 
 ## Daily automation (The Odds API)
 
-With `ODDS_API_KEY` set, PropEdge can fetch real de-vigged sportsbook player props and rank them
-using the **Market model** scoring profile (Settings → Scoring model). For hands-off mornings:
+With `ODDS_API_KEY` set, PropEdge fetches real de-vigged sportsbook player props and ranks them
+with the scoring profile chosen in Settings → Scoring model (**Probability** is recommended). For hands-off mornings:
 
 - **In-app:** Today's Picks → **Fetch + generate (all sports)**, or Research Lab → **Fetch from The
   Odds API** for a single sport.
@@ -180,8 +192,11 @@ using the **Market model** scoring profile (Settings → Scoring model). For han
   launchctl start com.propedge.daily                                # test run now
   ```
 
-  (cron alternative: `0 9 * * * "/absolute/path/scripts/daily-refresh.sh"`. On modern macOS, grant
-  `/usr/sbin/cron` **Full Disk Access** so it can reach `~/Documents`.)
+  (cron alternative: `0 9 * * * "/absolute/path/scripts/daily-refresh.sh"`.)
+
+  > **Keep the repo out of `~/Documents`, Desktop and Downloads.** macOS privacy controls stop
+  > launchd and cron jobs from reading those folders, and the job fails before it starts. This repo
+  > lives in `~/Code/propedge-ai` for that reason; the included plist points there.
 
 **Soccer competitions:** the **Soccer** category spans multiple competitions — currently **World Cup**
 (in season now) and **MLS**. Enabling Soccer pulls player props from both and tags each prop with its
@@ -255,12 +270,21 @@ assuming it — the honest core of a research tool.
   match reality (props use confidence ÷ 100; team picks use the model win probability), plus a
   **skill-vs-coin-flip** number (>0 beats guessing). Lower Brier/log-loss is better.
 
-**Capturing closing lines:**
-- **In-app:** Analytics → Model quality → **Capture closing lines** (team lines are a cheap bulk
-  fetch; **+ props** also re-fetches player props and costs Odds API credits).
-- **CLI:** `npm run capture` (add `--props` to include prop lines). Best scheduled **near game time**,
-  *separately* from the morning `npm run daily` — if you capture right after generating, the closing
-  line just equals the entry line and CLV is always zero. Regenerating a board resets its entry line.
+**Capturing closing lines — automatic.** Two schedulers capture prop closing lines **20–60 minutes
+before each kickoff**, sharing a lock so they never pay twice:
+
+| | Runs when | Install |
+| --- | --- | --- |
+| In-app scheduler | whenever the app (`npm run dev`) is running | nothing — starts with the server (`src/instrumentation.ts`) |
+| Background job | Mac awake, even with the app closed; Sun/Mon/Thu | `zsh scripts/install-auto-capture.sh` (re-run after a node upgrade) |
+
+A capture buys **only games that still hold an uncaptured pick**, only the markets those picks use,
+and **each game at most once**. Every other run is a local database read and costs nothing. The
+Mac has to be awake at kickoff. Runs are logged to `logs/auto-capture.log`.
+
+By hand: the **Capture closing lines** button (NFL page within 3 hours of kickoff, and Analytics →
+Model quality), or `npm run capture -- --props`. Capturing right after generating is pointless — the
+closing line just equals the entry line.
 
 ---
 
@@ -271,8 +295,12 @@ src/
   app/            # App Router pages (dashboard, picks, teams, research, parlays, results, analytics, settings)
   components/     # UI primitives + domain components (cards, badges, charts, forms, modals)
   lib/
-    analysis/     # scoringEngine, teamScoringEngine, confidenceModel, parlayCorrelation, teamParlay, calibration, modelQuality (Brier/log-loss/CLV), stats
+    analysis/     # scoringEngine, probabilityModel + distributions, pickemMath (payouts, break-even, correlation),
+                  # slipBuilder, availability, lineEdge, teamScoringEngine, parlayCorrelation, calibration, modelQuality
+    nfl/          # slate, schedule, gameContext, defense (+ by position), usage, injuryReport, stadiums,
+                  # gameday data, autoCapture (window rules) + runAutoCapture (shared capture pass)
     captureLines.ts                                 # closing-line capture for CLV (team + prop)
+    addToBoard.ts                                   # score one game's props / add one to the board
     providers/    # stats/news/odds/results/historical adapters + live/ (ESPN scores/injuries/gamelogs/matchup, park factors, MLB Stats API, The Odds API) + demo
     ingest/       # CSV parsing & validation
     db/           # Prisma client singleton
@@ -281,9 +309,11 @@ src/
     settle.ts, settleTeams.ts, generate.ts, generateTeams.ts
     analytics.ts, queries.ts, settings.ts, dto.ts
   server/actions/ # props, picks, teams, results, bankroll, parlays, settings, research, odds, jobs
-  jobs/           # dailyRefresh (props + teams: fetch, generate, settle)
+  jobs/           # dailyRefresh (props + teams: fetch, generate, settle), run-capture, run-auto-capture
+  instrumentation.ts  # starts the in-app closing-line scheduler when the server boots
   types/          # shared domain types & constants
 prisma/           # schema.prisma + seed.ts (demo data, incl. team picks)
+scripts/          # launchd installers: install-auto-capture.sh, daily-refresh.sh + plist
 ```
 
 ---
@@ -295,7 +325,13 @@ function returning `{ confidenceScore, edgeScore, riskLevel, scoreBreakdown, evi
 reasonsFor, reasonsAgainst, reasoningSummary, deepDiveAnalysis, verdict, tags, dataCompleteness }`.
 Each category is scored 0–100 relative to the pick direction; missing inputs contribute a neutral
 score **and** a recorded warning, and overall confidence is dampened toward 50 as data completeness
-drops — the model is honest about uncertainty. Every generated pick stamps its `modelVersion`.
+drops — the model is honest about uncertainty.
+
+Under the **Probability** profile the confidence *is* a probability: `probabilityModel.ts` blends the
+player's sample with a dispersion prior **measured per prop type** from nflverse (2022–2024), anchors
+the mean on the de-vigged market, and clips to 33–70% because an edge beyond that is far more likely
+to be model error. Every pick stamps its `modelVersion` and `scoringProfile`, and calibration only
+grades picks whose confidence genuinely is a probability.
 
 ---
 
@@ -305,7 +341,10 @@ drops — the model is honest about uncertainty. Every generated pick stamps its
 npm test
 ```
 
-Covers the prop scoring engine, the **team scoring engine** (2/3-way de-vig, value edge, draw-risk,
+Covers the prop scoring engine and probability model (distributions verified against closed forms),
+pick'em payout math, the slip builder's platform rules and pricing, closing-line capture timing and
+de-duplication, NFL settlement and slate logic, availability tracking, Wilson intervals, the **team
+scoring engine** (2/3-way de-vig, value edge, draw-risk,
 **blended form** from last-10/run-differential/probable-pitcher with a capped swing, and **activated
 injuries** with named evidence), settlement logic (hit/miss/push, parlay payout, **moneyline
 payout**), CSV parsing, prop ingestion, and analytics/calibration calculations.
