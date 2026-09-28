@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { settleParlay, settleProp, settleSingle } from "@/lib/settlement";
+import { playedLine, settleParlay, settleProp, settleSingle } from "@/lib/settlement";
 import type { Direction, SettlementStatus } from "@/types";
 
 export interface SettleOptions {
@@ -21,7 +21,7 @@ export async function settlePickById(pickId: string, opts: SettleOptions) {
   const prop = pick.playerProp;
   const status: SettlementStatus =
     opts.status ??
-    settleProp(prop.line, prop.direction as Direction, opts.actualResult ?? prop.actualResult);
+    settleProp(playedLine(prop.line, prop.underdogLine), prop.direction as Direction, opts.actualResult ?? prop.actualResult);
 
   const actual =
     opts.actualResult !== undefined ? opts.actualResult : prop.actualResult;

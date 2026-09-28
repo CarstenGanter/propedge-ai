@@ -143,7 +143,12 @@
       "Read(//Users/carstenganter/Code/propedge-ai/src/lib/utils/**)",
       "Bash(sqlite3 -header -column \"file:prisma/dev.db?mode=ro\" \"SELECT id, playerName, propType, direction, line, gameId FROM PlayerProp WHERE date='2026-09-27' AND propType='Receptions' AND line=2.5 AND direction='OVER' AND playerName IN \\('RJ Harvey','Evan Engram','Colby Parkinson'\\);\")",
       "Bash(sqlite3 -header -column \"file:prisma/dev.db?mode=ro\" \"SELECT pp.playerName, ROUND\\(p.entryProb*100,1\\) entry, ROUND\\(p.closingProb*100,1\\) closing, ROUND\\(\\(p.closingProb-p.entryProb\\)*100,1\\) clv FROM Pick p JOIN PlayerProp pp ON pp.id=p.playerPropId WHERE p.rank>10 AND p.date='2026-09-27';\")",
-      "Read(//Users/carstenganter/Code/propedge-ai/src/lib/analysis/**)"
+      "Read(//Users/carstenganter/Code/propedge-ai/src/lib/analysis/**)",
+      "Bash(sqlite3 -header -column \"file:prisma/dev.db?mode=ro\" \"SELECT p.rank, pp.playerName, pp.propType, pp.direction d, pp.line, pp.underdogPickMultiplier pay, p.confidenceScore conf, ROUND\\(p.entryProb*100,1\\) entry, ROUND\\(p.closingProb*100,1\\) close, pp.actualResult act, p.status, p.placedReal mine FROM Pick p JOIN PlayerProp pp ON pp.id=p.playerPropId WHERE p.date='2026-09-27' ORDER BY p.rank;\")",
+      "Bash(sqlite3 -header -column \"file:prisma/dev.db?mode=ro\" \"SELECT name, stake, payoutMultiplier, status, profitLoss FROM Parlay WHERE date='2026-09-27';\")",
+      "Bash(sqlite3 -separator ',' \"file:prisma/dev.db?mode=ro\" \"SELECT p.confidenceScore, p.entryProb, p.closingProb, p.status FROM Pick p JOIN PlayerProp pp ON pp.id=p.playerPropId WHERE pp.sport='NFL' AND p.scoringProfile='distribution' AND p.status IN \\('hit','miss'\\) AND p.entryProb IS NOT NULL;\")",
+      "Bash(sqlite3 -header -column \"file:prisma/dev.db?mode=ro\" \"SELECT p.date, pp.playerName, pp.propType, pp.direction d, pp.line book, pp.underdogLine ud, pp.actualResult act, p.status, CASE WHEN pp.actualResult IS NULL THEN '-' WHEN pp.actualResult=pp.underdogLine THEN 'push' WHEN \\(pp.direction='OVER'\\)=\\(pp.actualResult>pp.underdogLine\\) THEN 'hit' ELSE 'miss' END at_ud_line, p.placedReal mine FROM Pick p JOIN PlayerProp pp ON pp.id=p.playerPropId WHERE pp.underdogLine IS NOT NULL AND pp.underdogLine<>pp.line AND p.status IN \\('hit','miss','push'\\) ORDER BY p.date;\")",
+      "Bash(sqlite3 -header -column \"file:prisma/dev.db?mode=ro\" \"SELECT p.date, pp.sport, pp.playerName, pp.propType, pp.gameStartTime IS NOT NULL has_start, pp.source, p.isDemo FROM Pick p JOIN PlayerProp pp ON pp.id=p.playerPropId WHERE p.status='pending' AND p.isDemo=0;\")"
     ],
     "additionalDirectories": [
       "/Users/carstenganter/Code/propedge-ai/src/lib/nfl",

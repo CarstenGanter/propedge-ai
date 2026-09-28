@@ -96,7 +96,19 @@ export interface SlipCandidate extends ParlayLegInput {
   available?: boolean | null;
   /** What Underdog pays for this pick (e.g. 1.71). Null or missing means a standard 1.87x pick. */
   pickMultiplier?: number | null;
+  /** Books' no-vig probability of this side at the line being played, when known. */
+  marketProb?: number | null;
 }
+
+/**
+ * Whose probability decides which picks are worth a place.
+ *  - "market": the books'. A pick qualifies only when the books' own
+ *    probability times Underdog's payout is at least 1 — Underdog mispricing it
+ *    relative to sharp books, an edge that does not depend on the model at all.
+ *  - "model": the model's. Kept for comparison; on the first 40 settled picks
+ *    the model's probabilities scored worse than the market's.
+ */
+export type SlipBasis = "market" | "model";
 
 export interface SlipFlag {
   /** "good" marks a dependency chosen on purpose, not a hazard to warn about. */
@@ -141,6 +153,7 @@ export function pickToSlipCandidate(p: SerializedPick): SlipCandidate {
     teamId: p.prop.playerTeamId,
     available: p.prop.underdogAvailable,
     pickMultiplier: p.prop.underdogPickMultiplier,
+    marketProb: p.marketProb,
   };
 }
 
@@ -178,8 +191,9 @@ export function spansTwoTeams(legs: SlipCandidate[]): boolean {
 export function buildSuggestedSlips(
   candidates: SlipCandidate[],
   sizes: number[] = [2, 3, 4],
-  opts?: { allowSameGame?: boolean; multipliers?: Record<number, number> },
+  opts?: { allowSameGame?: boolean; multipliers?: Record<number, number>; basis?: SlipBasis },
 ): SuggestedSlip[] {
+  const basis = opts?.basis ?? "market";
   const allowSameGame = opts?.allowSameGame ?? true;
   const multipliers = opts?.multipliers ?? PICKEM_MULTIPLIERS;
   // A prop confirmed absent from the platform cannot be part of an entry, so it
@@ -195,11 +209,21 @@ export function buildSuggestedSlips(
   // A pick whose entered payout is too short for its probability (value below
   // 1) is left out entirely: it lowers the expected value of any slip it joins.
   // Unpriced picks stay in at the standard payout.
-  const value = (c: SlipCandidate) => pickValue(c.confidenceScore / 100, c.pickMultiplier);
+  //
+  // On the market basis a pick needs a books' price to be judged at all, and
+  // qualifies only when that price already beats Underdog's payout.
+  const modelValue = (c: SlipCandidate) => pickValue(c.confidenceScore / 100, c.pickMultiplier);
+  const marketValue = (c: SlipCandidate) => (c.marketProb == null ? null : pickValue(c.marketProb, c.pickMultiplier));
+  const value = (c: SlipCandidate) => (basis === "market" ? (marketValue(c) ?? 0) : modelValue(c));
   const sorted = [...candidates]
     .filter((c) => c.available !== false)
-    .filter((c) => c.pickMultiplier == null || value(c) >= 1)
-    .sort((a, b) => value(b) - value(a) || a.playerName.localeCompare(b.playerName));
+    .filter((c) =>
+      basis === "market" ? (marketValue(c) ?? 0) >= 1 : c.pickMultiplier == null || modelValue(c) >= 1,
+    )
+    .sort(
+      (a, b) =>
+        value(b) - value(a) || modelValue(b) - modelValue(a) || a.playerName.localeCompare(b.playerName),
+    );
   const out: SuggestedSlip[] = [];
 
   for (const size of sizes) {
@@ -254,8 +278,9 @@ function payoutFlags(legs: SlipCandidate[]): SlipFlag[] {
     .map((l) => ({
       tone: "info" as const,
       text:
-        `${l.playerName} pays ${l.pickMultiplier}× — needs ${(pickBreakEven(l.pickMultiplier) * 100).toFixed(1)}%, ` +
-        `model says ${Math.round(l.confidenceScore)}%.`,
+        `${l.playerName} pays ${l.pickMultiplier}× — needs ${(pickBreakEven(l.pickMultiplier) * 100).toFixed(1)}%` +
+        (l.marketProb != null ? `, books say ${(l.marketProb * 100).toFixed(1)}%` : "") +
+        `, model ${Math.round(l.confidenceScore)}%.`,
     }));
   const games = new Set(legs.map((l) => l.gameKey));
   if (games.size < legs.length && legs.some((l) => l.pickMultiplier != null)) {

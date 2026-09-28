@@ -1,7 +1,9 @@
 import { runAutoCapture } from "@/lib/nfl/runAutoCapture";
+import { runAutoSettle } from "@/lib/runAutoSettle";
 
 /**
- * In-app closing-line capture: every 15 minutes while the server is running.
+ * In-app closing-line capture and settlement: every 15 minutes while the
+ * server is running.
  * A 40-minute capture window cannot fall between two runs, whatever minute the
  * server happened to start on. Each run exits after a local database count
  * unless a game is actually due, so leaving the app open costs nothing.
@@ -16,12 +18,14 @@ const FIRST_RUN_MS = 30_000;
 const g = globalThis as { __propedgeAutoCapture?: ReturnType<typeof setInterval> };
 
 async function tick() {
-  try {
-    const line = await runAutoCapture("app");
-    // Quiet unless something happened — a skip every 15 minutes is noise.
-    if (!line.includes(": skip")) console.log(line);
-  } catch (e) {
-    console.error("[auto-capture] failed:", e);
+  // Quiet unless something happened — a skip every 15 minutes is noise.
+  for (const [name, run] of [["capture", runAutoCapture], ["settle", runAutoSettle]] as const) {
+    try {
+      const line = await run("app");
+      if (!line.includes(": skip") && !line.includes("skip —")) console.log(line);
+    } catch (e) {
+      console.error(`[auto-${name}] failed:`, e);
+    }
   }
 }
 

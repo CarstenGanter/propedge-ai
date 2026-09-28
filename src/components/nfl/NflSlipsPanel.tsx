@@ -11,6 +11,7 @@ import {
   buildSuggestedSlips,
   correlatedPairsFor,
   pickToSlipCandidate,
+  type SlipBasis,
   type SuggestedSlip,
 } from "@/lib/analysis/slipBuilder";
 import { parlayPayout } from "@/lib/analysis/parlayCorrelation";
@@ -36,9 +37,10 @@ export function NflSlipsPanel({
   const pendingPicks = picks.filter((p) => p.status === "pending");
   // Offer every size the board can fill and let the economics rank them, rather
   // than assuming which size is best — that depends on your actual multipliers.
+  const [basis, setBasis] = React.useState<SlipBasis>("market");
   const slips = React.useMemo(
-    () => buildSuggestedSlips(pendingPicks.map(pickToSlipCandidate), [2, 3, 4, 5]),
-    [pendingPicks],
+    () => buildSuggestedSlips(pendingPicks.map(pickToSlipCandidate), [2, 3, 4, 5], { basis }),
+    [pendingPicks, basis],
   );
 
   return (
@@ -56,9 +58,36 @@ export function NflSlipsPanel({
       </CardHeader>
       <CardContent className="space-y-4">
         <PricingNote />
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-muted-foreground">Judge picks by</span>
+          {(["market", "model"] as const).map((b) => (
+            <button
+              key={b}
+              type="button"
+              onClick={() => setBasis(b)}
+              className={cn(
+                "rounded-md border px-2 py-1 transition-colors",
+                basis === b ? "border-primary/40 bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {b === "market" ? "The books (recommended)" : "The model"}
+            </button>
+          ))}
+        </div>
+        {basis === "model" && (
+          <p className="flex items-start gap-1.5 rounded-lg border border-warning/25 bg-warning/5 p-2 text-[11px] leading-snug text-warning">
+            <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+            These slips trust the model&apos;s probabilities. So far they have scored worse than the books&apos;
+            — picks it rated 8+ points above the market won 3 of 8. Treat these as the model&apos;s opinion, not an edge.
+          </p>
+        )}
         {slips.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            {pendingPicks.length < 2 ? "Need at least two pending picks to suggest a slip." : "Not enough independent picks to build a slip."}
+            {pendingPicks.length < 2
+              ? "Need at least two pending picks to suggest a slip."
+              : basis === "market"
+                ? "Nothing on this board beats Underdog's price by the books' own numbers. Passing is the +EV play — enter each pick's Payout in the line table if you haven't, since unpriced picks are assumed to pay a standard 1.87×."
+                : "Not enough independent picks to build a slip."}
           </p>
         ) : (
           slips.map((slip) => (

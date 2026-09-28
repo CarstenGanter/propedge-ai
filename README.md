@@ -156,11 +156,14 @@ Underdog actually pays, and build slips. The step-by-step routine is in [GAMEDAY
 
 - **Per-pick pricing.** Underdog prices every pick individually — **1.87× for a standard pick**, less
   for a side it rates likely — and a slip pays the product (same-game slips a few percent under). In
-  the line table you enter each pick's **Line** and **Payout**; **Needs** shows `1 ÷ payout`, green
-  when the model clears it. **Not offered?** marks a prop Underdog doesn't carry; after 8 empty
+  the line table you enter each pick's **Line** and **Payout**; **Needs** shows `1 ÷ payout` and
+  **Books** the sportsbooks' own probability at your line — green when the books already beat the
+  price, i.e. Underdog has mispriced the pick relative to the sharp market. **Not offered?** marks a prop Underdog doesn't carry; after 8 empty
   checks of a market the page tells you to stop paying for it.
-- **Suggested slips.** Built from picks ranked by **probability × payout**, so short-priced
-  favourites don't crowd the board, and picks priced below their value are left out. Enforces
+- **Suggested slips.** By default built only from picks whose **books' probability × payout ≥ 1**,
+  so the edge doesn't rest on the model; when nothing qualifies the panel says to pass. A "The
+  model" switch shows model-based slips for comparison, with a warning that the model has scored
+  worse than the market so far. Enforces
   Underdog's rules (never the same player twice; at least two teams) and **seeks a QB stacked with
   his own receiver** — measured correlation +0.34, which the fixed payout doesn't fully charge for.
 - **All props in this game (free).** The board keeps the day's top 10, so a game can miss it. Each
@@ -270,13 +273,15 @@ assuming it — the honest core of a research tool.
   match reality (props use confidence ÷ 100; team picks use the model win probability), plus a
   **skill-vs-coin-flip** number (>0 beats guessing). Lower Brier/log-loss is better.
 
-**Capturing closing lines — automatic.** Two schedulers capture prop closing lines **20–60 minutes
-before each kickoff**, sharing a lock so they never pay twice:
+**Capturing closing lines and settling — automatic.** Two schedulers capture prop closing lines
+**20–60 minutes before each kickoff** and settle finished picks from ESPN box scores (eligible 3½
+hours after kickoff, retried every 30 minutes until final, slips settle with their legs), sharing
+locks so neither job is ever done twice:
 
 | | Runs when | Install |
 | --- | --- | --- |
 | In-app scheduler | whenever the app (`npm run dev`) is running | nothing — starts with the server (`src/instrumentation.ts`) |
-| Background job | Mac awake, even with the app closed; Sun/Mon/Thu | `zsh scripts/install-auto-capture.sh` (re-run after a node upgrade) |
+| Background job | Mac awake, even with the app closed; Sun/Mon/Tue/Thu/Fri | `zsh scripts/install-auto-capture.sh` (re-run after a node upgrade) |
 
 A capture buys **only games that still hold an uncaptured pick**, only the markets those picks use,
 and **each game at most once**. Every other run is a local database read and costs nothing. The
@@ -301,6 +306,7 @@ src/
                   # gameday data, autoCapture (window rules) + runAutoCapture (shared capture pass)
     captureLines.ts                                 # closing-line capture for CLV (team + prop)
     addToBoard.ts                                   # score one game's props / add one to the board
+    runAutoSettle.ts, settleSchedule.ts             # automatic settlement pass + its timing rules
     providers/    # stats/news/odds/results/historical adapters + live/ (ESPN scores/injuries/gamelogs/matchup, park factors, MLB Stats API, The Odds API) + demo
     ingest/       # CSV parsing & validation
     db/           # Prisma client singleton
@@ -309,7 +315,7 @@ src/
     settle.ts, settleTeams.ts, generate.ts, generateTeams.ts
     analytics.ts, queries.ts, settings.ts, dto.ts
   server/actions/ # props, picks, teams, results, bankroll, parlays, settings, research, odds, jobs
-  jobs/           # dailyRefresh (props + teams: fetch, generate, settle), run-capture, run-auto-capture
+  jobs/           # dailyRefresh (props + teams: fetch, generate, settle), run-capture, run-auto-capture (capture + settle)
   instrumentation.ts  # starts the in-app closing-line scheduler when the server boots
   types/          # shared domain types & constants
 prisma/           # schema.prisma + seed.ts (demo data, incl. team picks)
@@ -329,7 +335,8 @@ drops — the model is honest about uncertainty.
 
 Under the **Probability** profile the confidence *is* a probability: `probabilityModel.ts` blends the
 player's sample with a dispersion prior **measured per prop type** from nflverse (2022–2024), anchors
-the mean on the de-vigged market, and clips to 33–70% because an edge beyond that is far more likely
+the mean on the de-vigged market, applies context adjustments (matchup, usage, injuries, weather) to
+the model's own share only — the market's price already contains them — and clips to 33–70% because an edge beyond that is far more likely
 to be model error. Every pick stamps its `modelVersion` and `scoringProfile`, and calibration only
 grades picks whose confidence genuinely is a probability.
 

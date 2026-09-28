@@ -103,6 +103,11 @@ export interface ProbabilityEstimate {
   /** True when the market anchored the projection. */
   usedMarket: boolean;
   clipped: boolean;
+  /**
+   * What the books imply for this side at the line actually being played —
+   * the market mean read at that line. Null when no market price was available.
+   */
+  marketProbability: number | null;
   note: string;
 }
 
@@ -178,28 +183,47 @@ export function estimateProbability(input: ProbabilityInputs): ProbabilityEstima
 
   // --- projection: anchor on the market, correct with the player's own form ---
   const df = Math.max(1, n - 1);
-  let projection = sampleMean;
-  let usedMarket = false;
-  const marketLine = input.marketLine ?? line;
-  const pOver = input.marketProbOver;
-  if (pOver != null && pOver > 0.01 && pOver < 0.99 && Number.isFinite(marketLine)) {
-    const marketMean = solveProjectionForMarket(marketLine, pOver, sigma, input.propType, df);
-    const tau = TAU_FRACTION * Math.max(line, 1);
-    const k = sigma * sigma / n / (sigma * sigma / n + tau * tau); // weight on the market
-    projection = k * marketMean + (1 - k) * sampleMean;
-    usedMarket = true;
-  }
-
   // --- context adjustments, bounded ---
   const rawAdj = (input.adjustments ?? []).reduce((a, b) => a + b, 0);
   const adj = Math.max(-MAX_TOTAL_ADJUSTMENT, Math.min(MAX_TOTAL_ADJUSTMENT, rawAdj));
-  projection = Math.max(0, projection * (1 + adj));
+  // The adjustments are the model's own reading of context — matchup, usage, a
+  // teammate out, weather. They apply to the model's own share of the estimate
+  // only. The market's price already contains all of that, and applying them on
+  // top of it counted the same information twice: that is how a coin-flip
+  // market (50.5%) became a 70% pick on 2026-09-27, and it missed. On the first
+  // 40 settled probability picks, those rated 8+ points above the market won
+  // 3 of 8 against a market expecting ~52%; the adjustments were the whole
+  // source of those gaps. With a market price present the model now stays
+  // within about 3 points of it even with every adjustment maxed (it was ~10),
+  // and moves mainly when the line being played
+  // differs from the books' line — the one place a real edge shows up.
+  const adjustedSample = sampleMean * (1 + adj);
+
+  let projection = adjustedSample;
+  let usedMarket = false;
+  let marketMean: number | null = null;
+  const marketLine = input.marketLine ?? line;
+  const pOver = input.marketProbOver;
+  if (pOver != null && pOver > 0.01 && pOver < 0.99 && Number.isFinite(marketLine)) {
+    marketMean = solveProjectionForMarket(marketLine, pOver, sigma, input.propType, df);
+    const tau = TAU_FRACTION * Math.max(line, 1);
+    const k = sigma * sigma / n / (sigma * sigma / n + tau * tau); // weight on the market
+    projection = k * marketMean + (1 - k) * adjustedSample;
+    usedMarket = true;
+  }
+  projection = Math.max(0, projection);
 
   // --- tail probability, read at the line actually being played ---
   const pOverAtLine = tailProbability(line, projection, sigma, input.propType, df);
   const raw = input.direction === "OVER" ? pOverAtLine : 1 - pOverAtLine;
   const probability = Math.max(MIN_PROB, Math.min(MAX_PROB, raw));
   const clipped = Math.abs(probability - raw) > 1e-9;
+
+  let marketProbability: number | null = null;
+  if (marketMean != null) {
+    const mOver = tailProbability(line, marketMean, sigma, input.propType, df);
+    marketProbability = input.direction === "OVER" ? mOver : 1 - mOver;
+  }
 
   const note =
     `Projection ${projection.toFixed(1)} vs line ${line} with spread ${sigma.toFixed(1)}` +
@@ -208,7 +232,7 @@ export function estimateProbability(input: ProbabilityInputs): ProbabilityEstima
     (clipped ? ". Clipped — the raw estimate exceeded what prop markets plausibly allow" : "") +
     ".";
 
-  return { probability, projection, sigma, games: n, usedMarket, clipped, note };
+  return { probability, projection, sigma, games: n, usedMarket, clipped, marketProbability, note };
 }
 
 /** Context signals expressed as bounded nudges to the projection. */

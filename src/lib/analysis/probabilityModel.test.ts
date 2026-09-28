@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adjustmentsFrom, estimateProbability, MAX_PROB, MIN_PROB } from "./probabilityModel";
+import { adjustmentsFrom, estimateProbability, MAX_PROB, MIN_PROB, type ProbabilityInputs } from "./probabilityModel";
 import type { ResearchBundle, ScorablePropInput } from "@/types";
 
 const games = (n: number, value: number) => Array.from({ length: n }, () => value);
@@ -207,5 +207,55 @@ describe("market anchoring", () => {
     // The market must move it meaningfully toward 50/50.
     expect(anchored.probability).toBeLessThan(unanchored.probability);
     expect(anchored.usedMarket).toBe(true);
+  });
+});
+
+// 2026-09-27: every adjustment was applied on top of a market-anchored
+// projection, so context the market had already priced was counted twice.
+// Picks the model rated 8+ points above the market went 3 for 8.
+/** The same inputs with the market price removed. */
+function withoutMarket(x: ProbabilityInputs): ProbabilityInputs {
+  return { ...x, marketProbOver: undefined, marketLine: undefined };
+}
+
+describe("context adjustments do not double-count the market", () => {
+  const base = {
+    line: 60.5, direction: "OVER" as const, propType: "Receiving Yards",
+    games: games(10, 60.5), marketProbOver: 0.505, marketLine: 60.5,
+  };
+
+  it("keeps a coin-flip market near a coin flip even with every adjustment maxed out", () => {
+    const plain = estimateProbability(base)!;
+    const maxed = estimateProbability({ ...base, adjustments: [0.5] })!; // capped at +15%
+    expect(maxed.probability).toBeGreaterThan(plain.probability); // context still counts...
+    // ...but can't invent an edge: ~3 points at most with every adjustment
+    // maxed, where applying them on top of the market used to give ~10.
+    expect(maxed.probability - base.marketProbOver).toBeLessThan(0.04);
+  });
+
+  it("still lets context move the estimate fully when there is no market to lean on", () => {
+    const noMarket = withoutMarket(base);
+    const plain = estimateProbability(noMarket)!;
+    const maxed = estimateProbability({ ...noMarket, adjustments: [0.5] })!;
+    expect(maxed.projection).toBeCloseTo(plain.projection * 1.15, 6);
+  });
+
+  it("reports what the market implies at the line being played", () => {
+    const e = estimateProbability(base)!;
+    expect(e.marketProbability).toBeCloseTo(0.505, 2);
+    expect(estimateProbability({ ...base, direction: "UNDER" })!.marketProbability).toBeCloseTo(0.495, 2);
+    const noMarket = withoutMarket(base);
+    expect(estimateProbability(noMarket)!.marketProbability).toBeNull();
+  });
+
+  it("defers to the market over a hot sample, and moves for a better line", () => {
+    // A player averaging 145 yards against a 60.5 line the market calls a coin
+    // flip: the market is still the better forecast.
+    const hot = estimateProbability({ ...base, games: [140, 150, 145], adjustments: [0.15] })!;
+    expect(Math.abs(hot.probability - hot.marketProbability!)).toBeLessThan(0.02);
+    // What does move it is playing a softer line than the books priced.
+    const softer = estimateProbability({ ...base, line: 55.5 })!;
+    expect(softer.probability - base.marketProbOver).toBeGreaterThan(0.04);
+    expect(softer.marketProbability! - base.marketProbOver).toBeGreaterThan(0.04); // the market agrees at that line
   });
 });

@@ -13,7 +13,7 @@ Read the [Decision rules](#decision-rules) at least once; the rest is mechanical
 4. **Re-rank picks (free)**
 5. **Enter your pick'em lines and each pick's Payout** ← the step that matters most
 6. Mark anything missing as **Not offered?**
-7. Build a slip from picks that beat their **Needs** — green in the line table
+7. Build a slip only from picks where **Books** is green — or pass
 8. Tick **I actually placed this slip** before saving
 9. Leave your Mac awake at kickoff — closing lines capture themselves
 
@@ -81,6 +81,17 @@ receptions paid 1.55×, so it needed **64.5%**; the model gave it 55%. It *looke
 and was the worst leg on the slip. Picks priced too short for their probability drop out of the
 suggested slips automatically.
 
+**Then read the Books column — this is the one that decides.** It's the sportsbooks' own
+probability for that side at your line. When it's **green**, the books already say the pick beats
+Underdog's price: Underdog has mispriced it relative to the sharp market, and that edge doesn't
+depend on the model being right. When it's red, the books say you're paying too much.
+
+Why the books and not the model: on the first 40 settled picks the model's own probabilities scored
+**worse** than the market's, and every pick it rated 8+ points above the market came from
+double-counted context (fixed in model v1.5.0). On 2026-09-27 not one pick on the board was green —
+the best was Parkinson at exactly break-even — and both slips lost. **Most weeks few or none will be
+green. That is the honest answer, not a bug.**
+
 ### 6. Mark anything that isn't there
 
 If a recommended prop doesn't exist on Underdog, click **Not offered?** on that row.
@@ -94,22 +105,31 @@ Entering a line already records the prop as available. You only ever click for t
 
 ### 7. Build the slip
 
-The **Suggested slips** panel builds slips from picks that beat their price. Each slip's multiplier
+The **Suggested slips** panel builds slips only from picks the **books** say beat their price (the
+default, "The books"). If nothing qualifies it says so — **passing is the +EV play** that week. A
+"The model" switch shows model-based slips for comparison, with a warning; don't mistake them for an
+edge. Each slip's multiplier
 is the product of its picks' payouts. **Same-game slips pay a little under that product** (we've seen
 1–7%), so type in the total Underdog shows before saving. See [Slip size](#slip-size).
 
 Tick **I actually placed this slip on Underdog** if you really bet it. Untracked bets are why the
 "picks I took" numbers stay thin.
 
-### 8. Closing lines — automatic now
+### 8. Closing lines and results — automatic now
 
 **You don't need to do anything.** Closing lines are captured automatically 20–60 minutes before
 each kickoff, once per game, by two schedulers that share a lock so they never pay twice:
 
 | | Runs when | Days |
 |---|---|---|
-| Background job (launchd) | Mac is awake, even with the app closed | Sun, Mon, Thu |
+| Background job (launchd) | Mac is awake, even with the app closed | Sun, Mon, Tue, Thu, Fri |
 | In-app scheduler | The app (`npm run dev`) is running | every day |
+
+The same two schedulers also **settle finished picks** (free, ESPN box scores): a pick becomes
+eligible 3½ hours after kickoff, is retried every 30 minutes until ESPN marks the game final, and any
+slip it's in settles with it. Tue and Fri are on the schedule for the mornings after the Monday and
+Thursday games. A pick ESPN still can't grade after 3 days (usually a name mismatch) is left for the
+Results page, and the log says so.
 
 Each check costs nothing unless a game with uncaptured picks is actually due. A capture buys only
 the games your picks are in, only the markets they use, and **each game at most once** — typically

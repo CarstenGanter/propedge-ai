@@ -61,6 +61,8 @@ model PlayerProp {
 }
 
 model Pick {
+  // Books' no-vig probability of this side at the line being played (v1.5.0+).
+  marketProb         Float?
   id                 String   @id @default(cuid())
   playerPropId       String
   playerProp         PlayerProp @relation(fields: [playerPropId], references: [id], onDelete: Cascade)

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   moneylinePayout,
+  playedLine,
   settleParlay,
   settleProp,
   settleSingle,
@@ -77,5 +78,20 @@ describe("moneyline", () => {
     expect(settleTeamResult("HOME", "AWAY")).toBe("loss");
     expect(settleTeamResult("AWAY", "DRAW")).toBe("loss");
     expect(settleTeamResult("HOME", null)).toBe("pending");
+  });
+});
+
+describe("playedLine", () => {
+  it("grades against the Underdog line when one was entered", () => {
+    // Henry, 2026-09-27: books 105.5, Underdog 106.5. A 106 would have been a
+    // hit at the books' line and a miss at the line actually played.
+    expect(playedLine(105.5, 106.5)).toBe(106.5);
+    expect(settleProp(playedLine(105.5, 106.5), "OVER", 106)).toBe("miss");
+    expect(settleProp(105.5, "OVER", 106)).toBe("hit");
+  });
+
+  it("falls back to the books' line when none was entered", () => {
+    expect(playedLine(89, null)).toBe(89);
+    expect(playedLine(89, undefined)).toBe(89);
   });
 });

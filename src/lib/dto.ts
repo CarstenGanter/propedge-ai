@@ -80,6 +80,11 @@ export interface SerializedPick {
   closingCaptured: boolean;
   /** Engine that scored this pick; only "distribution" makes confidence a probability. */
   scoringProfile: string;
+  /**
+   * Books' no-vig probability of this side at the line being played. Falls back
+   * to the probability at the books' own line only when the two lines agree.
+   */
+  marketProb: number | null;
   /** Value of the entered Underdog line vs the sharp-market fair value (>0 = soft). */
   underdogEdge: number | null;
   prop: SerializedProp;
@@ -183,6 +188,11 @@ export function serializePick(
     isDemo: pick.isDemo,
     closingCaptured: pick.closingProb != null,
     scoringProfile: pick.scoringProfile,
+    marketProb:
+      pick.marketProb ??
+      (pick.playerProp.underdogLine == null || pick.playerProp.underdogLine === pick.playerProp.line
+        ? pick.entryProb
+        : null),
     underdogEdge: computeUnderdogEdge(prop),
     prop,
   };

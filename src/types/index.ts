@@ -189,6 +189,12 @@ export interface EvidenceItem {
 
 export interface PickAnalysis {
   confidenceScore: number; // 0..100
+  /**
+   * The books' no-vig probability of this side at the line actually being
+   * played (probability profile only). The market's view, kept separate from
+   * the model's, because it is the one the record says to trust.
+   */
+  marketProbability?: number | null;
   edgeScore: number; // projected edge vs. the line (can be negative)
   riskLevel: RiskLevel;
   scoreBreakdown: ScoreBreakdown;

@@ -28,7 +28,11 @@ import { adjustmentsFrom, estimateProbability } from "./probabilityModel";
 // (2022-2024) replace the single "all yardage is 0.55" bucket, which understated
 // how erratic receiving and rushing yards are and badly overstated the spread of
 // passing volume. Probabilities from earlier versions are not comparable.
-export const SCORING_MODEL_VERSION = "v1.4.0";
+// v1.5.0: context adjustments apply to the model's own share of the estimate,
+// not on top of the market's price, which already contains that context and
+// was being counted twice (the source of every 8+ point gap to the market).
+// Also records the books' probability at the played line on each pick.
+export const SCORING_MODEL_VERSION = "v1.5.0";
 
 /** NFL: full recent-form weight needs at least this many current-season games. */
 const NFL_FULL_FORM_GAMES = 4;
@@ -683,6 +687,7 @@ export function analyzeProp(
   // when there is no game log to build a distribution from.
   let probability: number | null = null;
   let probabilityNote: string | undefined;
+  let marketProbability: number | null = null;
   if (profile === "distribution") {
     const est = estimateProbability({
       line: prop.line,
@@ -696,6 +701,7 @@ export function analyzeProp(
     if (est) {
       probability = est.probability;
       probabilityNote = est.note;
+      marketProbability = est.marketProbability;
     }
   }
   const confidenceScore = probability != null ? Math.round(probability * 100) : blendedScore;
@@ -735,6 +741,7 @@ export function analyzeProp(
 
   return {
     confidenceScore,
+    marketProbability,
     edgeScore: round1(edgeScore),
     riskLevel,
     scoreBreakdown: breakdown,

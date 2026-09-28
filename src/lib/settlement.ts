@@ -4,6 +4,16 @@ import type { Direction, SettlementStatus, TeamStatus, WagerStatus } from "@/typ
  * Determine hit/miss/push from an actual stat result vs the line & direction.
  * Returns "pending" when the result is unknown.
  */
+/**
+ * The line a pick is graded against: the one actually played. Scoring already
+ * uses the Underdog line when it has been entered; settlement used the
+ * sportsbook's, so a result landing between the two lines was graded against a
+ * number that was never bet.
+ */
+export function playedLine(line: number, underdogLine: number | null | undefined): number {
+  return underdogLine != null && Number.isFinite(underdogLine) ? underdogLine : line;
+}
+
 export function settleProp(
   line: number,
   direction: Direction,

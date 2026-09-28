@@ -36,6 +36,9 @@ function cand(
     date: "2026-09-13",
     whyLine: "why",
     teamId,
+    // Books agree with the model unless a test says otherwise, so the older
+    // platform-rule tests behave the same on either basis.
+    marketProb: conf / 100,
   };
 }
 
@@ -226,7 +229,7 @@ describe("buildSuggestedSlips", () => {
     expect(two.multiplier).toBeCloseTo(1.71 * 1.87, 6);
     expect(two.baseMultiplier).toBe(3.5);
     const texts = two.flags.map((f) => f.text).join(" ");
-    expect(texts).toMatch(/RJ Harvey pays 1.71× — needs 58\.5%, model says 62%/);
+    expect(texts).toMatch(/RJ Harvey pays 1.71× — needs 58\.5%, books say 62\.0%, model 62%/);
     expect(texts).toMatch(/same-game entries/);
   });
 
@@ -234,6 +237,44 @@ describe("buildSuggestedSlips", () => {
     const [two] = buildSuggestedSlips(cands, [2]);
     expect(two.multiplier).toBe(two.baseMultiplier);
     expect(two.flags.some((f) => /pays/.test(f.text))).toBe(false);
+  });
+
+  // ---- market vs model basis ----
+  // 2026-09-27: the model rated Vaki, Henry and Brown 63-70% where the books
+  // said ~50%. All three missed. By default the books' number decides.
+
+  it("by default builds only from picks whose books' price beats Underdog's payout", () => {
+    const pool = [
+      // Model loves it; books call it a coin flip at a standard 1.87x -> 0.94, out.
+      { ...cand("vaki", "Sione Vaki", "Lions", "Jets", 70, "UNDER", "DET"), marketProb: 0.505 },
+      // Books at 56% x 1.87 = 1.05 -> in, despite a lower model number.
+      { ...cand("a", "Alpha WR", "Bengals", "Buccaneers", 56, "OVER", "CIN"), marketProb: 0.56 },
+      { ...cand("b", "Bravo RB", "Colts", "Texans", 55, "OVER", "IND"), marketProb: 0.545 },
+    ];
+    const [two] = buildSuggestedSlips(pool, [2]);
+    expect(two.legs.map((l) => l.pickId)).toEqual(["a", "b"]);
+    // The model basis would still have taken the model's favourite.
+    const [modelTwo] = buildSuggestedSlips(pool, [2], { basis: "model" });
+    expect(modelTwo.legs.map((l) => l.pickId)).toContain("vaki");
+  });
+
+  it("offers nothing when no pick beats its price by the books — Sunday's board", () => {
+    // Market x payout for the real 2026-09-27 board topped out at 1.00.
+    const pool = [
+      { ...cand("h", "RJ Harvey", "Broncos", "Rams", 62, "OVER", "DEN"), marketProb: 0.551, pickMultiplier: 1.71 },
+      { ...cand("j", "Daniel Jones", "Colts", "Texans", 67, "UNDER", "IND"), marketProb: 0.655, pickMultiplier: 1.44 },
+      { ...cand("v", "Sione Vaki", "Lions", "Jets", 70, "UNDER", "DET"), marketProb: 0.505 },
+    ];
+    expect(buildSuggestedSlips(pool, [2, 3])).toEqual([]);
+  });
+
+  it("will not judge a pick with no books' price on the market basis", () => {
+    const pool = [
+      { ...cand("manual", "Manual Entry", "Bears", "Packers", 60, "OVER", "CHI"), marketProb: null },
+      cand("a", "Alpha WR", "Bengals", "Buccaneers", 58, "OVER", "CIN"),
+      cand("b", "Bravo RB", "Lions", "Saints", 57, "OVER", "DET"),
+    ];
+    expect(buildSuggestedSlips(pool, [2])[0].legs.map((l) => l.pickId)).toEqual(["a", "b"]);
   });
 
   it("is deterministic across calls", () => {

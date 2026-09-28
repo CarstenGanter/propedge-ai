@@ -49,6 +49,7 @@ export function pickCreateData(
     playerPropId: prop.id,
     date: prop.date,
     entryProb,
+    marketProb: analysis.marketProbability ?? null,
     confidenceScore: analysis.confidenceScore,
     edgeScore: analysis.edgeScore,
     riskLevel: analysis.riskLevel,

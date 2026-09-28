@@ -53,6 +53,7 @@ export async function applyUnderdogLine(
     where: { id: pickId },
     data: {
       confidenceScore: analysis.confidenceScore,
+      marketProb: analysis.marketProbability ?? null,
       edgeScore: analysis.edgeScore,
       riskLevel: analysis.riskLevel,
       recommendedStake: recommendedStake(analysis.riskLevel, settings.defaultStake),
