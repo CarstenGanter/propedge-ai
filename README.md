@@ -160,6 +160,10 @@ Underdog actually pays, and build slips. The step-by-step routine is in [GAMEDAY
   **Books** the sportsbooks' own probability at your line — green when the books already beat the
   price, i.e. Underdog has mispriced the pick relative to the sharp market. **Not offered?** marks a prop Underdog doesn't carry; after 8 empty
   checks of a market the page tells you to stop paying for it.
+- **The board.** Under the Probability profile the day's board is a shortlist, not a list of bets:
+  props ranked by the value Underdog is expected to leave you — a pricing curve learned from the
+  payouts you've entered (it keeps ~6.5% on a coin flip, ~10% on a 65% favourite) — with at most a
+  third of the board from any one prop type. The old 55% floor is used only by the other profiles.
 - **Suggested slips.** By default built only from picks whose **books' probability × payout ≥ 1**,
   so the edge doesn't rest on the model; when nothing qualifies the panel says to pass. A "The
   model" switch shows model-based slips for comparison, with a warning that the model has scored

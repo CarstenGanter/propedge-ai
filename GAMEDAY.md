@@ -53,6 +53,15 @@ You have 500 per month. The floor setting (25) stops a fetch that would leave yo
 Click **Re-rank picks (free)**. Scores every stored prop and builds the board. No credits, so run it
 again any time you change a line.
 
+**What the board is:** a shortlist of the props Underdog is likely to price most fairly — learned
+from the payouts you've entered, Underdog keeps ~6.5% on a coin flip but ~10% on a 65% favourite —
+with at most 4 of any one prop type, so yardage shows up alongside receptions. Expect most board picks
+to sit near 50/50. **None is a bet on its own**; the Books column decides (step 5).
+
+(Until 2026-09-28 the board kept only picks rated 55%+. After the v1.5.0 model fix that meant 10 of
+10 low-line reception favourites — Underdog's most expensive picks — and no yardage at all, the one
+place a softer Underdog line has ever turned up.)
+
 The board keeps the day's **top 10**, so a whole game — usually the night game — can miss it. Don't
 re-rank to get it back once games have started; open that game's card and use **All props in this
 game (free)** instead. It scores the game's props (already fetched, no credits) and **Add** puts any

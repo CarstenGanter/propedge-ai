@@ -8,6 +8,12 @@ import { buildResearchBundle, resolveProviderContext } from "@/lib/providers";
 import { prewarmMlb } from "@/lib/providers/live/mlbStats";
 import { prewarmEspn } from "@/lib/providers/live/espnPlayerStats";
 import type { Direction, ScorablePropInput } from "@/types";
+import {
+  expectedValueAtUnderdog,
+  fitUnderdogPricing,
+  selectWithTypeCap,
+  type PricePoint,
+} from "@/lib/analysis/boardSelection";
 
 const ESPN_STAT_SPORTS = new Set(["NBA", "WNBA", "NCAAB", "NFL", "NHL"]);
 
@@ -179,8 +185,13 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
     "Player OUT": 0,
     "Insufficient data / low volume": 0,
     "Below confidence threshold": 0,
+    "No books' price to judge it by": 0,
     "Already has a settled pick": 0,
   };
+  // Under the probability model the confidence IS a probability that tracks the
+  // books, so a 55% floor keeps only lopsided favourites — Underdog's most
+  // expensive picks — and hides every yardage prop. See boardSelection.ts.
+  const probabilityBoard = settings.scoringProfile === "distribution";
 
   interface Candidate {
     prop: PlayerProp;
@@ -226,8 +237,14 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
       continue;
     }
 
-    // Filter: below the configured minimum confidence.
-    if (analysis.confidenceScore < settings.minConfidenceThreshold) {
+    // Filter: below the configured minimum confidence — or, under the
+    // probability model, no books' price to judge the pick against.
+    if (probabilityBoard) {
+      if (analysis.marketProbability == null) {
+        filters["No books' price to judge it by"]++;
+        continue;
+      }
+    } else if (analysis.confidenceScore < settings.minConfidenceThreshold) {
       filters["Below confidence threshold"]++;
       continue;
     }
@@ -246,19 +263,30 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
     candidates.push({ prop, analysis, entryProb });
   }
 
-  candidates.sort(
-    (a, b) =>
-      b.analysis.confidenceScore - a.analysis.confidenceScore ||
-      b.analysis.edgeScore - a.analysis.edgeScore,
-  );
+  let selected: Candidate[];
+  if (probabilityBoard) {
+    // Rank by what Underdog is expected to leave you, learned from the payouts
+    // entered so far, then cap each prop type so yardage makes the board.
+    const pricing = fitUnderdogPricing(await enteredPricePoints());
+    const value = (c: Candidate) => expectedValueAtUnderdog(c.analysis.marketProbability ?? 0.5, pricing);
+    candidates.sort(
+      (a, b) => value(b) - value(a) || b.analysis.confidenceScore - a.analysis.confidenceScore,
+    );
+    selected = selectWithTypeCap(candidates, (c) => c.prop.propType, settings.maxDailyPicks);
+  } else {
+    candidates.sort(
+      (a, b) =>
+        b.analysis.confidenceScore - a.analysis.confidenceScore ||
+        b.analysis.edgeScore - a.analysis.edgeScore,
+    );
+    selected = candidates.slice(0, settings.maxDailyPicks);
+  }
 
-  // The top N, plus anything you took or put in a slip. Those are real bets;
-  // letting a re-rank drop them orphaned slips and stranded stakes.
+  // The selection, plus anything you took or put in a slip. Those are real
+  // bets; letting a re-rank drop them orphaned slips and stranded stakes.
   const committed = (id: string) => takenStakes.has(id) || legsByProp.has(id);
-  const top = [
-    ...candidates.slice(0, settings.maxDailyPicks),
-    ...candidates.slice(settings.maxDailyPicks).filter((c) => committed(c.prop.id)),
-  ];
+  const chosenIds = new Set(selected.map((c) => c.prop.id));
+  const top = [...selected, ...candidates.filter((c) => !chosenIds.has(c.prop.id) && committed(c.prop.id))];
 
   let rank = 1;
   let restored = 0;
@@ -328,6 +356,24 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
       .filter(([, count]) => count > 0)
       .map(([reason, count]) => ({ reason, count })),
   };
+}
+
+/**
+ * Every (books' probability, Underdog payout) pair entered so far, where the
+ * line played matched the books' — the evidence for how Underdog prices picks.
+ */
+async function enteredPricePoints(): Promise<PricePoint[]> {
+  const rows = await prisma.pick.findMany({
+    where: { playerProp: { underdogPickMultiplier: { not: null } } },
+    select: {
+      marketProb: true,
+      entryProb: true,
+      playerProp: { select: { underdogPickMultiplier: true, underdogLine: true, line: true } },
+    },
+  });
+  return rows
+    .filter((r) => r.playerProp.underdogLine == null || r.playerProp.underdogLine === r.playerProp.line)
+    .map((r) => ({ books: r.marketProb ?? r.entryProb ?? Number.NaN, payout: r.playerProp.underdogPickMultiplier ?? Number.NaN }));
 }
 
 function inferOut(raw?: string | null): "out" | undefined {

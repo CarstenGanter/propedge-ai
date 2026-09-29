@@ -163,6 +163,15 @@ export function NflGamedayView({ data }: { data: NflGamedayData }) {
       ) : (
         <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
           <div className="space-y-4">
+            {s.profile === "distribution" && data.pickCount > 0 && (
+              <Note>
+                This board is a <strong className="font-medium">shortlist to check on Underdog</strong>, not a list
+                of bets. It favours the props Underdog tends to price most fairly — usually near 50/50 — and mixes
+                prop types. Enter each line and payout below: a pick is worth playing only when{" "}
+                <strong className="font-medium">Books</strong> turns green, and that mostly happens when Underdog&apos;s
+                line is softer than the books&apos;.
+              </Note>
+            )}
             <UnderdogLineTable picks={allPicks.filter((p) => p.status === "pending")} />
             {data.contextsCached < data.games.length && (
               <Note>

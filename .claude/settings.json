@@ -148,11 +148,19 @@
       "Bash(sqlite3 -header -column \"file:prisma/dev.db?mode=ro\" \"SELECT name, stake, payoutMultiplier, status, profitLoss FROM Parlay WHERE date='2026-09-27';\")",
       "Bash(sqlite3 -separator ',' \"file:prisma/dev.db?mode=ro\" \"SELECT p.confidenceScore, p.entryProb, p.closingProb, p.status FROM Pick p JOIN PlayerProp pp ON pp.id=p.playerPropId WHERE pp.sport='NFL' AND p.scoringProfile='distribution' AND p.status IN \\('hit','miss'\\) AND p.entryProb IS NOT NULL;\")",
       "Bash(sqlite3 -header -column \"file:prisma/dev.db?mode=ro\" \"SELECT p.date, pp.playerName, pp.propType, pp.direction d, pp.line book, pp.underdogLine ud, pp.actualResult act, p.status, CASE WHEN pp.actualResult IS NULL THEN '-' WHEN pp.actualResult=pp.underdogLine THEN 'push' WHEN \\(pp.direction='OVER'\\)=\\(pp.actualResult>pp.underdogLine\\) THEN 'hit' ELSE 'miss' END at_ud_line, p.placedReal mine FROM Pick p JOIN PlayerProp pp ON pp.id=p.playerPropId WHERE pp.underdogLine IS NOT NULL AND pp.underdogLine<>pp.line AND p.status IN \\('hit','miss','push'\\) ORDER BY p.date;\")",
-      "Bash(sqlite3 -header -column \"file:prisma/dev.db?mode=ro\" \"SELECT p.date, pp.sport, pp.playerName, pp.propType, pp.gameStartTime IS NOT NULL has_start, pp.source, p.isDemo FROM Pick p JOIN PlayerProp pp ON pp.id=p.playerPropId WHERE p.status='pending' AND p.isDemo=0;\")"
+      "Bash(sqlite3 -header -column \"file:prisma/dev.db?mode=ro\" \"SELECT p.date, pp.sport, pp.playerName, pp.propType, pp.gameStartTime IS NOT NULL has_start, pp.source, p.isDemo FROM Pick p JOIN PlayerProp pp ON pp.id=p.playerPropId WHERE p.status='pending' AND p.isDemo=0;\")",
+      "Bash(sqlite3 -header -column \"file:prisma/dev.db?mode=ro\" \"SELECT p.date, p.rank, pp.playerName, pp.propType, pp.direction d, pp.line book, pp.underdogLine ud, pp.underdogPickMultiplier pay, p.confidenceScore model, ROUND\\(p.marketProb*100,1\\) books, ROUND\\(100.0/COALESCE\\(pp.underdogPickMultiplier,1.87\\),1\\) needs, ROUND\\(p.marketProb*COALESCE\\(pp.underdogPickMultiplier,1.87\\),3\\) value, p.modelVersion ver FROM Pick p JOIN PlayerProp pp ON pp.id=p.playerPropId WHERE p.status='pending' AND p.isDemo=0 AND p.date>='2026-09-28' ORDER BY p.date, value DESC;\")",
+      "Bash(sqlite3 \"file:prisma/dev.db?mode=ro\" \"SELECT minConfidenceThreshold, maxDailyPicks, nflMarketsJson FROM AppSettings;\")",
+      "Bash(sqlite3 -header -column \"file:prisma/dev.db?mode=ro\" \"SELECT propType, COUNT\\(*\\) props_fetched, ROUND\\(AVG\\(line\\),1\\) avg_line FROM PlayerProp WHERE date='2026-09-28' AND sport='NFL' GROUP BY propType ORDER BY props_fetched DESC;\")",
+      "Bash(sqlite3 -separator '|' \"file:prisma/dev.db?mode=ro\" \"SELECT propType, direction, marketDataJson FROM PlayerProp WHERE date='2026-09-28' AND sport='NFL' AND marketDataJson IS NOT NULL;\")",
+      "Bash(sqlite3 -separator ',' \"file:prisma/dev.db?mode=ro\" \"SELECT COALESCE\\(p.marketProb,p.entryProb\\), pp.underdogPickMultiplier, pp.propType FROM Pick p JOIN PlayerProp pp ON pp.id=p.playerPropId WHERE pp.underdogPickMultiplier IS NOT NULL AND COALESCE\\(p.marketProb,p.entryProb\\) IS NOT NULL AND \\(pp.underdogLine IS NULL OR pp.underdogLine=pp.line\\);\")",
+      "Bash(sqlite3 -separator '|' \"file:prisma/dev.db?mode=ro\" \"SELECT direction, marketDataJson FROM PlayerProp WHERE sport='NFL' AND source='The Odds API' AND marketDataJson IS NOT NULL AND date>='2026-09-13';\")",
+      "Bash(cd ~/Code/propedge-ai && npx vitest run src/lib/analysis/boardSelection.test.ts 2>&1 | grep -E \"×|Tests |Expected|Received\" | head)"
     ],
     "additionalDirectories": [
       "/Users/carstenganter/Code/propedge-ai/src/lib/nfl",
-      "/Users/carstenganter/Code/propedge-ai/src/lib"
+      "/Users/carstenganter/Code/propedge-ai/src/lib",
+      "/Users/carstenganter/Code/propedge-ai/src/lib/analysis"
     ]
   }
 }
