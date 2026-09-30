@@ -1,6 +1,6 @@
 import type { Direction, ResearchBundle, ScorablePropInput } from "@/types";
 import { mean as avg, stdDev } from "./stats";
-import { negBinomialCdf, studentTCdf } from "./distributions";
+import { gammaCdf, negBinomialCdf, studentTCdf } from "./distributions";
 
 /**
  * Estimate P(stat beats the line) directly, instead of blending 0-100 "lean"
@@ -127,6 +127,23 @@ export interface ProbabilityInputs {
 export const MAX_TOTAL_ADJUSTMENT = 0.15;
 
 /** P(stat > line) for a given mean and spread, in the family the prop needs. */
+/**
+ * Right-skewed shape for yardage: a gamma on (Y + shift), moment-matched to
+ * the mean and a spread widened by `scale`. Chosen by walk-forward test on
+ * nflverse weekly data (fit 2022-23, scored untouched on 2024-25, each game
+ * predicted from the previous six only — src/jobs/research/validateYardageDist.ts).
+ * The symmetric Student-t it replaces put only 38.7% (receiving), 40.2%
+ * (rushing) and 41.1% (rush+rec) of outcomes above its median — i.e. it
+ * systematically overrated Overs near the line. Gamma: 50.1%, 48.6%, 48.1%,
+ * with lower CRPS and binary log-loss (0.686 -> 0.661 receiving). Passing yards
+ * is not right-skewed (gamma 53.4%, no better) and keeps the t.
+ */
+export const YARDAGE_SHAPE: Record<string, { shift: number; scale: number }> = {
+  "Receiving Yards": { shift: 5, scale: 1.3 },
+  "Rushing Yards": { shift: 10, scale: 1.2 },
+  "Rush+Rec Yards": { shift: 10, scale: 1.2 },
+};
+
 export function tailProbability(
   line: number,
   projection: number,
@@ -137,6 +154,12 @@ export function tailProbability(
   if (COUNT_PROPS.has(propType)) {
     const variance = Math.max(sigma * sigma, projection);
     return 1 - negBinomialCdf(Math.floor(line), projection, variance);
+  }
+  const shape = YARDAGE_SHAPE[propType];
+  if (shape) {
+    const m = Math.max(projection + shape.shift, 1e-6);
+    const sd = Math.max(sigma * shape.scale, 1e-6);
+    return 1 - gammaCdf(line + shape.shift, (m * m) / (sd * sd), (sd * sd) / m);
   }
   return 1 - studentTCdf((line - projection) / sigma, Math.max(1, df));
 }

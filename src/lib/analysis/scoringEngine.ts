@@ -36,7 +36,10 @@ import { adjustmentsFrom, estimateProbability } from "./probabilityModel";
 // de-vigged at its own line, power method, outliers dropped, weighted) read at
 // the line actually played, instead of an average of probabilities at
 // different lines pinned to the median line.
-export const SCORING_MODEL_VERSION = "v1.6.0";
+// v1.7.0: receiving, rushing and rush+rec yards use a right-skewed gamma
+// instead of a symmetric Student-t (walk-forward: the t put only ~39-41% of
+// outcomes above its median, overrating Overs). Passing yards unchanged.
+export const SCORING_MODEL_VERSION = "v1.7.0";
 
 /** Compare "v1.6.0"-style versions numerically. */
 export function versionAtLeast(version: string | null | undefined, min: string): boolean {

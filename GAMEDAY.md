@@ -48,6 +48,14 @@ Click **Fetch props**. The estimate appears *before* you confirm:
 **Roughly 6 credits per game.** A single Thursday or Monday game is ~6; a full Sunday slate is ~90.
 You have 500 per month. The floor setting (25) stops a fetch that would leave you too low.
 
+The fetch asks for eight sportsbooks **plus Underdog and PrizePicks** — same cost, because The
+Odds API bills ten named books as one region. The sportsbooks make the market price; the two pick'em
+sites' lines are compared against it, never averaged in.
+
+**Fetching again is safe** (since 2026-09-30). It updates props in place: lines and payouts you
+typed, "not offered" marks, saved slips and closing lines all survive. Before that fix, a second
+Fetch wiped them.
+
 ### 4. Re-rank — free
 
 Click **Re-rank picks (free)**. Scores every stored prop and builds the board. No credits, so run it
@@ -70,7 +78,10 @@ pick you took or put in a slip, but it still rebuilds the rest of the board.
 
 ### 5. Enter your pick'em lines ⚠️
 
-Open **Enter your pick'em lines** and type the number Underdog actually posts for each pick.
+Open **Enter your pick'em lines**. Most Underdog lines are **already filled in from the feed** —
+marked *from feed* under the box. Check them against the app and fix any that differ; whatever you
+type is yours, and the feed never overwrites it. The feed can't see Underdog's discounted picks
+(mostly low-line receptions favourites), so those you still type yourself.
 
 **This is the highest-value step in the whole routine.** Picks are scored against the *sportsbook*
 line until you do it. If Underdog posts something different, the model is answering the wrong
@@ -78,7 +89,9 @@ question. This is how the James Cook edge was found — 100.5 on Underdog agains
 and it hit.
 
 The **Edge** column updates as you type. Positive means Underdog is offering a softer number than
-the books, which is the edge actually worth having.
+the books, which is the edge actually worth having. Under it, **soft line** (green) or **tough line**
+(red) means the books give your side at least 1.5 points more — or less — at Underdog's line than at
+their own. A soft line is the one edge that has actually held up.
 
 **Also enter each pick's Payout** — the multiplier Underdog shows for that pick (e.g. `1.71`). A
 standard pick pays **1.87×**; Underdog pays less for a side it rates likely and more for one it rates
@@ -91,9 +104,18 @@ and was the worst leg on the slip. Picks priced too short for their probability 
 suggested slips automatically.
 
 **Then read the Books column — this is the one that decides.** It's the sportsbooks' own
-probability for that side at your line. When it's **green**, the books already say the pick beats
-Underdog's price: Underdog has mispriced it relative to the sharp market, and that edge doesn't
-depend on the model being right. When it's red, the books say you're paying too much.
+probability for that side at your line, from a proper multi-book consensus (each book priced at its
+own line, outliers dropped, weighted toward the books that set prop lines). It's **green** only when
+books' probability × payout clears **1.02** — a 2% cushion, because the price is itself an estimate.
+**Amber** is break-even (1.00–1.02): not an edge. **Red** means you're paying too much. A **"~"** in
+front means fewer than three independent books priced it; that's too thin to call an edge, so it's
+never green.
+
+**The PrizePicks column** shows PrizePicks' line and the side the books favour there. PrizePicks
+pays the same multiplier whichever side you pick, so a stale line pays in full — that's the classic
+pick'em edge Underdog's per-pick pricing removed. Green means the books' probability clears its
+5-pick Power Play bar (54.9% a leg) by the same 2% cushion. At its whole-number reception lines
+(2, 3) a tie is refunded, and the app accounts for that.
 
 Why the books and not the model: on the first 40 settled picks the model's own probabilities scored
 **worse** than the market's, and every pick it rated 8+ points above the market came from
@@ -117,8 +139,9 @@ Entering a line already records the prop as available. You only ever click for t
 The **Suggested slips** panel builds slips only from picks the **books** say beat their price (the
 default, "The books"). If nothing qualifies it says so — **passing is the +EV play** that week. A
 "The model" switch shows model-based slips for comparison, with a warning; don't mistake them for an
-edge. Each slip's multiplier
-is the product of its picks' payouts. **Same-game slips pay a little under that product** (we've seen
+edge. Each slip shows a **stake: about X% of your bankroll**, a quarter of the Kelly amount —
+full Kelly assumes the probabilities are exact, which they aren't — and "no stake" when there's no
+edge. Each slip's multiplier is the product of its picks' payouts. **Same-game slips pay a little under that product** (we've seen
 1–7%), so type in the total Underdog shows before saving. See [Slip size](#slip-size).
 
 Tick **I actually placed this slip on Underdog** if you really bet it. Untracked bets are why the
@@ -240,6 +263,18 @@ defending. Reaching for a third leg you don't believe in is exactly how the mult
 
 No bet is a free option. There is always next week.
 
+### Which app (Wisconsin, as of Sep 2026)
+
+- **Underdog** — prices each pick: ~6.5% house edge on a coin flip, ~10% on a heavy favourite. Your
+  edge there is a **soft line**, not a stale favourite.
+- **PrizePicks** — fixed multipliers, so a line the books have moved past still pays the favoured side
+  in full. That's the classic pick'em edge; the PrizePicks column flags it. Needs 5-pick entries at
+  ~54.9% a leg, and winning accounts report $5 entry caps (anecdotal). Available in Wisconsin.
+- **Kalshi / Novig / ProphetX** — the cheapest place to bet a single prop (~3–4.5% per bet, less as
+  a maker, no reported limits), but legally contested in Wisconsin right now. Not wired into the app.
+- **Sportsbooks** — no mobile app is live in Wisconsin yet (law signed Apr 2026, launch targeted
+  2027, under legal challenge).
+
 ### Weather
 
 Only matters for **outdoor** stadiums with **wind ≥ 15 mph**. At that threshold unders on game
@@ -257,9 +292,16 @@ stadium table is the authority.
 
 **Break-even is exact.** It comes from the multiplier alone. Trust it.
 
-**Expected value is not.** It leans on the confidence score as though it were a probability. Use it to
+**Expected value is not.** On the default "The books" setting it uses the books' probabilities, which
+are good but still estimates; on "The model" it uses the model's, which have scored worse. Use it to
 rank slips against each other, never as a promised return. When the model claims more than 62% per
 leg the app greys it out and says so — prop markets aren't loose enough for an edge that size.
+
+**Yardage is right-skewed** (since model v1.7.0). A receiver's yards pile up just under his average
+and occasionally spike far above it, so a player averaging exactly the line is only ~45% to go over.
+The app used a symmetric shape before, and tested against three seasons that shape had only ~39–41%
+of games landing above its middle — it was quietly overrating Overs near the line. Passing yards
+isn't skewed and keeps the old shape.
 
 **Your record proves nothing yet.** The NFL board is 22-15 (59.5%), and the 95% range runs 43.5% to
 73.7% — which contains both a real edge and a coin flip. At a genuine 56% per-leg rate it takes on the

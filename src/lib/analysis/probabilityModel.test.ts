@@ -175,12 +175,16 @@ describe("market anchoring", () => {
         games: games(15, line), // sample sitting exactly on the line
         marketProbOver: pOver, marketLine: line,
       })!;
-      // Lands close to the market, pulled toward the player's own sample — here
-      // a sample sitting exactly on the line, i.e. arguing for 50/50. A gap of
-      // a few points is the shrinkage working; landing on the other side of the
-      // market's call would not be.
+      // Lands close to the market, pulled a little toward the player's own
+      // sample. Under the right-skewed yardage shape an average sitting on the
+      // line argues ~45% Over, not 50/50 (the median sits below the mean), so
+      // the result lies between that and the market, much nearer the market.
+      const sampleOnly = estimateProbability({ line, direction: "OVER", propType, games: games(15, line) })!;
       expect(Math.abs(e.probability - pOver)).toBeLessThan(0.08);
-      expect(Math.sign(e.probability - 0.5)).toBe(Math.sign(pOver - 0.5));
+      const [lo, hi] = [Math.min(sampleOnly.probability, pOver), Math.max(sampleOnly.probability, pOver)];
+      expect(e.probability).toBeGreaterThanOrEqual(lo - 1e-9);
+      expect(e.probability).toBeLessThanOrEqual(hi + 1e-9);
+      expect(Math.abs(e.probability - pOver)).toBeLessThan(Math.abs(e.probability - sampleOnly.probability));
     }
   });
 
@@ -257,5 +261,24 @@ describe("context adjustments do not double-count the market", () => {
     const softer = estimateProbability({ ...base, line: 55.5 })!;
     expect(softer.probability - base.marketProbOver).toBeGreaterThan(0.04);
     expect(softer.marketProbability! - base.marketProbOver).toBeGreaterThan(0.04); // the market agrees at that line
+  });
+});
+
+describe("right-skewed yardage", () => {
+  it("puts less than half the mass above the mean, as the data does", () => {
+    const e = estimateProbability({ line: 60, direction: "OVER", propType: "Receiving Yards", games: games(12, 60) })!;
+    expect(e.probability).toBeLessThan(0.5);
+  });
+
+  it("keeps passing yards symmetric — it isn't right-skewed", () => {
+    const e = estimateProbability({ line: 240, direction: "OVER", propType: "Passing Yards", games: games(12, 240) })!;
+    expect(e.probability).toBeCloseTo(0.5, 2);
+  });
+
+  it("still reproduces the market at its own line under the new shape", () => {
+    for (const propType of ["Receiving Yards", "Rushing Yards", "Rush+Rec Yards"]) {
+      const e = estimateProbability({ line: 50.5, direction: "OVER", propType, games: games(30, 50), marketProbOver: 0.55, marketLine: 50.5 })!;
+      expect(e.marketProbability!).toBeCloseTo(0.55, 3);
+    }
   });
 });

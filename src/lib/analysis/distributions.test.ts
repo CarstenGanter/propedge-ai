@@ -123,3 +123,31 @@ describe("bivariateNormalCdf", () => {
     expect(bivariateNormalCdf(0.3, 0.3, -1)).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe("gamma and log-normal", () => {
+  it("matches closed forms: shape 1 is exponential, shape 2 has a known CDF", async () => {
+    const { gammaCdf, regularizedGammaP } = await import("./distributions");
+    for (const x of [0.1, 0.5, 1, 2, 5]) {
+      expect(gammaCdf(x, 1, 1)).toBeCloseTo(1 - Math.exp(-x), 10);
+      expect(regularizedGammaP(2, x)).toBeCloseTo(1 - Math.exp(-x) * (1 + x), 10);
+    }
+  });
+
+  it("uses both branches smoothly across x = a + 1", async () => {
+    const { regularizedGammaP } = await import("./distributions");
+    const a = 7.3;
+    expect(regularizedGammaP(a, a + 1 - 1e-9)).toBeCloseTo(regularizedGammaP(a, a + 1 + 1e-9), 8);
+  });
+
+  it("puts the gamma median below the mean — a right skew", async () => {
+    const { gammaCdf } = await import("./distributions");
+    // Shape 3 (mean 3): median ≈ 2.674.
+    expect(gammaCdf(2.674, 3, 1)).toBeCloseTo(0.5, 3);
+  });
+
+  it("has the log-normal median at exp(mu)", async () => {
+    const { lognormalCdf } = await import("./distributions");
+    expect(lognormalCdf(Math.exp(3.2), 3.2, 0.6)).toBeCloseTo(0.5, 6);
+    expect(lognormalCdf(0, 3.2, 0.6)).toBe(0);
+  });
+});

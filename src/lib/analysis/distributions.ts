@@ -180,3 +180,54 @@ export function bivariateNormalCdf(h: number, k: number, rho: number): number {
   }
   return Math.max(0, Math.min(1, base + (half * sum) / (2 * Math.PI)));
 }
+
+/**
+ * Regularised lower incomplete gamma P(a, x) — the gamma distribution's CDF
+ * with unit scale. Series for x < a + 1, continued fraction otherwise
+ * (Numerical Recipes, gammp).
+ */
+export function regularizedGammaP(a: number, x: number): number {
+  if (!(a > 0) || !(x > 0)) return 0;
+  const lnPre = a * Math.log(x) - x - logGamma(a);
+  if (x < a + 1) {
+    let sum = 1 / a;
+    let term = sum;
+    for (let n = 1; n < 500; n++) {
+      term *= x / (a + n);
+      sum += term;
+      if (Math.abs(term) < Math.abs(sum) * 1e-14) break;
+    }
+    return Math.min(1, Math.exp(lnPre) * sum);
+  }
+  // Lentz's continued fraction for Q(a, x).
+  const tiny = 1e-300;
+  let b = x + 1 - a;
+  let c = 1 / tiny;
+  let d = 1 / b;
+  let h = d;
+  for (let i = 1; i < 500; i++) {
+    const an = -i * (i - a);
+    b += 2;
+    d = an * d + b;
+    if (Math.abs(d) < tiny) d = tiny;
+    c = b + an / c;
+    if (Math.abs(c) < tiny) c = tiny;
+    d = 1 / d;
+    const del = d * c;
+    h *= del;
+    if (Math.abs(del - 1) < 1e-14) break;
+  }
+  return Math.max(0, 1 - Math.exp(lnPre) * h);
+}
+
+/** Gamma CDF with shape k and scale theta. */
+export function gammaCdf(x: number, shape: number, scale: number): number {
+  if (x <= 0) return 0;
+  return regularizedGammaP(shape, x / scale);
+}
+
+/** Log-normal CDF where ln X ~ N(mu, s^2). */
+export function lognormalCdf(x: number, mu: number, s: number): number {
+  if (x <= 0) return 0;
+  return normalCdf((Math.log(x) - mu) / s);
+}

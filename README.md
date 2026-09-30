@@ -139,6 +139,17 @@ Underdog actually pays, and build slips. The step-by-step routine is in [GAMEDAY
 
 - **Slate-aware.** Opens on today's games, or the next game day. Slate dates use **US Eastern time**,
   so Sunday Night Football stays on Sunday wherever your machine is.
+- **Market consensus.** Each prop's price comes from eight sportsbooks (FanDuel, DraftKings, BetMGM,
+  ESPN BET, BetOnline, BetRivers, Bovada, Hard Rock): every book is de-vigged at its **own** line
+  (power method), Over/Under paired by player and line, juice and outlier lines dropped, each book
+  turned into the mean it implies, and the means combined with per-book weights
+  (`src/lib/analysis/marketConsensus.ts`, `bookProfiles.ts`). The consensus can then be read at any
+  line — the books', Underdog's, PrizePicks' whole-number line with ties refunded. Fewer than three
+  independent books marks the market as thin. Every book's quote is stored on the prop, so the
+  consensus is recomputed when the method changes.
+- **Pick'em venues from the feed.** Underdog and PrizePicks come in the same request (ten named
+  bookmakers bill as one region). Their lines are real; their prices are placeholders, so payouts
+  stay manual. Underdog lines fill the line table automatically but never overwrite one you typed.
 - **Credit-safe fetching.** Player props are the only paid call. The page shows the estimate first —
   *"14 games × 6 markets = 84 credits, ≈267 left (floor 25)"* — and you confirm. Only that slate's
   games and the markets enabled in **Settings → NFL gameday** are fetched; days without NFL games
@@ -340,7 +351,10 @@ drops — the model is honest about uncertainty.
 Under the **Probability** profile the confidence *is* a probability: `probabilityModel.ts` blends the
 player's sample with a dispersion prior **measured per prop type** from nflverse (2022–2024), anchors
 the mean on the de-vigged market, applies context adjustments (matchup, usage, injuries, weather) to
-the model's own share only — the market's price already contains them — and clips to 33–70% because an edge beyond that is far more likely
+the model's own share only — the market's price already contains them — and clips to 33–70%.
+Receiving, rushing and rush+rec yards use a **right-skewed gamma** (chosen by a walk-forward test on
+nflverse 2022–25: the previous symmetric shape put only ~39–41% of outcomes above its median);
+passing yards and count props keep their shapes because an edge beyond that is far more likely
 to be model error. Every pick stamps its `modelVersion` and `scoringProfile`, and calibration only
 grades picks whose confidence genuinely is a probability.
 
