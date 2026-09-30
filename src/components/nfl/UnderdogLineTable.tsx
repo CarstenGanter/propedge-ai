@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { setUnderdogAvailability, setUnderdogLines, type UnderdogLineEntry } from "@/server/actions/picks";
 import { cn } from "@/lib/utils/cn";
 import type { SerializedPick } from "@/lib/dto";
-import { pickBreakEven, STANDARD_PICK_PAYOUT } from "@/lib/analysis/pickemMath";
+import { pickBreakEven, STANDARD_PICK_PAYOUT, valueVerdict, VALUE_MARGIN } from "@/lib/analysis/pickemMath";
+import { PRIZEPICKS_LEG_BAR } from "@/lib/analysis/venues";
 
 /**
  * Enter the whole slate's pick'em lines at once. Scoring a pick against the
@@ -108,6 +109,7 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                   <th className="pb-2 pr-3 text-right font-medium" title={`What Underdog pays for this pick, e.g. 1.71. Blank = a standard ${STANDARD_PICK_PAYOUT}x pick.`}>Payout</th>
                   <th className="pb-2 pr-3 text-right font-medium" title="Hit rate this pick needs to be worth its payout: 1 ÷ payout.">Needs</th>
                   <th className="pb-2 pr-3 text-right font-medium" title="The sportsbooks' own no-vig probability for this side at your line. Green when it beats Needs.">Books</th>
+                  <th className="pb-2 pr-3 text-right font-medium" title={`PrizePicks' line from the feed, and the books' probability for the side they favour there. PrizePicks pays the same either way, so a stale line pays in full; green when it clears the ${(PRIZEPICKS_LEG_BAR * 100).toFixed(1)}% a leg its 5-pick Power Play needs, by the ${Math.round((VALUE_MARGIN - 1) * 100)}% margin.`}>PrizePicks</th>
                   <th className="pb-2 text-right font-medium">On Underdog?</th>
                 </tr>
               </thead>
@@ -145,6 +147,14 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                           placeholder="—"
                           className="h-8 w-20 rounded-md border border-border bg-input/60 px-2 text-right text-sm tabular-nums"
                         />
+                        {p.prop.underdogLineSource === "feed" && typed === p.prop.underdogLine && (
+                          <div
+                            className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground"
+                            title="Filled from Underdog via The Odds API — indicative. Edit it and save to mark it as yours; the feed never overwrites a line you typed."
+                          >
+                            from feed
+                          </div>
+                        )}
                       </td>
                       <td
                         className={cn(
@@ -159,6 +169,17 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                         )}
                       >
                         {liveEdge == null ? "—" : `${liveEdge > 0 ? "+" : ""}${liveEdge}`}
+                        {p.prop.underdogRead && typed === p.prop.underdogLine && p.prop.underdogRead.flag !== "none" && (
+                          <div
+                            className={cn(
+                              "mt-0.5 text-[10px] font-medium uppercase tracking-wide",
+                              p.prop.underdogRead.flag === "soft" ? "text-success" : "text-danger",
+                            )}
+                            title={`At Underdog's line the books give this side ${(p.prop.underdogRead.probAtLine * 100).toFixed(1)}% — ${p.prop.underdogRead.flag === "soft" ? "kinder" : "harsher"} than at their own line. A soft line is the one edge that has held up.`}
+                          >
+                            {p.prop.underdogRead.flag} line
+                          </div>
+                        )}
                       </td>
                       <td className="py-2 pr-3 text-right">
                         <input
@@ -174,6 +195,7 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                         />
                       </td>
                       <NeedsCell pick={p} tagRaw={tagDraft[p.id] ?? ""} />
+                      <PrizePicksCell pick={p} />
                       <td className="py-2 text-right">
                         <button
                           type="button"
@@ -241,13 +263,16 @@ function NeedsCell({ pick, tagRaw }: { pick: SerializedPick; tagRaw: string }) {
   const payout = typed != null && Number.isFinite(typed) && typed > 0 ? typed : null;
   const need = pickBreakEven(payout);
   const books = pick.marketProb;
+  const thin = pick.prop.marketReliable === false;
   const model = pick.scoringProfile === "distribution" ? pick.confidenceScore / 100 : null;
-  const clears = books != null ? books >= need : null;
+  const verdict = books != null ? valueVerdict(books / need) : null;
   const tip =
     (payout == null ? `Assuming a standard ${STANDARD_PICK_PAYOUT}x pick. ` : "") +
     `Needs ${(need * 100).toFixed(1)}%.` +
-    (books != null ? ` Books: ${(books * 100).toFixed(1)}%.` : " No books' price for this line.") +
-    (model != null ? ` Model: ${(model * 100).toFixed(0)}%.` : "");
+    (books != null ? ` Books: ${(books * 100).toFixed(1)}% (value ${(books / need).toFixed(3)}).` : " No books' price for this line.") +
+    (thin ? " Fewer than three independent books priced it — too thin to call an edge." : "") +
+    (model != null ? ` Model: ${(model * 100).toFixed(0)}%.` : "") +
+    ` Green needs value ≥ ${VALUE_MARGIN.toFixed(2)}; amber is break-even.`;
   return (
     <>
       <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground" title={tip}>
@@ -256,12 +281,40 @@ function NeedsCell({ pick, tagRaw }: { pick: SerializedPick; tagRaw: string }) {
       <td
         className={cn(
           "py-2 pr-3 text-right tabular-nums",
-          clears == null ? "text-muted-foreground" : clears ? "font-medium text-success" : "text-danger",
+          verdict == null || thin
+            ? "text-muted-foreground"
+            : verdict === "edge"
+              ? "font-medium text-success"
+              : verdict === "break-even"
+                ? "text-warning"
+                : "text-danger",
         )}
         title={tip}
       >
-        {books == null ? "—" : `${(books * 100).toFixed(1)}%`}
+        {books == null ? "—" : `${thin ? "~" : ""}${(books * 100).toFixed(1)}%`}
       </td>
     </>
+  );
+}
+
+/**
+ * PrizePicks' line from the feed and the side the books favour at it. Its
+ * multiplier is the same whichever side you pick, so the value is simply the
+ * books' probability over its per-leg bar.
+ */
+function PrizePicksCell({ pick }: { pick: SerializedPick }) {
+  const pp = pick.prop.prizePicks;
+  if (!pp) return <td className="py-2 pr-3 text-right text-muted-foreground">—</td>;
+  const verdict = pick.prop.marketReliable === false ? null : valueVerdict(pp.value);
+  return (
+    <td
+      className={cn(
+        "py-2 pr-3 text-right tabular-nums",
+        verdict === "edge" ? "font-medium text-success" : verdict === "break-even" ? "text-warning" : "text-muted-foreground",
+      )}
+      title={`PrizePicks line ${pp.line}. Books give ${pp.direction === "OVER" ? "More" : "Less"} ${(pp.prob * 100).toFixed(1)}% there (ties refunded); its 5-pick Power Play needs ${(PRIZEPICKS_LEG_BAR * 100).toFixed(1)}% a leg. Value ${pp.value.toFixed(3)}.`}
+    >
+      {pp.direction === "OVER" ? "More" : "Less"} {pp.line} · {(pp.prob * 100).toFixed(0)}%
+    </td>
   );
 }

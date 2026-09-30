@@ -1,6 +1,6 @@
 import type { SerializedPick } from "@/lib/dto";
 import { analyzeParlay, makeGameKey, type ParlayAnalysis, type ParlayLegInput } from "./parlayCorrelation";
-import { entryMultiplier, pickBreakEven, pickValue, STANDARD_PICK_PAYOUT, type CorrelatedPair } from "./pickemMath";
+import { entryMultiplier, pickBreakEven, pickValue, STANDARD_PICK_PAYOUT, VALUE_MARGIN, type CorrelatedPair } from "./pickemMath";
 
 /**
  * Suggested pick'em slips (pure, tested).
@@ -98,6 +98,8 @@ export interface SlipCandidate extends ParlayLegInput {
   pickMultiplier?: number | null;
   /** Books' no-vig probability of this side at the line being played, when known. */
   marketProb?: number | null;
+  /** False when fewer than three independent books priced it — too thin to call an edge. */
+  marketReliable?: boolean | null;
 }
 
 /**
@@ -154,6 +156,7 @@ export function pickToSlipCandidate(p: SerializedPick): SlipCandidate {
     available: p.prop.underdogAvailable,
     pickMultiplier: p.prop.underdogPickMultiplier,
     marketProb: p.marketProb,
+    marketReliable: p.prop.marketReliable,
   };
 }
 
@@ -218,7 +221,10 @@ export function buildSuggestedSlips(
   const sorted = [...candidates]
     .filter((c) => c.available !== false)
     .filter((c) =>
-      basis === "market" ? (marketValue(c) ?? 0) >= 1 : c.pickMultiplier == null || modelValue(c) >= 1,
+      basis === "market"
+        ? // An edge must clear break-even by the margin, on a market deep enough to trust.
+          (marketValue(c) ?? 0) >= VALUE_MARGIN && c.marketReliable !== false
+        : c.pickMultiplier == null || modelValue(c) >= 1,
     )
     .sort(
       (a, b) =>

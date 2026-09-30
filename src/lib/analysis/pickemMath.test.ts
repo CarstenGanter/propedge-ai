@@ -210,3 +210,22 @@ describe("per-pick payouts", () => {
     expect(pickValue(0.55, 1.55)).toBeLessThan(1); // likely, but priced too short
   });
 });
+
+describe("value margin and staking", () => {
+  it("needs 2% over break-even to call an edge", async () => {
+    const { valueVerdict } = await import("./pickemMath");
+    expect(valueVerdict(1.03)).toBe("edge");
+    expect(valueVerdict(1.02)).toBe("edge");
+    expect(valueVerdict(1.01)).toBe("break-even");
+    expect(valueVerdict(1.0)).toBe("break-even"); // Parkinson on 2026-09-27
+    expect(valueVerdict(0.94)).toBe("negative");
+  });
+
+  it("sizes a quarter of Kelly, and nothing without an edge", async () => {
+    const { quarterKelly } = await import("./pickemMath");
+    // 3-leg at 6.5x, 56% a leg: P(all) = 0.1756; full Kelly ≈ 2.6%.
+    expect(quarterKelly(6.5, 0.56 ** 3)).toBeCloseTo(0.0065, 3);
+    expect(quarterKelly(6.5, 0.5 ** 3)).toBe(0);
+    expect(quarterKelly(1, 0.9)).toBe(0);
+  });
+});

@@ -207,8 +207,8 @@ describe("buildSuggestedSlips", () => {
     // The Kyren Williams leg from 2026-09-27: 55% at 1.55x is worth 0.85.
     const pool = [
       { ...cand("short", "Kyren Williams", "Broncos", "Rams", 55, "UNDER", "LAR"), pickMultiplier: 1.55 },
-      cand("a", "Alpha WR", "Bengals", "Buccaneers", 54, "OVER", "CIN"),
-      cand("b", "Bravo RB", "Lions", "Saints", 54, "OVER", "DET"),
+      cand("a", "Alpha WR", "Bengals", "Buccaneers", 56, "OVER", "CIN"),
+      cand("b", "Bravo RB", "Lions", "Saints", 56, "OVER", "DET"),
     ];
     const ids = buildSuggestedSlips(pool, [2])[0].legs.map((l) => l.pickId);
     expect(ids).not.toContain("short");
@@ -249,7 +249,7 @@ describe("buildSuggestedSlips", () => {
       { ...cand("vaki", "Sione Vaki", "Lions", "Jets", 70, "UNDER", "DET"), marketProb: 0.505 },
       // Books at 56% x 1.87 = 1.05 -> in, despite a lower model number.
       { ...cand("a", "Alpha WR", "Bengals", "Buccaneers", 56, "OVER", "CIN"), marketProb: 0.56 },
-      { ...cand("b", "Bravo RB", "Colts", "Texans", 55, "OVER", "IND"), marketProb: 0.545 },
+      { ...cand("b", "Bravo RB", "Colts", "Texans", 55, "OVER", "IND"), marketProb: 0.555 },
     ];
     const [two] = buildSuggestedSlips(pool, [2]);
     expect(two.legs.map((l) => l.pickId)).toEqual(["a", "b"]);
@@ -266,6 +266,19 @@ describe("buildSuggestedSlips", () => {
       { ...cand("v", "Sione Vaki", "Lions", "Jets", 70, "UNDER", "DET"), marketProb: 0.505 },
     ];
     expect(buildSuggestedSlips(pool, [2, 3])).toEqual([]);
+  });
+
+  it("needs a 2% margin over break-even, and a market deep enough to trust", () => {
+    const pool = [
+      // 0.54 x 1.87 = 1.01: above break-even but inside the margin.
+      { ...cand("thin", "Thin Edge", "Bears", "Packers", 54, "OVER", "CHI"), marketProb: 0.54 },
+      // A real edge on paper, from fewer than three independent books.
+      { ...cand("shallow", "Shallow Mkt", "Jets", "Bills", 58, "OVER", "NYJ"), marketProb: 0.58, marketReliable: false },
+      cand("a", "Alpha WR", "Bengals", "Buccaneers", 58, "OVER", "CIN"),
+      cand("b", "Bravo RB", "Lions", "Saints", 57, "OVER", "DET"),
+    ];
+    const ids = buildSuggestedSlips(pool, [2])[0].legs.map((l) => l.pickId);
+    expect(ids).toEqual(["a", "b"]);
   });
 
   it("will not judge a pick with no books' price on the market basis", () => {

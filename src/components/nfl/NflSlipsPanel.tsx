@@ -15,7 +15,7 @@ import {
   type SuggestedSlip,
 } from "@/lib/analysis/slipBuilder";
 import { parlayPayout } from "@/lib/analysis/parlayCorrelation";
-import { slipEconomics, STANDARD_PICK_PAYOUT } from "@/lib/analysis/pickemMath";
+import { quarterKelly, slipEconomics, STANDARD_PICK_PAYOUT } from "@/lib/analysis/pickemMath";
 import { createParlay } from "@/server/actions/parlays";
 import { setPicksTakenFlag } from "@/server/actions/bankroll";
 import { formatCurrency } from "@/lib/utils/format";
@@ -91,7 +91,7 @@ export function NflSlipsPanel({
           </p>
         ) : (
           slips.map((slip) => (
-            <SlipCard key={slip.size} slip={slip} date={date} defaultStake={defaultStake} calibrated={calibrated} />
+            <SlipCard key={slip.size} slip={slip} date={date} defaultStake={defaultStake} calibrated={calibrated} basis={basis} />
           ))
         )}
       </CardContent>
@@ -128,11 +128,13 @@ function SlipCard({
   date,
   defaultStake,
   calibrated,
+  basis,
 }: {
   slip: SuggestedSlip;
   date: string;
   defaultStake: number;
   calibrated: boolean;
+  basis: SlipBasis;
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
@@ -144,10 +146,16 @@ function SlipCard({
   const ids = slip.legs.map((l) => l.pickId);
   // Recomputed on every keystroke, so a boosted or discounted multiplier
   // immediately changes the verdict.
-  const econ = slipEconomics(mult, slip.legs.map((l) => l.confidenceScore / 100), {
-    pIsCalibrated: calibrated,
+  // Judged by the books, the slip's value comes from the books' probabilities
+  // too — the model's own numbers have scored worse than the market's.
+  const useBooks = basis === "market" && slip.legs.every((l) => l.marketProb != null);
+  const legProbs = slip.legs.map((l) => (useBooks ? (l.marketProb as number) : l.confidenceScore / 100));
+  const econ = slipEconomics(mult, legProbs, {
+    pIsCalibrated: calibrated || useBooks,
     correlatedPairs: correlatedPairsFor(slip.legs),
   });
+  const kelly = econ.overconfident ? 0 : quarterKelly(mult, econ.modelPAll);
+  const source = useBooks ? "books" : "model";
   const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
   const evTone =
     econ.verdict === "positive" ? "text-success" : econ.verdict === "negative" ? "text-danger" : "text-warning";
@@ -257,7 +265,7 @@ function SlipCard({
           <span className="text-muted-foreground">(exact, from your multiplier)</span>
         </span>
 
-        <span className="text-muted-foreground">Model says</span>
+        <span className="text-muted-foreground">{source === "books" ? "Books say" : "Model says"}</span>
         <span>
           <span className="tabular-nums">{econ.modelPerLeg == null ? "—" : pct(econ.modelPerLeg)}</span> per leg ·{" "}
           <span className="tabular-nums">{pct(econ.modelPAll)}</span> all hit
@@ -268,13 +276,25 @@ function SlipCard({
           )}
         </span>
 
+        <span className="text-muted-foreground">Stake</span>
+        <span className="tabular-nums">
+          {kelly > 0 ? (
+            <>
+              about <span className="font-medium text-foreground">{(kelly * 100).toFixed(1)}%</span> of your bankroll{" "}
+              <span className="text-muted-foreground">(¼ Kelly — full Kelly assumes the probabilities are exact)</span>
+            </>
+          ) : (
+            <span className="text-muted-foreground">no stake — no edge by the {source}&apos;s numbers</span>
+          )}
+        </span>
+
         <span className="text-muted-foreground">Expected value</span>
         <span className={cn("font-medium tabular-nums", econ.overconfident ? "text-muted-foreground" : evTone)}>
           {econ.ev >= 0 ? "+" : ""}
           {(econ.ev * 100).toFixed(0)}%
           <span className="ml-1 font-normal text-muted-foreground">
             {econ.verdict === "positive"
-              ? `— model clears the bar by ${econ.cushion == null ? "" : pct(econ.cushion)}`
+              ? `— ${source} clear the bar by ${econ.cushion == null ? "" : pct(econ.cushion)}`
               : econ.verdict === "negative"
                 ? "— below the bar, likely a pass"
                 : "— too close to call"}

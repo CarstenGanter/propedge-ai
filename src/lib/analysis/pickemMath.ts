@@ -232,3 +232,33 @@ export function marginalLegRequirement(
   if (fromMultiplier <= 0 || toMultiplier <= 0) return null;
   return fromMultiplier / toMultiplier;
 }
+
+/**
+ * How much a pick's expected value has to clear break-even before it counts as
+ * an edge. Prices are estimates — the consensus itself carries a point or two
+ * of error — so a pick at exactly 1.00 is a coin flip on whether it is +EV at
+ * all. Buchdahl's forward-tested market-based method only bets above 102%.
+ */
+export const VALUE_MARGIN = 1.02;
+
+export type ValueVerdict = "edge" | "break-even" | "negative";
+
+/** Classify books' probability x payout against the margin. */
+export function valueVerdict(value: number): ValueVerdict {
+  if (value >= VALUE_MARGIN) return "edge";
+  if (value >= 1) return "break-even";
+  return "negative";
+}
+
+/**
+ * Quarter-Kelly stake for an all-or-nothing entry, as a fraction of bankroll.
+ * Full Kelly is f = (b·p − q) / b with b = multiplier − 1; a quarter of it
+ * keeps most of the growth while surviving the fact that p is an estimate.
+ * Zero when the entry has no edge.
+ */
+export function quarterKelly(multiplier: number, pAll: number): number {
+  const b = multiplier - 1;
+  if (!(b > 0) || !(pAll > 0 && pAll < 1)) return 0;
+  const f = (b * pAll - (1 - pAll)) / b;
+  return f > 0 ? f / 4 : 0;
+}

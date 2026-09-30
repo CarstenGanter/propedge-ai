@@ -20,6 +20,8 @@ import type {
   TeamStatus,
 } from "@/types";
 import type { PickRecord } from "@/lib/analytics";
+import { consensusOf, parseSnapshot, type LineSource } from "@/lib/marketSnapshot";
+import { bestPrizePicksSide, prizePicksValue, readVenueLine, type LineFlag } from "@/lib/analysis/venues";
 
 export interface SerializedProp {
   id: string;
@@ -41,6 +43,14 @@ export interface SerializedProp {
   underdogPickMultiplier: number | null;
   marketLine: number | null;
   marketProjection: number | null;
+  /** Where the Underdog line came from — the feed, or typed by the user. */
+  underdogLineSource: LineSource | null;
+  /** At least three independent books behind the market; null for older props. */
+  marketReliable: boolean | null;
+  /** The Underdog line read against the books' consensus, when both exist. */
+  underdogRead: { flag: LineFlag; lineGap: number; probAtLine: number } | null;
+  /** PrizePicks' line and the side the books favour at it (its multiplier is the same either way). */
+  prizePicks: { line: number; direction: Direction; prob: number; value: number } | null;
   direction: Direction;
   source: string;
   projection: number | null;
@@ -129,7 +139,18 @@ function parseMarket(json: string | null): { marketLine: number | null; projecti
 
 export function serializeProp(p: PlayerProp): SerializedProp {
   const market = parseMarket(p.marketDataJson);
+  const snap = parseSnapshot(p.marketDataJson);
+  const consensus = consensusOf(snap);
+  const ud = consensus && p.underdogLine != null ? readVenueLine(consensus, p.underdogLine, p.direction as Direction) : null;
+  const ppLine = snap?.venues?.prizepicks;
+  const pp = consensus && ppLine != null ? bestPrizePicksSide(consensus, ppLine) : null;
   return {
+    underdogLineSource: snap?.underdogLineSource ?? (p.underdogLine != null ? "manual" : null),
+    marketReliable: consensus ? consensus.reliable : null,
+    underdogRead: ud ? { flag: ud.flag, lineGap: ud.lineGap, probAtLine: ud.probAtVenue } : null,
+    prizePicks: pp && ppLine != null
+      ? { line: ppLine, direction: pp.dir, prob: pp.read.probAtVenue, value: prizePicksValue(pp.read) }
+      : null,
     id: p.id,
     date: p.date,
     sport: p.sport,
