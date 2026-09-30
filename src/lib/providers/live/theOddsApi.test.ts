@@ -56,3 +56,19 @@ describe("noVigProbOver", () => {
     expect(noVigProbOver(-110, -110)).toBeCloseTo(0.5, 5);
   });
 });
+
+describe("normalizeEvent (real feed, 2026-10-01 PIT @ CLE)", () => {
+  it("prices each prop from the sportsbooks and records the pick'em lines separately", async () => {
+    const { normalizeEvent } = await import("./theOddsApi");
+    const ev = (await import("./__fixtures__/nfl-event-ten-bookmakers.json")).default;
+    const props = normalizeEvent(ev as never, "americanfootball_nfl", "NFL");
+    const metcalf = props.find((p) => p.playerName === "DK Metcalf" && p.propType === "Receiving Yards")!;
+    expect(metcalf.venues).toEqual({ underdog: 44.5, prizepicks: 41.5 });
+    expect(metcalf.consensus!.reliable).toBe(true);
+    // Pick'em sites are compared, never averaged in.
+    expect(metcalf.quotes!.filter((q) => q.status === "dfs").map((q) => q.book).sort()).toEqual(["prizepicks", "underdog"]);
+    expect(metcalf.quotes!.filter((q) => q.status === "used").every((q) => !["underdog", "prizepicks"].includes(q.book))).toBe(true);
+    // The line is one a book actually posted.
+    expect(metcalf.comparableLines).toContain(metcalf.line);
+  });
+});

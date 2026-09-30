@@ -6,6 +6,8 @@ import { recordOddsCredits } from "@/lib/providerCache";
 import { toSlateDate } from "@/lib/utils/dates";
 import type { Sport } from "@/types";
 import { planIngest, propKey, refreshableFields } from "@/lib/ingestMerge";
+import { parseSnapshot, snapshotFrom } from "@/lib/marketSnapshot";
+import { mergeAvailability, mergeUnderdogLine } from "@/lib/analysis/venues";
 
 export interface OddsIngestResult {
   ok: boolean;
@@ -91,15 +93,9 @@ export async function ingestOddsPropsForSport(
       source: "The Odds API",
       projection: p.projection,
       gameStartTime: new Date(p.commenceTime),
-      marketDataJson: JSON.stringify({
-        noVigProbOver: p.noVigProbOver,
-        comparableLines: p.comparableLines,
-        bookCount: p.bookCount,
-        projection: p.projection,
-        marketLine: p.line,
-        source: "The Odds API",
-      }),
+      marketDataJson: JSON.stringify(snapshotFrom(p)),
       isDemo: false,
+      feedUnderdogLine: p.venues?.underdog,
     };
   });
 
@@ -112,9 +108,30 @@ export async function ingestOddsPropsForSport(
     },
     select: {
       id: true, date: true, playerName: true, propType: true, gameId: true, team: true, opponent: true,
+      underdogLine: true, underdogAvailable: true, marketDataJson: true,
       _count: { select: { picks: true } },
     },
   });
+  const storedById = new Map(stored.map((s) => [s.id, s]));
+
+  /** Underdog line + availability after merging the feed, and the snapshot recording the source. */
+  const withUnderdog = (row: (typeof rows)[number], prev?: (typeof stored)[number], hasPick = false) => {
+    const { feedUnderdogLine, ...data } = row;
+    const prevSource = parseSnapshot(prev?.marketDataJson)?.underdogLineSource ?? null;
+    // Once a prop has a pick, its Underdog line may have been played: the feed
+    // can fill a blank but never move it, or settlement would grade the bet at
+    // a line that was never bet.
+    const feed = hasPick && prev?.underdogLine != null ? undefined : feedUnderdogLine;
+    const merged = mergeUnderdogLine({ line: prev?.underdogLine ?? null, source: prevSource }, feed);
+    const snap = JSON.parse(data.marketDataJson);
+    if (merged.source) snap.underdogLineSource = merged.source;
+    return {
+      ...data,
+      marketDataJson: JSON.stringify(snap),
+      underdogLine: merged.line,
+      underdogAvailable: mergeAvailability(prev?.underdogAvailable ?? null, feedUnderdogLine),
+    };
+  };
   const byKey = new Map(rows.map((r) => [propKey(r), r]));
   const plan = planIngest(
     stored.map((s) => ({ id: s.id, key: propKey(s), hasPick: s._count.picks > 0 })),
@@ -124,10 +141,13 @@ export async function ingestOddsPropsForSport(
   // Update in place. The user's Underdog line, payout and availability, picks,
   // slip legs and closing lines all live on or under these rows and survive.
   for (const [key, { id, hasPick }] of plan.update) {
-    await prisma.playerProp.update({ where: { id }, data: refreshableFields(byKey.get(key)!, hasPick) });
+    await prisma.playerProp.update({
+      where: { id },
+      data: refreshableFields(withUnderdog(byKey.get(key)!, storedById.get(id), hasPick), hasPick),
+    });
   }
   if (plan.create.length > 0) {
-    await prisma.playerProp.createMany({ data: plan.create.map((k) => byKey.get(k)!) });
+    await prisma.playerProp.createMany({ data: plan.create.map((k) => withUnderdog(byKey.get(k)!)) });
   }
   if (plan.remove.length > 0) {
     await prisma.playerProp.deleteMany({ where: { id: { in: plan.remove } } });

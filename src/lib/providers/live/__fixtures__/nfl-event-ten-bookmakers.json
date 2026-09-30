@@ -1,0 +1,1012 @@
+{
+ "id": "d55cb69fed50a09170560b5b75d8de86",
+ "sport_key": "americanfootball_nfl",
+ "sport_title": "NFL",
+ "commence_time": "2026-10-02T00:15:00Z",
+ "home_team": "Cleveland Browns",
+ "away_team": "Pittsburgh Steelers",
+ "bookmakers": [
+  {
+   "key": "draftkings",
+   "title": "DraftKings",
+   "markets": [
+    {
+     "key": "player_reception_yds",
+     "last_update": "2026-09-30T21:23:13Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "DK Metcalf",
+       "price": -112,
+       "point": 44.5
+      },
+      {
+       "name": "Under",
+       "description": "DK Metcalf",
+       "price": -112,
+       "point": 44.5
+      },
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -111,
+       "point": 40.5
+      },
+      {
+       "name": "Under",
+       "description": "Harold Fannin Jr.",
+       "price": -113,
+       "point": 40.5
+      },
+      {
+       "name": "Over",
+       "description": "Jaylen Warren",
+       "price": -114,
+       "point": 25.5
+      },
+      {
+       "name": "Under",
+       "description": "Jaylen Warren",
+       "price": -110,
+       "point": 25.5
+      },
+      {
+       "name": "Over",
+       "description": "Roman Wilson",
+       "price": -116,
+       "point": 19.5
+      },
+      {
+       "name": "Under",
+       "description": "Roman Wilson",
+       "price": -108,
+       "point": 19.5
+      },
+      {
+       "name": "Over",
+       "description": "Darnell Washington",
+       "price": -109,
+       "point": 17.5
+      },
+      {
+       "name": "Under",
+       "description": "Darnell Washington",
+       "price": -115,
+       "point": 17.5
+      }
+     ]
+    },
+    {
+     "key": "player_receptions",
+     "last_update": "2026-09-30T21:23:13Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -111,
+       "point": 4.5
+      },
+      {
+       "name": "Under",
+       "description": "Harold Fannin Jr.",
+       "price": -115,
+       "point": 4.5
+      },
+      {
+       "name": "Over",
+       "description": "DK Metcalf",
+       "price": -138,
+       "point": 3.5
+      },
+      {
+       "name": "Under",
+       "description": "DK Metcalf",
+       "price": 108,
+       "point": 3.5
+      },
+      {
+       "name": "Over",
+       "description": "Jaylen Warren",
+       "price": -101,
+       "point": 3.5
+      },
+      {
+       "name": "Under",
+       "description": "Jaylen Warren",
+       "price": -127,
+       "point": 3.5
+      },
+      {
+       "name": "Over",
+       "description": "Roman Wilson",
+       "price": 134,
+       "point": 2.5
+      },
+      {
+       "name": "Under",
+       "description": "Roman Wilson",
+       "price": -171,
+       "point": 2.5
+      },
+      {
+       "name": "Over",
+       "description": "Darnell Washington",
+       "price": -195,
+       "point": 1.5
+      },
+      {
+       "name": "Under",
+       "description": "Darnell Washington",
+       "price": 151,
+       "point": 1.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "fanduel",
+   "title": "FanDuel",
+   "markets": [
+    {
+     "key": "player_reception_yds",
+     "last_update": "2026-09-30T21:22:43Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -114,
+       "point": 40.5
+      },
+      {
+       "name": "Under",
+       "description": "Harold Fannin Jr.",
+       "price": -114,
+       "point": 40.5
+      },
+      {
+       "name": "Over",
+       "description": "Darnell Washington",
+       "price": -114,
+       "point": 16.5
+      },
+      {
+       "name": "Under",
+       "description": "Darnell Washington",
+       "price": -114,
+       "point": 16.5
+      },
+      {
+       "name": "Over",
+       "description": "DK Metcalf",
+       "price": -114,
+       "point": 41.5
+      },
+      {
+       "name": "Under",
+       "description": "DK Metcalf",
+       "price": -114,
+       "point": 41.5
+      },
+      {
+       "name": "Over",
+       "description": "Roman Wilson",
+       "price": -114,
+       "point": 18.5
+      },
+      {
+       "name": "Under",
+       "description": "Roman Wilson",
+       "price": -114,
+       "point": 18.5
+      },
+      {
+       "name": "Over",
+       "description": "Jaylen Warren",
+       "price": -114,
+       "point": 22.5
+      },
+      {
+       "name": "Under",
+       "description": "Jaylen Warren",
+       "price": -114,
+       "point": 22.5
+      }
+     ]
+    },
+    {
+     "key": "player_receptions",
+     "last_update": "2026-09-30T21:22:43Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "DK Metcalf",
+       "price": -122,
+       "point": 3.5
+      },
+      {
+       "name": "Under",
+       "description": "DK Metcalf",
+       "price": -108,
+       "point": 3.5
+      },
+      {
+       "name": "Over",
+       "description": "Darnell Washington",
+       "price": -188,
+       "point": 1.5
+      },
+      {
+       "name": "Under",
+       "description": "Darnell Washington",
+       "price": 140,
+       "point": 1.5
+      },
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -114,
+       "point": 4.5
+      },
+      {
+       "name": "Under",
+       "description": "Harold Fannin Jr.",
+       "price": -114,
+       "point": 4.5
+      },
+      {
+       "name": "Over",
+       "description": "Roman Wilson",
+       "price": 144,
+       "point": 2.5
+      },
+      {
+       "name": "Under",
+       "description": "Roman Wilson",
+       "price": -194,
+       "point": 2.5
+      },
+      {
+       "name": "Over",
+       "description": "Jaylen Warren",
+       "price": 116,
+       "point": 3.5
+      },
+      {
+       "name": "Under",
+       "description": "Jaylen Warren",
+       "price": -154,
+       "point": 3.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "betonlineag",
+   "title": "BetOnline.ag",
+   "markets": [
+    {
+     "key": "player_reception_yds",
+     "last_update": "2026-09-30T21:22:30Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -114,
+       "point": 40.5
+      },
+      {
+       "name": "Under",
+       "description": "Harold Fannin Jr.",
+       "price": -114,
+       "point": 40.5
+      },
+      {
+       "name": "Over",
+       "description": "Darnell Washington",
+       "price": -116,
+       "point": 16.5
+      },
+      {
+       "name": "Under",
+       "description": "Darnell Washington",
+       "price": -111,
+       "point": 16.5
+      },
+      {
+       "name": "Over",
+       "description": "Roman Wilson",
+       "price": -119,
+       "point": 19.5
+      },
+      {
+       "name": "Under",
+       "description": "Roman Wilson",
+       "price": -109,
+       "point": 19.5
+      },
+      {
+       "name": "Over",
+       "description": "Jaylen Warren",
+       "price": -115,
+       "point": 25.5
+      },
+      {
+       "name": "Under",
+       "description": "Jaylen Warren",
+       "price": -112,
+       "point": 25.5
+      },
+      {
+       "name": "Over",
+       "description": "DK Metcalf",
+       "price": -114,
+       "point": 44.5
+      },
+      {
+       "name": "Under",
+       "description": "DK Metcalf",
+       "price": -114,
+       "point": 44.5
+      }
+     ]
+    },
+    {
+     "key": "player_receptions",
+     "last_update": "2026-09-30T21:22:30Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "DK Metcalf",
+       "price": -128,
+       "point": 3.5
+      },
+      {
+       "name": "Under",
+       "description": "DK Metcalf",
+       "price": -101,
+       "point": 3.5
+      },
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -114,
+       "point": 4.5
+      },
+      {
+       "name": "Under",
+       "description": "Harold Fannin Jr.",
+       "price": -114,
+       "point": 4.5
+      },
+      {
+       "name": "Over",
+       "description": "Jaylen Warren",
+       "price": -101,
+       "point": 3.5
+      },
+      {
+       "name": "Under",
+       "description": "Jaylen Warren",
+       "price": -128,
+       "point": 3.5
+      },
+      {
+       "name": "Over",
+       "description": "Darnell Washington",
+       "price": -192,
+       "point": 1.5
+      },
+      {
+       "name": "Under",
+       "description": "Darnell Washington",
+       "price": 145,
+       "point": 1.5
+      },
+      {
+       "name": "Over",
+       "description": "Roman Wilson",
+       "price": 150,
+       "point": 2.5
+      },
+      {
+       "name": "Under",
+       "description": "Roman Wilson",
+       "price": -196,
+       "point": 2.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "betrivers",
+   "title": "BetRivers",
+   "markets": [
+    {
+     "key": "player_reception_yds",
+     "last_update": "2026-09-30T21:22:23Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "Darnell Washington",
+       "price": -110,
+       "point": 16.5
+      },
+      {
+       "name": "Under",
+       "description": "Darnell Washington",
+       "price": -121,
+       "point": 16.5
+      },
+      {
+       "name": "Over",
+       "description": "Roman Wilson",
+       "price": -112,
+       "point": 21.5
+      },
+      {
+       "name": "Under",
+       "description": "Roman Wilson",
+       "price": -118,
+       "point": 21.5
+      },
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -118,
+       "point": 40.5
+      },
+      {
+       "name": "Under",
+       "description": "Harold Fannin Jr.",
+       "price": -113,
+       "point": 40.5
+      },
+      {
+       "name": "Over",
+       "description": "Jaylen Warren",
+       "price": -120,
+       "point": 22.5
+      },
+      {
+       "name": "Under",
+       "description": "Jaylen Warren",
+       "price": -110,
+       "point": 22.5
+      },
+      {
+       "name": "Over",
+       "description": "DK Metcalf",
+       "price": -117,
+       "point": 41.5
+      },
+      {
+       "name": "Under",
+       "description": "DK Metcalf",
+       "price": -114,
+       "point": 41.5
+      }
+     ]
+    },
+    {
+     "key": "player_receptions",
+     "last_update": "2026-09-30T21:22:23Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -114,
+       "point": 4.5
+      },
+      {
+       "name": "Over",
+       "description": "DK Metcalf",
+       "price": -127,
+       "point": 3.5
+      },
+      {
+       "name": "Over",
+       "description": "Jaylen Warren",
+       "price": 105,
+       "point": 3.5
+      },
+      {
+       "name": "Over",
+       "description": "Roman Wilson",
+       "price": 128,
+       "point": 2.5
+      },
+      {
+       "name": "Over",
+       "description": "Darnell Washington",
+       "price": -182,
+       "point": 1.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "betmgm",
+   "title": "BetMGM",
+   "markets": [
+    {
+     "key": "player_reception_yds",
+     "last_update": "2026-09-30T21:23:12Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -115,
+       "point": 41.5
+      },
+      {
+       "name": "Under",
+       "description": "Harold Fannin Jr.",
+       "price": -115,
+       "point": 41.5
+      },
+      {
+       "name": "Over",
+       "description": "Darnell Washington",
+       "price": -115,
+       "point": 16.5
+      },
+      {
+       "name": "Under",
+       "description": "Darnell Washington",
+       "price": -115,
+       "point": 16.5
+      },
+      {
+       "name": "Over",
+       "description": "DK Metcalf",
+       "price": -115,
+       "point": 43.5
+      },
+      {
+       "name": "Under",
+       "description": "DK Metcalf",
+       "price": -115,
+       "point": 43.5
+      },
+      {
+       "name": "Over",
+       "description": "Roman Wilson",
+       "price": -115,
+       "point": 20.5
+      },
+      {
+       "name": "Under",
+       "description": "Roman Wilson",
+       "price": -115,
+       "point": 20.5
+      },
+      {
+       "name": "Over",
+       "description": "Jaylen Warren",
+       "price": -111,
+       "point": 24.5
+      },
+      {
+       "name": "Under",
+       "description": "Jaylen Warren",
+       "price": -120,
+       "point": 24.5
+      }
+     ]
+    },
+    {
+     "key": "player_receptions",
+     "last_update": "2026-09-30T21:23:12Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -110,
+       "point": 4.5
+      },
+      {
+       "name": "Under",
+       "description": "Harold Fannin Jr.",
+       "price": -120,
+       "point": 4.5
+      },
+      {
+       "name": "Over",
+       "description": "DK Metcalf",
+       "price": -135,
+       "point": 3.5
+      },
+      {
+       "name": "Under",
+       "description": "DK Metcalf",
+       "price": 100,
+       "point": 3.5
+      },
+      {
+       "name": "Over",
+       "description": "Roman Wilson",
+       "price": 135,
+       "point": 2.5
+      },
+      {
+       "name": "Under",
+       "description": "Roman Wilson",
+       "price": -185,
+       "point": 2.5
+      },
+      {
+       "name": "Over",
+       "description": "Jaylen Warren",
+       "price": -105,
+       "point": 3.5
+      },
+      {
+       "name": "Under",
+       "description": "Jaylen Warren",
+       "price": -125,
+       "point": 3.5
+      },
+      {
+       "name": "Over",
+       "description": "Darnell Washington",
+       "price": 140,
+       "point": 2.5
+      },
+      {
+       "name": "Under",
+       "description": "Darnell Washington",
+       "price": -190,
+       "point": 2.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "espnbet",
+   "title": "theScore Bet",
+   "markets": [
+    {
+     "key": "player_reception_yds",
+     "last_update": "2026-09-30T21:22:55Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "DK Metcalf",
+       "price": 100,
+       "point": 44.5
+      },
+      {
+       "name": "Under",
+       "description": "DK Metcalf",
+       "price": -130,
+       "point": 44.5
+      },
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -120,
+       "point": 40.5
+      },
+      {
+       "name": "Under",
+       "description": "Harold Fannin Jr.",
+       "price": -110,
+       "point": 40.5
+      },
+      {
+       "name": "Over",
+       "description": "Jaylen Warren",
+       "price": -130,
+       "point": 21.5
+      },
+      {
+       "name": "Under",
+       "description": "Jaylen Warren",
+       "price": 100,
+       "point": 21.5
+      },
+      {
+       "name": "Over",
+       "description": "Roman Wilson",
+       "price": 100,
+       "point": 19.5
+      },
+      {
+       "name": "Under",
+       "description": "Roman Wilson",
+       "price": -130,
+       "point": 19.5
+      },
+      {
+       "name": "Over",
+       "description": "Darnell Washington",
+       "price": -130,
+       "point": 15.5
+      },
+      {
+       "name": "Under",
+       "description": "Darnell Washington",
+       "price": 100,
+       "point": 15.5
+      }
+     ]
+    },
+    {
+     "key": "player_receptions",
+     "last_update": "2026-09-30T21:22:55Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -115,
+       "point": 4.5
+      },
+      {
+       "name": "Under",
+       "description": "Harold Fannin Jr.",
+       "price": -115,
+       "point": 4.5
+      },
+      {
+       "name": "Over",
+       "description": "DK Metcalf",
+       "price": -125,
+       "point": 3.5
+      },
+      {
+       "name": "Under",
+       "description": "DK Metcalf",
+       "price": -105,
+       "point": 3.5
+      },
+      {
+       "name": "Over",
+       "description": "Jaylen Warren",
+       "price": 115,
+       "point": 3.5
+      },
+      {
+       "name": "Under",
+       "description": "Jaylen Warren",
+       "price": -150,
+       "point": 3.5
+      },
+      {
+       "name": "Over",
+       "description": "Darnell Washington",
+       "price": -190,
+       "point": 1.5
+      },
+      {
+       "name": "Under",
+       "description": "Darnell Washington",
+       "price": 140,
+       "point": 1.5
+      },
+      {
+       "name": "Over",
+       "description": "Roman Wilson",
+       "price": 150,
+       "point": 2.5
+      },
+      {
+       "name": "Under",
+       "description": "Roman Wilson",
+       "price": -200,
+       "point": 2.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "underdog",
+   "title": "Underdog",
+   "markets": [
+    {
+     "key": "player_reception_yds",
+     "last_update": "2026-09-30T21:22:27Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "Jaylen Warren",
+       "price": -137,
+       "point": 22.5
+      },
+      {
+       "name": "Under",
+       "description": "Jaylen Warren",
+       "price": -137,
+       "point": 22.5
+      },
+      {
+       "name": "Over",
+       "description": "DK Metcalf",
+       "price": -137,
+       "point": 44.5
+      },
+      {
+       "name": "Under",
+       "description": "DK Metcalf",
+       "price": -137,
+       "point": 44.5
+      },
+      {
+       "name": "Over",
+       "description": "Roman Wilson",
+       "price": -137,
+       "point": 18.5
+      },
+      {
+       "name": "Under",
+       "description": "Roman Wilson",
+       "price": -137,
+       "point": 18.5
+      },
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -137,
+       "point": 40.5
+      },
+      {
+       "name": "Under",
+       "description": "Harold Fannin Jr.",
+       "price": -137,
+       "point": 40.5
+      },
+      {
+       "name": "Over",
+       "description": "Darnell Washington",
+       "price": -137,
+       "point": 16.5
+      },
+      {
+       "name": "Under",
+       "description": "Darnell Washington",
+       "price": -137,
+       "point": 16.5
+      }
+     ]
+    },
+    {
+     "key": "player_receptions",
+     "last_update": "2026-09-30T21:22:27Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -137,
+       "point": 4.5
+      },
+      {
+       "name": "Under",
+       "description": "Harold Fannin Jr.",
+       "price": -137,
+       "point": 4.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "prizepicks",
+   "title": "PrizePicks",
+   "markets": [
+    {
+     "key": "player_reception_yds",
+     "last_update": "2026-09-30T21:23:17Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "DK Metcalf",
+       "price": -137,
+       "point": 41.5
+      },
+      {
+       "name": "Under",
+       "description": "DK Metcalf",
+       "price": -137,
+       "point": 41.5
+      },
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -137,
+       "point": 40.5
+      },
+      {
+       "name": "Under",
+       "description": "Harold Fannin Jr.",
+       "price": -137,
+       "point": 40.5
+      },
+      {
+       "name": "Over",
+       "description": "Jaylen Warren",
+       "price": -137,
+       "point": 23.5
+      },
+      {
+       "name": "Under",
+       "description": "Jaylen Warren",
+       "price": -137,
+       "point": 23.5
+      },
+      {
+       "name": "Over",
+       "description": "Roman Wilson",
+       "price": -137,
+       "point": 19.5
+      },
+      {
+       "name": "Under",
+       "description": "Roman Wilson",
+       "price": -137,
+       "point": 19.5
+      },
+      {
+       "name": "Over",
+       "description": "Darnell Washington",
+       "price": -137,
+       "point": 16.5
+      },
+      {
+       "name": "Under",
+       "description": "Darnell Washington",
+       "price": -137,
+       "point": 16.5
+      }
+     ]
+    },
+    {
+     "key": "player_receptions",
+     "last_update": "2026-09-30T21:23:17Z",
+     "outcomes": [
+      {
+       "name": "Over",
+       "description": "Harold Fannin Jr.",
+       "price": -137,
+       "point": 4.5
+      },
+      {
+       "name": "Under",
+       "description": "Harold Fannin Jr.",
+       "price": -137,
+       "point": 4.5
+      },
+      {
+       "name": "Over",
+       "description": "Jaylen Warren",
+       "price": -137,
+       "point": 3
+      },
+      {
+       "name": "Under",
+       "description": "Jaylen Warren",
+       "price": -137,
+       "point": 3
+      },
+      {
+       "name": "Over",
+       "description": "Darnell Washington",
+       "price": -137,
+       "point": 2
+      },
+      {
+       "name": "Under",
+       "description": "Darnell Washington",
+       "price": -137,
+       "point": 2
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

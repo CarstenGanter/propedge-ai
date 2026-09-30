@@ -32,7 +32,23 @@ import { adjustmentsFrom, estimateProbability } from "./probabilityModel";
 // not on top of the market's price, which already contains that context and
 // was being counted twice (the source of every 8+ point gap to the market).
 // Also records the books' probability at the played line on each pick.
-export const SCORING_MODEL_VERSION = "v1.5.0";
+// v1.6.0: the market price comes from a multi-book consensus (each book
+// de-vigged at its own line, power method, outliers dropped, weighted) read at
+// the line actually played, instead of an average of probabilities at
+// different lines pinned to the median line.
+export const SCORING_MODEL_VERSION = "v1.6.0";
+
+/** Compare "v1.6.0"-style versions numerically. */
+export function versionAtLeast(version: string | null | undefined, min: string): boolean {
+  const parse = (v: string) => v.replace(/^v/, "").split(".").map((n) => Number(n) || 0);
+  if (!version) return false;
+  const a = parse(version);
+  const b = parse(min);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) > (b[i] ?? 0);
+  }
+  return true;
+}
 
 /** NFL: full recent-form weight needs at least this many current-season games. */
 const NFL_FULL_FORM_GAMES = 4;
@@ -694,8 +710,10 @@ export function analyzeProp(
       direction: prop.direction,
       propType: prop.propType,
       games: bundle.playerStats?.recentGames ?? [],
-      marketProbOver: bundle.market?.noVigProbOver,
-      marketLine: bundle.market?.marketLine ?? prop.marketLine,
+      // Prefer the consensus read at the played line; older props fall back to
+      // the stored probability at the books' line.
+      marketProbOver: bundle.market?.probOverAtLine ?? bundle.market?.noVigProbOver,
+      marketLine: bundle.market?.atLine ?? bundle.market?.marketLine ?? prop.marketLine,
       adjustments: adjustmentsFrom(prop, bundle),
     });
     if (est) {

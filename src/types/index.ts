@@ -290,6 +290,16 @@ export interface MarketContext {
   /** The market's own consensus line (so we can tell if we're scoring a different line). */
   marketLine?: number;
   bookCount?: number;
+  /**
+   * Consensus P(over) read directly at the line being scored (the Underdog line
+   * when entered), from a multi-book consensus. Present on props priced since
+   * the consensus rebuild; absent on older ones.
+   */
+  probOverAtLine?: number;
+  /** The line `probOverAtLine` was read at. */
+  atLine?: number;
+  /** At least three independent pricing sources behind the market. */
+  reliable?: boolean;
   source: string;
   isDemo?: boolean;
 }

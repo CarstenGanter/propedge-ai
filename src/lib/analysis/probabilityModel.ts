@@ -20,7 +20,7 @@ import { negBinomialCdf, studentTCdf } from "./distributions";
  */
 
 /** Counting props use a discrete distribution; everything else is continuous. */
-const COUNT_PROPS = new Set([
+export const COUNT_PROPS = new Set([
   "Receptions",
   "Pass TDs",
   "Completions",
@@ -69,7 +69,7 @@ const CV_PRIOR: Record<string, number> = {
 };
 
 /** Fallbacks for prop types outside the measured table (other sports). */
-function cvPrior(propType: string): number {
+export function cvPrior(propType: string): number {
   const measured = CV_PRIOR[propType];
   if (measured != null) return measured;
   if (COUNT_PROPS.has(propType)) return 0.45;

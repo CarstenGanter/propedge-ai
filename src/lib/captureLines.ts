@@ -8,6 +8,8 @@ import { isLeague, type League } from "@/lib/teamLeagues";
 import { todaySlate } from "@/lib/utils/dates";
 import { toNflSlateDate } from "@/lib/nfl/slate";
 import { nameMatch } from "@/lib/utils/playerName";
+import { consensusProbOver } from "@/lib/analysis/marketConsensus";
+import { playedLine } from "@/lib/settlement";
 import { recordOddsCredits } from "@/lib/providerCache";
 import type { Sport, TeamSide } from "@/types";
 
@@ -119,7 +121,12 @@ export async function captureClosingLines(opts?: {
               (teamsMatch(x.homeTeam, pp.opponent) && teamsMatch(x.awayTeam, pp.team))),
         );
         if (!np) continue;
-        const closingProb = pp.direction === "OVER" ? np.noVigProbOver : 1 - np.noVigProbOver;
+        // Read the close at the line actually played, as the entry was, so CLV
+        // compares one line at two moments rather than two different lines.
+        const pOverClose = np.consensus
+          ? consensusProbOver(np.consensus, playedLine(pp.line, pp.underdogLine))
+          : np.noVigProbOver;
+        const closingProb = pp.direction === "OVER" ? pOverClose : 1 - pOverClose;
         await prisma.pick.update({
           where: { id: pick.id },
           data: { closingProb, closingCapturedAt: new Date() },

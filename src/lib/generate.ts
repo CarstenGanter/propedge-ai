@@ -2,7 +2,7 @@ import "server-only";
 import type { PlayerProp } from "@prisma/client";
 import { prisma } from "@/lib/db/client";
 import { getSettings } from "@/lib/settings";
-import { analyzeProp, SCORING_MODEL_VERSION } from "@/lib/analysis/scoringEngine";
+import { analyzeProp, SCORING_MODEL_VERSION, versionAtLeast } from "@/lib/analysis/scoringEngine";
 import { recommendedStake } from "@/lib/analysis/confidenceModel";
 import { buildResearchBundle, resolveProviderContext } from "@/lib/providers";
 import { prewarmMlb } from "@/lib/providers/live/mlbStats";
@@ -11,6 +11,7 @@ import type { Direction, ScorablePropInput } from "@/types";
 import {
   expectedValueAtUnderdog,
   fitUnderdogPricing,
+  MIN_POINTS_TO_LEARN,
   selectWithTypeCap,
   type PricePoint,
 } from "@/lib/analysis/boardSelection";
@@ -259,7 +260,7 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
     }
 
     // Entry line for CLV: no-vig probability of the chosen side at pick time.
-    const entryProb = clvEntryProb(bundle.market?.noVigProbOver, prop.direction as Direction);
+    const entryProb = clvEntryProb(bundle.market?.probOverAtLine ?? bundle.market?.noVigProbOver, prop.direction as Direction);
     candidates.push({ prop, analysis, entryProb });
   }
 
@@ -363,14 +364,19 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
  * line played matched the books' — the evidence for how Underdog prices picks.
  */
 async function enteredPricePoints(): Promise<PricePoint[]> {
-  const rows = await prisma.pick.findMany({
+  const all = await prisma.pick.findMany({
     where: { playerProp: { underdogPickMultiplier: { not: null } } },
     select: {
+      modelVersion: true,
       marketProb: true,
       entryProb: true,
       playerProp: { select: { underdogPickMultiplier: true, underdogLine: true, line: true } },
     },
   });
+  // Books' probabilities changed method at v1.6.0; once there are enough
+  // points priced the new way, learn only from those.
+  const current = all.filter((r) => versionAtLeast(r.modelVersion, "v1.6.0"));
+  const rows = current.length >= MIN_POINTS_TO_LEARN ? current : all;
   return rows
     .filter((r) => r.playerProp.underdogLine == null || r.playerProp.underdogLine === r.playerProp.line)
     .map((r) => ({ books: r.marketProb ?? r.entryProb ?? Number.NaN, payout: r.playerProp.underdogPickMultiplier ?? Number.NaN }));

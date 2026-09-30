@@ -42,7 +42,7 @@ async function score(prop: PlayerProp, settings: Awaited<ReturnType<typeof getSe
   const scorable = propToScorable(prop);
   const bundle = await buildResearchBundle(scorable, ctx);
   const analysis = analyzeProp(scorable, bundle, { profile: settings.scoringProfile });
-  const entryProb = clvEntryProb(bundle.market?.noVigProbOver, prop.direction as Direction);
+  const entryProb = clvEntryProb(bundle.market?.probOverAtLine ?? bundle.market?.noVigProbOver, prop.direction as Direction);
   return { bundle, analysis, entryProb };
 }
 

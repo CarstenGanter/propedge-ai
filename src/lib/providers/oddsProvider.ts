@@ -1,4 +1,6 @@
 import type { MarketContext, ScorablePropInput } from "@/types";
+import { consensusOf, parseSnapshot } from "@/lib/marketSnapshot";
+import { consensusProbOver } from "@/lib/analysis/marketConsensus";
 import { demoMarket } from "./demoData";
 import type { ProviderContext } from "./config";
 import { hasKey } from "./config";
@@ -24,11 +26,17 @@ export const liveOddsProvider: OddsProvider = {
     if (prop.marketDataJson) {
       try {
         const m = JSON.parse(prop.marketDataJson) as MarketContext;
+        // Read the consensus straight at the line being scored, so the market's
+        // price there never depends on the player's own game log.
+        const consensus = consensusOf(parseSnapshot(prop.marketDataJson));
         // The prop's original line is the market line — use it as a fallback so
         // scoring a different (Underdog) line correctly detects the difference.
         return {
           ...m,
           marketLine: m.marketLine ?? prop.marketLine ?? undefined,
+          ...(consensus
+            ? { probOverAtLine: consensusProbOver(consensus, prop.line), atLine: prop.line, reliable: consensus.reliable }
+            : {}),
           source: m.source ?? "The Odds API",
         };
       } catch {

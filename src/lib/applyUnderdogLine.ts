@@ -5,6 +5,7 @@ import { buildResearchBundle, resolveProviderContext } from "@/lib/providers";
 import { analyzeProp, SCORING_MODEL_VERSION } from "@/lib/analysis/scoringEngine";
 import { recommendedStake } from "@/lib/analysis/confidenceModel";
 import { getSettings } from "@/lib/settings";
+import { patchSnapshot } from "@/lib/marketSnapshot";
 
 /**
  * Store the line your pick'em app actually offers and re-score the pick against
@@ -22,9 +23,19 @@ export async function applyUnderdogLine(
   });
   if (!pick) return { ok: false };
 
+  // Record that this line came from the user, so a later fetch never
+  // overwrites it. Clearing it hands the field back to the feed.
   await prisma.playerProp.update({
     where: { id: pick.playerPropId },
-    data: { underdogLine },
+    data: {
+      underdogLine,
+      // Only props priced from the feed carry a snapshot; don't invent one.
+      marketDataJson: pick.playerProp.marketDataJson
+        ? patchSnapshot(pick.playerProp.marketDataJson, {
+            underdogLineSource: underdogLine != null ? "manual" : undefined,
+          })
+        : null,
+    },
   });
 
   const settings = await getSettings();

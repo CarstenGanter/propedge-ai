@@ -1,4 +1,6 @@
 import type { Direction, Sport } from "@/types";
+import { buildConsensus, type BookQuote, type ConsensusModel, type RawQuote } from "@/lib/analysis/marketConsensus";
+import { NFL_PROP_BOOKMAKERS, oddsTargetQuery, type OddsTarget } from "./oddsBooks";
 
 /**
  * The Odds API (v4) client for player props.
@@ -156,6 +158,8 @@ interface FetchResult<T> {
   data: T | null;
   remaining: number | null;
   used: number | null;
+  /** Credits this request cost (x-requests-last). */
+  last: number | null;
   status: number;
   error?: string;
 }
@@ -167,12 +171,13 @@ async function fetchJson<T>(url: string, timeoutMs = 9000): Promise<FetchResult<
     const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
     const remaining = numHeader(res.headers.get("x-requests-remaining"));
     const used = numHeader(res.headers.get("x-requests-used"));
+    const last = numHeader(res.headers.get("x-requests-last"));
     if (!res.ok) {
-      return { data: null, remaining, used, status: res.status, error: await safeText(res) };
+      return { data: null, remaining, used, last, status: res.status, error: await safeText(res) };
     }
-    return { data: (await res.json()) as T, remaining, used, status: res.status };
+    return { data: (await res.json()) as T, remaining, used, last, status: res.status };
   } catch (e) {
-    return { data: null, remaining: null, used: null, status: 0, error: String(e) };
+    return { data: null, remaining: null, used: null, last: null, status: 0, error: String(e) };
   } finally {
     clearTimeout(timer);
   }
@@ -207,13 +212,15 @@ interface OddsOutcome {
 interface OddsMarket {
   key: string;
   outcomes: OddsOutcome[];
+  last_update?: string;
 }
 interface OddsBookmaker {
   key: string;
   title: string;
   markets: OddsMarket[];
+  last_update?: string;
 }
-interface OddsEventOdds {
+export interface OddsEventOdds {
   id: string;
   home_team: string;
   away_team: string;
@@ -271,16 +278,20 @@ export async function listEvents(
   return { status, events };
 }
 
+/** NFL names its bookmakers (same cost, and includes the pick'em venues); other sports use a region. */
+export function oddsTargetFor(sportKey: string): OddsTarget {
+  return sportKey === "americanfootball_nfl" ? { bookmakers: NFL_PROP_BOOKMAKERS } : { regions: "us" };
+}
+
 async function getEventProps(
   apiKey: string,
   sportKey: string,
   eventId: string,
   markets: string[],
-  regions = "us",
 ): Promise<FetchResult<OddsEventOdds>> {
   const url =
     `${BASE}/sports/${sportKey}/events/${eventId}/odds/?apiKey=${apiKey}` +
-    `&regions=${regions}&markets=${markets.join(",")}&oddsFormat=american`;
+    `&${oddsTargetQuery(oddsTargetFor(sportKey))}&markets=${markets.join(",")}&oddsFormat=american`;
   return fetchJson<OddsEventOdds>(url);
 }
 
@@ -300,6 +311,18 @@ export interface NormalizedProp {
   commenceTime: string;
   /** Competition label (e.g. "World Cup", "MLS") — usually the sport, but soccer spans several. */
   league: string;
+  /** The multi-book consensus the line and probability came from. */
+  consensus?: ConsensusModel;
+  /** Every book's quote, with why it was used or excluded. */
+  quotes?: BookQuote[];
+  /** Lines posted by pick'em venues — compared against the market, never part of it. */
+  venues?: VenueLines;
+}
+
+/** Pick'em venue lines seen in the feed. Their prices are placeholders; only lines are real. */
+export interface VenueLines {
+  underdog?: number;
+  prizepicks?: number;
 }
 
 function median(xs: number[]): number {
@@ -309,61 +332,89 @@ function median(xs: number[]): number {
 }
 
 /** Collapse all books' Over/Under outcomes into one normalized prop per player+market. */
-function normalizeEvent(event: OddsEventOdds, sportKey: string, league: string): NormalizedProp[] {
-  // key: `${player}||${propType}` -> aggregation
-  const agg = new Map<
-    string,
-    { player: string; propType: string; lines: number[]; novig: number[] }
-  >();
+export interface EventQuotes {
+  player: string;
+  propType: string;
+  quotes: RawQuote[];
+}
 
+/**
+ * Every book's quote for every player prop in one event, with Over and Under
+ * paired by player AND line (pure, tested). The previous parser kept one
+ * Over/Under slot per player per book, so a book posting two lines could have
+ * its Over from one line matched with its Under from another.
+ */
+export function collectQuotes(event: OddsEventOdds, sportKey: string): EventQuotes[] {
+  const out = new Map<string, EventQuotes>();
   for (const book of event.bookmakers ?? []) {
     for (const market of book.markets ?? []) {
       const propType = propTypeForMarket(sportKey, market.key);
       if (!propType) continue;
-      // group this book's outcomes by player
-      const byPlayer = new Map<string, { over?: OddsOutcome; under?: OddsOutcome }>();
+      const pairs = new Map<string, { player: string; line: number; over?: number; under?: number }>();
       for (const o of market.outcomes ?? []) {
-        if (!o.description) continue;
-        const slot = byPlayer.get(o.description) ?? {};
-        if (o.name.toLowerCase() === "over") slot.over = o;
-        else if (o.name.toLowerCase() === "under") slot.under = o;
-        byPlayer.set(o.description, slot);
+        if (!o.description || o.point == null) continue;
+        const k = `${o.description}||${o.point}`;
+        const slot = pairs.get(k) ?? { player: o.description, line: o.point };
+        if (o.name.toLowerCase() === "over") slot.over = o.price;
+        else if (o.name.toLowerCase() === "under") slot.under = o.price;
+        pairs.set(k, slot);
       }
-      for (const [player, { over, under }] of byPlayer) {
-        if (over?.point == null) continue;
-        const k = `${player}||${propType}`;
-        const a = agg.get(k) ?? { player, propType, lines: [], novig: [] };
-        a.lines.push(over.point);
-        if (over.price != null && under?.price != null) {
-          a.novig.push(noVigProbOver(over.price, under.price));
-        }
-        agg.set(k, a);
+      for (const p of pairs.values()) {
+        const key = `${p.player}||${propType}`;
+        const entry = out.get(key) ?? { player: p.player, propType, quotes: [] };
+        entry.quotes.push({
+          book: book.key,
+          line: p.line,
+          over: p.over ?? null,
+          under: p.under ?? null,
+          lastUpdate: market.last_update ?? book.last_update,
+        });
+        out.set(key, entry);
       }
     }
   }
+  return [...out.values()];
+}
 
+function venueLine(quotes: RawQuote[], book: string): number | undefined {
+  const lines = quotes.filter((q) => q.book === book).map((q) => q.line);
+  if (lines.length === 0) return undefined;
+  // A venue normally posts one standard line; if several arrive, keep the middle one.
+  lines.sort((a, b) => a - b);
+  return lines[Math.floor(lines.length / 2)];
+}
+
+/**
+ * One prop per player and stat, priced from a proper multi-book consensus
+ * (marketConsensus.ts). A prop no sportsbook priced on both sides is dropped:
+ * there is no market to judge it against.
+ */
+export function normalizeEvent(event: OddsEventOdds, sportKey: string, league: string): NormalizedProp[] {
   const out: NormalizedProp[] = [];
-  for (const a of agg.values()) {
-    if (a.lines.length === 0) continue;
-    const line = median(a.lines);
-    const pOver = a.novig.length ? a.novig.reduce((s, x) => s + x, 0) / a.novig.length : 0.5;
-    const direction: Direction = pOver >= 0.5 ? "OVER" : "UNDER";
-    const leanStrength = Math.abs(pOver - 0.5); // 0..0.5
-    const offset = leanStrength * Math.max(1, line) * 0.5; // market-implied nudge
-    const projection = direction === "OVER" ? line + offset : line - offset;
+  for (const e of collectQuotes(event, sportKey)) {
+    const { model, quotes } = buildConsensus(e.propType, e.quotes);
+    if (!model) continue;
+    const pOver = model.pOverAtReference;
+    const venues: VenueLines = {
+      underdog: venueLine(e.quotes, "underdog"),
+      prizepicks: venueLine(e.quotes, "prizepicks"),
+    };
     out.push({
-      playerName: a.player,
-      propType: a.propType,
-      direction,
-      line,
-      projection: Math.round(projection * 10) / 10,
+      playerName: e.player,
+      propType: e.propType,
+      direction: pOver >= 0.5 ? "OVER" : "UNDER",
+      line: model.referenceLine,
+      projection: Math.round(model.fairLine * 10) / 10,
       noVigProbOver: Math.round(pOver * 1000) / 1000,
-      bookCount: a.novig.length || a.lines.length,
-      comparableLines: [...new Set(a.lines)],
+      bookCount: model.groups,
+      comparableLines: [...new Set(quotes.filter((q) => q.status === "used").map((q) => q.line))],
       homeTeam: event.home_team,
       awayTeam: event.away_team,
       commenceTime: event.commence_time,
       league,
+      consensus: model,
+      quotes,
+      venues,
     });
   }
   return out;
@@ -454,6 +505,13 @@ export async function fetchPlayerProps(
       if (r.used != null) used = r.used;
       if (r.error) lastError = r.error;
       if (r.data) all.push(...normalizeEvent(r.data, comp.sportKey, comp.label));
+      // Each event should cost at most one credit per market. If it costs more
+      // the billing assumption behind the bookmaker list is wrong: stop before
+      // the rest of the slate spends double.
+      if (r.last != null && r.last > marketKeys.length) {
+        lastError = `Credit regression: one event cost ${r.last} credits for ${marketKeys.length} markets — stopped fetching.`;
+        break;
+      }
     }
   }
 
