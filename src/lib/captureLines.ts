@@ -7,6 +7,7 @@ import { teamsMatch } from "@/lib/utils/teamName";
 import { isLeague, type League } from "@/lib/teamLeagues";
 import { todaySlate } from "@/lib/utils/dates";
 import { toNflSlateDate } from "@/lib/nfl/slate";
+import { nameMatch } from "@/lib/utils/playerName";
 import { recordOddsCredits } from "@/lib/providerCache";
 import type { Sport, TeamSide } from "@/types";
 
@@ -16,25 +17,6 @@ export interface CaptureSummary {
   propPicksUpdated: number;
   creditsRemaining: number | null;
   error?: string;
-}
-
-const COMBINING = new RegExp("[\\u0300-\\u036f]", "g");
-function normName(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(COMBINING, "")
-    .replace(/[^a-z\s]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-function nameMatch(a: string, b: string): boolean {
-  const na = normName(a);
-  const nb = normName(b);
-  if (na === nb) return true;
-  const ap = na.split(" ");
-  const bp = nb.split(" ");
-  return ap[ap.length - 1] === bp[bp.length - 1] && ap[0]?.[0] === bp[0]?.[0];
 }
 
 /**

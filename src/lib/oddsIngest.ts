@@ -5,11 +5,17 @@ import { hasKey } from "@/lib/providers/config";
 import { recordOddsCredits } from "@/lib/providerCache";
 import { toSlateDate } from "@/lib/utils/dates";
 import type { Sport } from "@/types";
+import { planIngest, propKey, refreshableFields } from "@/lib/ingestMerge";
 
 export interface OddsIngestResult {
   ok: boolean;
   sport: string;
   imported: number;
+  /** Props refreshed in place (user data on them kept). */
+  updated?: number;
+  created?: number;
+  /** Props no longer offered by any book, with nothing depending on them. */
+  removed?: number;
   events: number;
   creditsRemaining: number | null;
   dates: string[];
@@ -31,8 +37,11 @@ export interface IngestOptions {
 
 /**
  * Fetch, de-vig, and store player props for a sport from The Odds API.
- * Replaces existing pending Odds-API props for that sport (for the slate date
- * only, when one is given). Does NOT revalidate or generate — callers do that.
+ * Merges into the pending Odds-API props already stored for that sport (and
+ * slate date, when given): a prop still offered is updated in place, a new one
+ * is created, and one no longer offered is removed only if nothing depends on
+ * it. See ingestMerge.ts for why this is not a delete-and-recreate. Does NOT
+ * revalidate or generate — callers do that.
  */
 export async function ingestOddsPropsForSport(
   sport: Sport,
@@ -64,15 +73,6 @@ export async function ingestOddsPropsForSport(
     };
   }
 
-  await prisma.playerProp.deleteMany({
-    where: {
-      source: "The Odds API",
-      sport,
-      status: "pending",
-      ...(options.slateDate ? { date: options.slateDate } : {}),
-    },
-  });
-
   const dates = new Set<string>();
   const rows = result.props.map((p) => {
     const date = toSlate(p.commenceTime);
@@ -103,12 +103,43 @@ export async function ingestOddsPropsForSport(
     };
   });
 
-  await prisma.playerProp.createMany({ data: rows });
+  const stored = await prisma.playerProp.findMany({
+    where: {
+      source: "The Odds API",
+      sport,
+      status: "pending",
+      ...(options.slateDate ? { date: options.slateDate } : {}),
+    },
+    select: {
+      id: true, date: true, playerName: true, propType: true, gameId: true, team: true, opponent: true,
+      _count: { select: { picks: true } },
+    },
+  });
+  const byKey = new Map(rows.map((r) => [propKey(r), r]));
+  const plan = planIngest(
+    stored.map((s) => ({ id: s.id, key: propKey(s), hasPick: s._count.picks > 0 })),
+    [...byKey.keys()],
+  );
+
+  // Update in place. The user's Underdog line, payout and availability, picks,
+  // slip legs and closing lines all live on or under these rows and survive.
+  for (const [key, { id, hasPick }] of plan.update) {
+    await prisma.playerProp.update({ where: { id }, data: refreshableFields(byKey.get(key)!, hasPick) });
+  }
+  if (plan.create.length > 0) {
+    await prisma.playerProp.createMany({ data: plan.create.map((k) => byKey.get(k)!) });
+  }
+  if (plan.remove.length > 0) {
+    await prisma.playerProp.deleteMany({ where: { id: { in: plan.remove } } });
+  }
 
   return {
     ok: true,
     sport,
     imported: rows.length,
+    updated: plan.update.size,
+    created: plan.create.length,
+    removed: plan.remove.length,
     events: result.events,
     creditsRemaining: result.status.remaining,
     dates: [...dates],
