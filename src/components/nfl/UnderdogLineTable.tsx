@@ -28,6 +28,26 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
   const [tagDraft, setTagDraft] = React.useState<Record<string, string>>(() =>
     Object.fromEntries(picks.map((p) => [p.id, p.prop.underdogPickMultiplier?.toString() ?? ""])),
   );
+  // Which rows the user has typed into since the last save. useState's lazy
+  // initializer above only runs on mount, so without this, a line the feed
+  // fills in after a later Fetch (or that another tab saved) would silently
+  // stay blank on screen — the input never resyncs with fresh server data on
+  // its own. Untouched rows resync every time `picks` changes; a row the user
+  // is mid-edit on is left alone so a refresh can't eat an unsaved keystroke.
+  const touchedLine = React.useRef<Set<string>>(new Set());
+  const touchedTag = React.useRef<Set<string>>(new Set());
+  React.useEffect(() => {
+    setDraft((prev) => {
+      const next = { ...prev };
+      for (const p of picks) if (!touchedLine.current.has(p.id)) next[p.id] = p.prop.underdogLine?.toString() ?? "";
+      return next;
+    });
+    setTagDraft((prev) => {
+      const next = { ...prev };
+      for (const p of picks) if (!touchedTag.current.has(p.id)) next[p.id] = p.prop.underdogPickMultiplier?.toString() ?? "";
+      return next;
+    });
+  }, [picks]);
 
   const entered = picks.filter((p) => p.prop.underdogLine != null).length;
   const absent = picks.filter((p) => p.prop.underdogAvailable === false).length;
@@ -60,6 +80,12 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
     setMsg(null);
     startTransition(async () => {
       const r = await setUnderdogLines(entries);
+      // Saved rows are server-confirmed now, so let the next refresh resync
+      // them like any other row instead of treating them as still mid-edit.
+      for (const e of entries) {
+        if (e.line !== undefined) touchedLine.current.delete(e.pickId);
+        if (e.pickMultiplier !== undefined) touchedTag.current.delete(e.pickId);
+      }
       setMsg(
         `Saved ${r.updated} pick${r.updated === 1 ? "" : "s"}.` +
           (r.failed ? ` ${r.failed} failed.` : ""),
@@ -143,7 +169,7 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                           step="0.5"
                           inputMode="decimal"
                           value={draft[p.id] ?? ""}
-                          onChange={(e) => setDraft((d) => ({ ...d, [p.id]: e.target.value }))}
+                          onChange={(e) => { touchedLine.current.add(p.id); setDraft((d) => ({ ...d, [p.id]: e.target.value })); }}
                           placeholder="—"
                           className="h-8 w-20 rounded-md border border-border bg-input/60 px-2 text-right text-sm tabular-nums"
                         />
@@ -188,7 +214,7 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                           min="0.05"
                           inputMode="decimal"
                           value={tagDraft[p.id] ?? ""}
-                          onChange={(e) => setTagDraft((d) => ({ ...d, [p.id]: e.target.value }))}
+                          onChange={(e) => { touchedTag.current.add(p.id); setTagDraft((d) => ({ ...d, [p.id]: e.target.value })); }}
                           placeholder={String(STANDARD_PICK_PAYOUT)}
                           aria-label={`Payout multiplier for ${p.prop.playerName}`}
                           className="h-8 w-16 rounded-md border border-border bg-input/60 px-2 text-right text-sm tabular-nums"
