@@ -284,3 +284,14 @@ export function leaveOneBookOut(propType: string, raw: RawQuote[], method: "lega
   }
   return out;
 }
+
+/**
+ * The side the books favour at a given line — the side worth considering on a
+ * venue posting that line. Chosen at the line actually played, not the books'
+ * own: on 2026-10-04 the books leaned Under at their 10.5 on George Holani's
+ * receiving yards, but at Underdog's 9.5 the Over was 54.9% — a soft line the
+ * board was judging from the wrong side.
+ */
+export function favouredSide(m: ConsensusModel, line: number): Direction {
+  return consensusProbOver(m, line) >= 0.5 ? "OVER" : "UNDER";
+}

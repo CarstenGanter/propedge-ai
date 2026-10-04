@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  boardValue,
   expectedValueAtUnderdog,
   fitUnderdogPricing,
   perTypeCap,
@@ -73,5 +74,27 @@ describe("selectWithTypeCap", () => {
   it("keeps the given order within the cap", () => {
     const ordered = [item("a", "X"), item("b", "Y"), item("c", "X")];
     expect(selectWithTypeCap(ordered, (x) => x.type, 3).map((x) => x.id)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("boardValue", () => {
+  const curve = (p: number) => expectedValueAtUnderdog(p);
+
+  it("ranks a soft line by the standard payout, not the favourite discount the curve assumes", () => {
+    // George Holani, 2026-10-04: books 54.9% at Underdog's 9.5, in the base market.
+    const soft = boardValue({ marketProb: 0.549, underdogLine: 9.5, underdogPayout: null, reliable: true, predicted: curve });
+    expect(soft).toBeCloseTo(0.549 * 1.87, 6);
+    expect(soft).toBeGreaterThan(1.02);
+    // Without the line, the curve would have priced it as a discounted favourite.
+    expect(boardValue({ marketProb: 0.549, underdogLine: null, underdogPayout: null, reliable: true, predicted: curve })).toBeLessThan(1);
+  });
+
+  it("uses an entered payout when there is one", () => {
+    expect(boardValue({ marketProb: 0.6, underdogLine: 3.5, underdogPayout: 1.54, reliable: true, predicted: curve })).toBeCloseTo(0.924, 6);
+  });
+
+  it("caps a thin market at break-even", () => {
+    // Emanuel Wilson, 2026-10-04: 1.189 on paper, from fewer than three books.
+    expect(boardValue({ marketProb: 0.636, underdogLine: 5.5, underdogPayout: null, reliable: false, predicted: curve })).toBe(1);
   });
 });

@@ -1,3 +1,5 @@
+import { STANDARD_PICK_PAYOUT } from "./pickemMath";
+
 /**
  * Choosing which props make the day's board under the probability model (pure,
  * tested).
@@ -99,4 +101,32 @@ export function selectWithTypeCap<T>(ordered: T[], typeOf: (t: T) => string, siz
     chosen.push(item);
   }
   return chosen;
+}
+
+/**
+ * A prop's value for ranking the board: books' probability x what Underdog
+ * pays for it.
+ *
+ * When Underdog's line is known, the payout is the one entered, else standard:
+ * the feed only carries Underdog's base market, whose picks pay the standard
+ * multiplier, so a line seen there is one Underdog is pricing as a coin flip.
+ * That is exactly a soft line when the books disagree — on 2026-10-04 George
+ * Holani's Higher 9.5 receiving yards was 54.9% by the books at a standard
+ * 1.87x (1.027), yet the pricing curve, which assumes a 55% pick is a
+ * discounted favourite, ranked it off the board.
+ *
+ * With no Underdog line yet, the curve learned from entered payouts predicts
+ * the price. A thin market (fewer than three independent books) is capped at
+ * break-even: the app never calls an edge on one.
+ */
+export function boardValue(c: {
+  marketProb: number | null;
+  underdogLine: number | null;
+  underdogPayout: number | null;
+  reliable: boolean;
+  predicted: (books: number) => number;
+}): number {
+  const p = c.marketProb ?? 0.5;
+  const v = c.underdogLine != null ? p * (c.underdogPayout ?? STANDARD_PICK_PAYOUT) : c.predicted(p);
+  return c.reliable ? v : Math.min(v, 1);
 }

@@ -1,5 +1,5 @@
 import type { Direction, Sport } from "@/types";
-import { buildConsensus, type BookQuote, type ConsensusModel, type RawQuote } from "@/lib/analysis/marketConsensus";
+import { buildConsensus, favouredSide, type BookQuote, type ConsensusModel, type RawQuote } from "@/lib/analysis/marketConsensus";
 import { NFL_PROP_BOOKMAKERS, oddsTargetQuery, type OddsTarget } from "./oddsBooks";
 
 /**
@@ -408,7 +408,9 @@ export function normalizeEvent(event: OddsEventOdds, sportKey: string, league: s
     out.push({
       playerName: e.player,
       propType: e.propType,
-      direction: pOver >= 0.5 ? "OVER" : "UNDER",
+      // The side worth playing is the one the books favour at the line the
+      // venue posts, which can differ from their own lean at their own line.
+      direction: favouredSide(model, venues.underdog ?? model.referenceLine),
       line: model.referenceLine,
       projection: Math.round(model.fairLine * 10) / 10,
       noVigProbOver: Math.round(pOver * 1000) / 1000,

@@ -109,7 +109,9 @@ export async function ingestOddsPropsForSport(
     select: {
       id: true, date: true, playerName: true, propType: true, gameId: true, team: true, opponent: true,
       underdogLine: true, underdogAvailable: true, marketDataJson: true,
-      _count: { select: { picks: true } },
+      // Only a pick you bet (placed, or in a saved slip) locks the prop's line
+      // and side. Auto-generated board picks are rebuilt by the re-rank anyway.
+      _count: { select: { picks: { where: { OR: [{ placedReal: true }, { parlayLegs: { some: {} } }] } } } },
     },
   });
   const storedById = new Map(stored.map((s) => [s.id, s]));

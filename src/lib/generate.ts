@@ -8,7 +8,10 @@ import { buildResearchBundle, resolveProviderContext } from "@/lib/providers";
 import { prewarmMlb } from "@/lib/providers/live/mlbStats";
 import { prewarmEspn } from "@/lib/providers/live/espnPlayerStats";
 import type { Direction, ScorablePropInput } from "@/types";
+import { consensusOf, parseSnapshot } from "@/lib/marketSnapshot";
+import { favouredSide } from "@/lib/analysis/marketConsensus";
 import {
+  boardValue,
   expectedValueAtUnderdog,
   fitUnderdogPricing,
   MIN_POINTS_TO_LEARN,
@@ -198,9 +201,12 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
     prop: PlayerProp;
     analysis: ReturnType<typeof analyzeProp>;
     entryProb: number | null;
+    /** At least three independent books priced it. */
+    reliable: boolean;
   }
   const candidates: Candidate[] = [];
 
+  let sideFlips = 0;
   for (const prop of props) {
     if (alreadySettled.has(prop.id)) {
       filters["Already has a settled pick"]++;
@@ -209,6 +215,19 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
     if (enabled.size > 0 && !enabled.has(prop.sport.toLowerCase())) {
       filters["Sport disabled"]++;
       continue;
+    }
+
+    // Judge each prop on the side the books favour at the line actually played
+    // (Underdog's, once known) — it can differ from their lean at their own
+    // line. A prop you bet keeps the side you bet.
+    const consensus = consensusOf(parseSnapshot(prop.marketDataJson));
+    if (consensus && !takenStakes.has(prop.id) && !legsByProp.has(prop.id)) {
+      const side = favouredSide(consensus, prop.underdogLine ?? prop.line);
+      if (side !== prop.direction) {
+        await prisma.playerProp.update({ where: { id: prop.id }, data: { direction: side } });
+        prop.direction = side;
+        sideFlips++;
+      }
     }
 
     const ctx = resolveProviderContext({
@@ -261,7 +280,7 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
 
     // Entry line for CLV: no-vig probability of the chosen side at pick time.
     const entryProb = clvEntryProb(bundle.market?.probOverAtLine ?? bundle.market?.noVigProbOver, prop.direction as Direction);
-    candidates.push({ prop, analysis, entryProb });
+    candidates.push({ prop, analysis, entryProb, reliable: bundle.market?.reliable !== false });
   }
 
   let selected: Candidate[];
@@ -269,7 +288,14 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
     // Rank by what Underdog is expected to leave you, learned from the payouts
     // entered so far, then cap each prop type so yardage makes the board.
     const pricing = fitUnderdogPricing(await enteredPricePoints());
-    const value = (c: Candidate) => expectedValueAtUnderdog(c.analysis.marketProbability ?? 0.5, pricing);
+    const value = (c: Candidate) =>
+      boardValue({
+        marketProb: c.analysis.marketProbability ?? null,
+        underdogLine: c.prop.underdogLine,
+        underdogPayout: c.prop.underdogPickMultiplier,
+        reliable: c.reliable,
+        predicted: (p) => expectedValueAtUnderdog(p, pricing),
+      });
     candidates.sort(
       (a, b) => value(b) - value(a) || b.analysis.confidenceScore - a.analysis.confidenceScore,
     );
@@ -345,6 +371,9 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
   ).length;
   if (droppedTaken > 0) {
     filters[`Dropped from the board but you had taken ${droppedTaken}`] = droppedTaken;
+  }
+  if (sideFlips > 0) {
+    filters["Switched to the side the books favour at Underdog's line"] = sideFlips;
   }
 
   return {

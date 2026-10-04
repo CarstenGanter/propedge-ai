@@ -154,3 +154,18 @@ describe("leaveOneBookOut", () => {
     if (b) expect(b.predicted).toBeCloseTo(a[0].predicted, 9);
   });
 });
+
+describe("favouredSide", () => {
+  it("picks the side at the line being played, which can flip on a softer line", async () => {
+    const { favouredSide } = await import("./marketConsensus");
+    // Books lean Under at their own 10.5…
+    const { model } = buildConsensus("Receiving Yards", [
+      { book: "fanduel", line: 10.5, over: -105, under: -125 },
+      { book: "draftkings", line: 10.5, over: -108, under: -122 },
+      { book: "betmgm", line: 10.5, over: -110, under: -120 },
+    ]);
+    expect(favouredSide(model!, 10.5)).toBe("UNDER");
+    // …but a venue posting 9.5 makes the Over the side worth playing.
+    expect(favouredSide(model!, 9.5)).toBe("OVER");
+  });
+});
