@@ -72,3 +72,17 @@ describe("normalizeEvent (real feed, 2026-10-01 PIT @ CLE)", () => {
     expect(metcalf.comparableLines).toContain(metcalf.line);
   });
 });
+
+describe("notStartedYet", () => {
+  it("keeps only games still to kick off — none of the in-progress early slate", async () => {
+    const { notStartedYet } = await import("./theOddsApi");
+    const now = Date.parse("2026-10-04T17:18:00Z"); // 12:18 CT, early games 18 min in
+    const events = [
+      { id: "early", commence_time: "2026-10-04T17:00:00Z" },
+      { id: "london", commence_time: "2026-10-04T13:30:00Z" },
+      { id: "late", commence_time: "2026-10-04T20:05:00Z" },
+      { id: "snf", commence_time: "2026-10-05T00:20:00Z" },
+    ];
+    expect(notStartedYet(events, now).map((e) => e.id)).toEqual(["late", "snf"]);
+  });
+});

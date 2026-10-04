@@ -1,7 +1,7 @@
 import "server-only";
 import { getSettings } from "@/lib/settings";
 import { hasKey } from "@/lib/providers/config";
-import { estimateCredits, filterEventsForSlate, listEvents } from "@/lib/providers/live/theOddsApi";
+import { estimateCredits, filterEventsForSlate, listEvents, notStartedYet } from "@/lib/providers/live/theOddsApi";
 import { getOddsCredits, recordOddsCredits } from "@/lib/providerCache";
 import { ingestOddsPropsForSport } from "@/lib/oddsIngest";
 import { generatePicksForDate, type GenerationSummary } from "@/lib/generate";
@@ -56,11 +56,14 @@ export async function estimateNflFetch(date: string): Promise<NflFetchEstimate> 
   const listed = await listEvents(process.env.ODDS_API_KEY!, "NFL"); // free
   await recordOddsCredits(listed.status.remaining, listed.status.used);
   const remaining = listed.status.remaining ?? base.creditsKnownRemaining;
-  const priced = filterEventsForSlate(
-    listed.events.map((e) => ({ ...e, commence_time: e.commenceTime })),
-    date,
-    toNflSlateDate,
-  ).filter((e) => Date.parse(e.commence_time) > Date.now() - 3 * 3600_000);
+  // Only games still to kick off — the fetch skips the rest, so the estimate must too.
+  const priced = notStartedYet(
+    filterEventsForSlate(
+      listed.events.map((e) => ({ ...e, commence_time: e.commenceTime })),
+      date,
+      toNflSlateDate,
+    ),
+  );
   const gamesToFetch = Math.min(priced.length, settings.nflMaxGames);
   const credits = estimateCredits(gamesToFetch, markets.length);
   const creditsAfter = remaining != null ? remaining - credits : null;

@@ -129,6 +129,17 @@ export function estimateCredits(games: number, markets: number, regions = 1): nu
 }
 
 /** Keep only events that kick off on the given slate date (per the supplied date mapper). */
+/**
+ * Events that have not kicked off yet (pure). Props are bought to bet before
+ * the game; once it starts, the feed carries live in-game lines, which are
+ * useless here and cost the same. This used to keep anything that started in
+ * the last three hours, so fetching a Sunday slate after the early kickoffs
+ * bought every in-progress game too — 13 games instead of 5 on 2026-10-04.
+ */
+export function notStartedYet<T extends { commence_time: string }>(events: T[], now = Date.now()): T[] {
+  return events.filter((e) => Date.parse(e.commence_time) > now);
+}
+
 export function filterEventsForSlate<T extends { commence_time: string }>(
   events: T[],
   slateDate: string,
@@ -483,7 +494,7 @@ export async function fetchPlayerProps(
     if (marketKeys.length === 0) continue;
 
     const events = await getEvents(apiKey, comp.sportKey);
-    let candidates = events.filter((e) => new Date(e.commence_time).getTime() > Date.now() - 3 * 3600_000);
+    let candidates = notStartedYet(events);
     if (options.slateDate) {
       candidates = filterEventsForSlate(candidates, options.slateDate, options.toSlate ?? defaultToSlate);
     }
