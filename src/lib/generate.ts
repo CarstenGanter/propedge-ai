@@ -13,6 +13,7 @@ import { favouredSide } from "@/lib/analysis/marketConsensus";
 import {
   boardValue,
   expectedValueAtUnderdog,
+  onePerPlayer,
   fitUnderdogPricing,
   MIN_POINTS_TO_LEARN,
   selectWithTypeCap,
@@ -299,7 +300,11 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
     candidates.sort(
       (a, b) => value(b) - value(a) || b.analysis.confidenceScore - a.analysis.confidenceScore,
     );
-    selected = selectWithTypeCap(candidates, (c) => c.prop.propType, settings.maxDailyPicks);
+    selected = selectWithTypeCap(
+      onePerPlayer(candidates, (c) => c.prop.playerName),
+      (c) => c.prop.propType,
+      settings.maxDailyPicks,
+    );
   } else {
     candidates.sort(
       (a, b) =>

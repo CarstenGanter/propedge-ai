@@ -231,9 +231,34 @@ function specOf(m: ConsensusModel): DistSpec {
   return { propType: m.propType, sigma: m.sigma, df: m.df };
 }
 
+/**
+ * How much of the model's per-yard probability change to trust when reading
+ * the consensus at a line other than the books' own (pure).
+ *
+ * Measured on nflverse weekly data 2022-25 (each game predicted from the
+ * previous six): moving a yardage line one yard lower raised the Over's actual
+ * hit rate by less than the model claimed — receiving 8-14 yds 2.1 pts vs 3.0,
+ * rushing 8-14 2.7 vs 3.4, 14-20 1.9 vs 2.4, 20-30 1.2 vs 1.9. About 0.7 of
+ * the modelled gain is real on the low lines where soft Underdog lines show
+ * up. On 2026-10-04 every green pick was a 1-yard soft line on a line under
+ * 16 yards, and the overstated gain is what pushed them past the margin.
+ * Applied to all yardage: where the model was already accurate (higher lines)
+ * this under-claims slightly, which is the safe direction for an edge.
+ */
+export const LINE_SHIFT_TRUST: Record<string, number> = {
+  "Receiving Yards": 0.7,
+  "Rushing Yards": 0.7,
+  "Rush+Rec Yards": 0.7,
+};
+
 /** The consensus P(outcome > line), at any line. */
 export function consensusProbOver(m: ConsensusModel, line: number): number {
-  return probOver(specOf(m), m.mean, line);
+  const spec = specOf(m);
+  const raw = probOver(spec, m.mean, line);
+  const trust = LINE_SHIFT_TRUST[m.propType];
+  if (trust == null || line === m.referenceLine) return raw;
+  const atReference = probOver(spec, m.mean, m.referenceLine);
+  return atReference + trust * (raw - atReference);
 }
 
 /**

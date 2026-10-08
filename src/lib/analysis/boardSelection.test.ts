@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   boardValue,
+  onePerPlayer,
   expectedValueAtUnderdog,
   fitUnderdogPricing,
   perTypeCap,
@@ -96,5 +97,20 @@ describe("boardValue", () => {
   it("caps a thin market at break-even", () => {
     // Emanuel Wilson, 2026-10-04: 1.189 on paper, from fewer than three books.
     expect(boardValue({ marketProb: 0.636, underdogLine: 5.5, underdogPayout: null, reliable: false, predicted: curve })).toBe(1);
+  });
+});
+
+describe("onePerPlayer", () => {
+  it("keeps each player's best-ranked prop only", () => {
+    const ordered = [
+      { p: "Emanuel Wilson", t: "Receiving Yards" },
+      { p: "George Holani", t: "Receiving Yards" },
+      { p: "Emanuel Wilson", t: "Rushing Yards" },
+      { p: "emanuel wilson ", t: "Rush+Rec Yards" },
+    ];
+    expect(onePerPlayer(ordered, (x) => x.p).map((x) => `${x.p}:${x.t}`)).toEqual([
+      "Emanuel Wilson:Receiving Yards",
+      "George Holani:Receiving Yards",
+    ]);
   });
 });

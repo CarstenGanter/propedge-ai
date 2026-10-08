@@ -68,10 +68,6 @@ export async function runAutoCapture(source: "launchd" | "app", now = new Date()
     if (decision.action === "skip") return log(`skip — ${decision.reason}`);
     const due = decision.games;
 
-    // Recorded before paying, so a crash or an unmatched prop can never lead to
-    // the same game being bought again on the next run.
-    await cacheSet(attemptedKey(date), [...attempted, ...due.map((g) => g.gameId)]);
-
     const r = await captureClosingLines({
       date,
       includeProps: true,
@@ -86,6 +82,27 @@ export async function runAutoCapture(source: "launchd" | "app", now = new Date()
         ),
     });
     if (!r.ok) return log(`FAILED — ${r.error}`);
+
+    // Record only the games a paid request actually returned odds for. On
+    // 2026-10-04 a request for MIA @ MIN came back empty (no credits spent),
+    // yet the game was marked attempted up front, so the next run refused to
+    // retry it and its closing lines were lost. A game the books simply pulled
+    // props from still counts as priced, so it is never bought twice.
+    const priced = due.filter((g) =>
+      (r.pricedGames ?? []).some(
+        (e) =>
+          (teamsMatch(e.home, g.home) && teamsMatch(e.away, g.away)) ||
+          (teamsMatch(e.home, g.away) && teamsMatch(e.away, g.home)),
+      ),
+    );
+    if (priced.length > 0) await cacheSet(attemptedKey(date), [...attempted, ...priced.map((g) => g.gameId)]);
+    if (priced.length < due.length) {
+      return log(
+        `no odds returned for ${due.length - priced.length} of ${due.length} game(s)` +
+          (r.error ? ` (${r.error})` : "") +
+          ` — will retry next run. Captured ${r.propPicksUpdated} pick(s).`,
+      );
+    }
     const wanted = due.reduce((n, g) => n + g.picks, 0);
     return log(
       `captured ${r.propPicksUpdated} of ${wanted} pick(s) across ${due.length} game(s)` +

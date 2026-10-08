@@ -91,7 +91,10 @@ and it hit.
 The **Edge** column updates as you type. Positive means Underdog is offering a softer number than
 the books, which is the edge actually worth having. Under it, **soft line** (green) or **tough line**
 (red) means the books give your side at least 1.5 points more — or less — at Underdog's line than at
-their own. A soft line is the one edge that has actually held up.
+their own. A soft line is the one edge that has actually held up — but on low lines (under ~20
+yards) it's worth less than it looks: tested on 2022–25 games, a yard of line moved the hit rate only
+about 70% as much as the model claimed, so the app now credits 0.7 of it. On 2026-10-04 that would
+have turned Holani's "green" Higher 9.5 into break-even (it lost).
 
 **Also enter each pick's Payout** — the multiplier Underdog shows for that pick (e.g. `1.71`). A
 standard pick pays **1.87×**; Underdog pays less for a side it rates likely and more for one it rates

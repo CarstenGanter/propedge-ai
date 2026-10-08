@@ -432,6 +432,8 @@ export interface FetchPropsResult {
   status: OddsApiStatus;
   props: NormalizedProp[];
   events: number;
+  /** Events a paid request actually returned odds for — what credits were spent on. */
+  pricedEvents: { home: string; away: string }[];
   sportKey: string;
 }
 
@@ -478,11 +480,12 @@ export async function fetchPlayerProps(
   const maxEvents = options.maxEvents ?? 12;
   const comps = competitionsForSport(sport);
   if (comps.length === 0) {
-    return { status: { ok: false, remaining: null, used: null, error: "Unsupported sport" }, props: [], events: 0, sportKey: "" };
+    return { status: { ok: false, remaining: null, used: null, error: "Unsupported sport" }, props: [], events: 0, pricedEvents: [], sportKey: "" };
   }
   const perComp = Math.max(1, Math.floor(maxEvents / comps.length));
 
   const all: NormalizedProp[] = [];
+  const priced: { home: string; away: string }[] = [];
   let remaining: number | null = null;
   let used: number | null = null;
   let lastError: string | undefined;
@@ -512,7 +515,10 @@ export async function fetchPlayerProps(
       if (r.remaining != null) remaining = r.remaining;
       if (r.used != null) used = r.used;
       if (r.error) lastError = r.error;
-      if (r.data) all.push(...normalizeEvent(r.data, comp.sportKey, comp.label));
+      if (r.data) {
+        all.push(...normalizeEvent(r.data, comp.sportKey, comp.label));
+        priced.push({ home: ev.home_team, away: ev.away_team });
+      }
       // Each event should cost at most one credit per market. If it costs more
       // the billing assumption behind the bookmaker list is wrong: stop before
       // the rest of the slate spends double.
@@ -527,6 +533,7 @@ export async function fetchPlayerProps(
     status: { ok: all.length > 0 || !lastError, remaining, used, error: all.length === 0 ? lastError : undefined },
     props: all,
     events: totalEvents,
+    pricedEvents: priced,
     sportKey: comps[0].sportKey,
   };
 }

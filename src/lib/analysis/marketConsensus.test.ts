@@ -169,3 +169,27 @@ describe("favouredSide", () => {
     expect(favouredSide(model!, 9.5)).toBe("OVER");
   });
 });
+
+describe("line-shift trust", () => {
+  it("credits only 0.7 of the modelled gain from a softer yardage line", async () => {
+    const { LINE_SHIFT_TRUST, consensusProbOver } = await import("./marketConsensus");
+    const { probOver } = await import("./propDistribution");
+    const { model } = buildConsensus("Receiving Yards", [
+      { book: "fanduel", line: 10.5, over: -105, under: -125 },
+      { book: "draftkings", line: 10.5, over: -108, under: -122 },
+      { book: "betmgm", line: 10.5, over: -110, under: -120 },
+    ]);
+    const m = model!;
+    const spec = { propType: m.propType, sigma: m.sigma, df: m.df };
+    const rawGain = probOver(spec, m.mean, 9.5) - probOver(spec, m.mean, 10.5);
+    const gain = consensusProbOver(m, 9.5) - consensusProbOver(m, 10.5);
+    expect(gain).toBeCloseTo(LINE_SHIFT_TRUST["Receiving Yards"] * rawGain, 9);
+    // The books' own line is untouched.
+    expect(consensusProbOver(m, 10.5)).toBeCloseTo(m.pOverAtReference, 9);
+  });
+
+  it("leaves count props alone", async () => {
+    const { LINE_SHIFT_TRUST } = await import("./marketConsensus");
+    expect(LINE_SHIFT_TRUST["Receptions"]).toBeUndefined();
+  });
+});

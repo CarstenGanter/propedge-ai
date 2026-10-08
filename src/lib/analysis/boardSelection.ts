@@ -130,3 +130,19 @@ export function boardValue(c: {
   const v = c.underdogLine != null ? p * (c.underdogPayout ?? STANDARD_PICK_PAYOUT) : c.predicted(p);
   return c.reliable ? v : Math.min(v, 1);
 }
+
+/**
+ * Keep each player's best prop only (items must already be in rank order).
+ * The board is a shortlist to check on Underdog; one player's correlated
+ * props crowding it — Emanuel Wilson held 3 of 10 slots on 2026-10-04 — leave
+ * fewer independent chances, and a slip can't use two of them anyway.
+ */
+export function onePerPlayer<T>(ordered: T[], playerOf: (t: T) => string): T[] {
+  const seen = new Set<string>();
+  return ordered.filter((t) => {
+    const k = playerOf(t).trim().toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}

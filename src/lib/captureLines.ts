@@ -18,6 +18,8 @@ export interface CaptureSummary {
   teamPicksUpdated: number;
   propPicksUpdated: number;
   creditsRemaining: number | null;
+  /** Games a paid request returned odds for. A game missing here cost nothing. */
+  pricedGames?: { home: string; away: string }[];
   error?: string;
 }
 
@@ -83,6 +85,8 @@ export async function captureClosingLines(opts?: {
 
   // ---- Player props — per-event, credit-heavy, capped & opt-in ----
   let propPicksUpdated = 0;
+  const pricedGames: { home: string; away: string }[] = [];
+  let fetchError: string | undefined;
   if (opts?.includeProps !== false) {
     const picks = await prisma.pick.findMany({
       where: {
@@ -110,6 +114,8 @@ export async function captureClosingLines(opts?: {
       });
       if (res.status.remaining != null) creditsRemaining = res.status.remaining;
       await recordOddsCredits(res.status.remaining, res.status.used);
+      pricedGames.push(...res.pricedEvents);
+      if (res.status.error) fetchError = res.status.error;
       if (res.props.length === 0) continue;
       for (const pick of marketPicks.filter((p) => p.playerProp.sport === sport)) {
         const pp = pick.playerProp;
@@ -136,5 +142,5 @@ export async function captureClosingLines(opts?: {
     }
   }
 
-  return { ok: true, teamPicksUpdated, propPicksUpdated, creditsRemaining };
+  return { ok: true, teamPicksUpdated, propPicksUpdated, creditsRemaining, pricedGames, ...(fetchError ? { error: fetchError } : {}) };
 }
