@@ -108,7 +108,7 @@ export async function ingestOddsPropsForSport(
     },
     select: {
       id: true, date: true, playerName: true, propType: true, gameId: true, team: true, opponent: true,
-      underdogLine: true, underdogAvailable: true, marketDataJson: true,
+      underdogLine: true, underdogAvailable: true, underdogPickMultiplier: true, marketDataJson: true,
       // Only a pick you bet (placed, or in a saved slip) locks the prop's line
       // and side. Auto-generated board picks are rebuilt by the re-rank anyway.
       _count: { select: { picks: { where: { OR: [{ placedReal: true }, { parlayLegs: { some: {} } }] } } } },
@@ -143,10 +143,11 @@ export async function ingestOddsPropsForSport(
   // Update in place. The user's Underdog line, payout and availability, picks,
   // slip legs and closing lines all live on or under these rows and survive.
   for (const [key, { id, hasPick }] of plan.update) {
-    await prisma.playerProp.update({
-      where: { id },
-      data: refreshableFields(withUnderdog(byKey.get(key)!, storedById.get(id), hasPick), hasPick),
-    });
+    const prev = storedById.get(id);
+    const data: Record<string, unknown> = refreshableFields(withUnderdog(byKey.get(key)!, prev, hasPick), hasPick);
+    // A payout you typed belongs to the side shown when you typed it.
+    if (prev?.underdogPickMultiplier != null) delete data.direction;
+    await prisma.playerProp.update({ where: { id }, data });
   }
   if (plan.create.length > 0) {
     await prisma.playerProp.createMany({ data: plan.create.map((k) => withUnderdog(byKey.get(k)!)) });

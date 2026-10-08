@@ -220,9 +220,18 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
 
     // Judge each prop on the side the books favour at the line actually played
     // (Underdog's, once known) — it can differ from their lean at their own
-    // line. A prop you bet keeps the side you bet.
+    // line. A prop you bet keeps the side you bet, and so does one you entered
+    // a payout for: Underdog pays Higher and Lower differently, and the payout
+    // typed belongs to the side shown. Flipping it would pair one side's odds
+    // with the other side's payout — on 2026-10-08 that would have shown
+    // Flournoy Higher 24.5 "green" at 1.40 using Lower's 2.38x.
     const consensus = consensusOf(parseSnapshot(prop.marketDataJson));
-    if (consensus && !takenStakes.has(prop.id) && !legsByProp.has(prop.id)) {
+    if (
+      consensus &&
+      prop.underdogPickMultiplier == null &&
+      !takenStakes.has(prop.id) &&
+      !legsByProp.has(prop.id)
+    ) {
       const side = favouredSide(consensus, prop.underdogLine ?? prop.line);
       if (side !== prop.direction) {
         await prisma.playerProp.update({ where: { id: prop.id }, data: { direction: side } });

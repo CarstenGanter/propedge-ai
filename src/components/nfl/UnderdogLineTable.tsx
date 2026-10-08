@@ -132,7 +132,7 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                   <th className="pb-2 pr-3 text-right font-medium">Book line</th>
                   <th className="pb-2 pr-3 text-right font-medium">Your line</th>
                   <th className="pb-2 pr-3 text-right font-medium">Edge</th>
-                  <th className="pb-2 pr-3 text-right font-medium" title={`What Underdog pays for this pick, e.g. 1.71. Blank = a standard ${STANDARD_PICK_PAYOUT}x pick.`}>Payout</th>
+                  <th className="pb-2 pr-3 text-right font-medium" title={`What Underdog pays for the side shown under Pick — Higher and Lower pay differently, so enter the one for that side (e.g. 1.71). Blank = a standard ${STANDARD_PICK_PAYOUT}x pick. Entering it fixes the pick to that side.`}>Payout</th>
                   <th className="pb-2 pr-3 text-right font-medium" title="Hit rate this pick needs to be worth its payout: 1 ÷ payout.">Needs</th>
                   <th className="pb-2 pr-3 text-right font-medium" title="The sportsbooks' own no-vig probability for this side at your line. Green when it beats Needs.">Books</th>
                   <th className="pb-2 pr-3 text-right font-medium" title={`PrizePicks' line from the feed, and the books' probability for the side they favour there. PrizePicks pays the same either way, so a stale line pays in full; green when it clears the ${(PRIZEPICKS_LEG_BAR * 100).toFixed(1)}% a leg its 5-pick Power Play needs, by the ${Math.round((VALUE_MARGIN - 1) * 100)}% margin.`}>PrizePicks</th>
