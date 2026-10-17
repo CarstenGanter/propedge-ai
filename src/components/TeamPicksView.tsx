@@ -6,10 +6,11 @@ import { Sparkles, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SportFilter } from "@/components/SportFilter";
 import { TeamPickCard } from "@/components/TeamPickCard";
-import { EmptyState, SectionHeading } from "@/components/common";
+import { EmptyState, PageHeader } from "@/components/common";
 import { generateTeamPicks } from "@/server/actions/teams";
 import { formatSlate } from "@/lib/utils/dates";
 import { LEAGUE_LABELS, type League } from "@/lib/teamLeagues";
+import { isVisibleLeague } from "@/components/visibleSports";
 import type { SerializedTeamPick } from "@/lib/dto";
 
 export function TeamPicksView({
@@ -26,7 +27,8 @@ export function TeamPicksView({
   const [pending, startTransition] = React.useTransition();
   const [message, setMessage] = React.useState<string | null>(null);
 
-  const activeLeagues = [...new Set(picks.map((p) => p.league))];
+  // Filter chips only for leagues the UI offers; "All" still lists past picks from any league.
+  const activeLeagues = [...new Set(picks.map((p) => p.league))].filter(isVisibleLeague);
   const filtered = league === "All" ? picks : picks.filter((p) => p.league === league);
   // SportFilter shows league labels but we key on league codes.
   const labelFor = (code: string) => LEAGUE_LABELS[code as League] ?? code;
@@ -49,10 +51,11 @@ export function TeamPicksView({
 
   return (
     <div className="space-y-5">
-      <SectionHeading
+      <PageHeader
+        kicker="Game winners"
         title="Team Picks"
         description={`Best teams to win for ${formatSlate(date)} — model win probability vs the market, with value flagged. All picks carry risk.`}
-        action={
+        actions={
           <Button onClick={handleGenerate} disabled={pending}>
             <Sparkles className="h-4 w-4" />
             {pending ? "Analyzing games…" : "Fetch + generate"}
@@ -87,7 +90,7 @@ export function TeamPicksView({
           title={picks.length === 0 ? "No team picks yet" : "No picks for this league"}
           description={
             picks.length === 0
-              ? "Enable in-season leagues in Settings (MLB, WNBA, active soccer), then click Fetch + generate to pull today's games and rank the best teams to win."
+              ? "Enable NFL under Team picks in Settings, then click Fetch + generate to pull today's games and rank the best teams to win."
               : "Try a different league filter."
           }
           action={

@@ -1,53 +1,124 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------ */
-/*  PropEdge AI — minimal dark theme, neutral zinc + finance emerald   */
+/*  PropEdge — "Form Guide": an editorial betting page.                */
+/*  Paper and ink by default, a night edition under data-theme=dark.   */
+/*                                                                     */
+/*  Green, amber and red mean edge, break-even and overpriced. They    */
+/*  are never decoration: the brand accent is ink-blue.                */
 /* ------------------------------------------------------------------ */
 
-@theme {
-  --color-background: #09090b;
-  --color-surface: #0e0e11;
-  --color-card: #131316;
-  --color-card-foreground: #ededf0;
-  --color-foreground: #ededf0;
-  --color-muted: #1a1a1f;
-  --color-muted-foreground: #9b9ba4;
-  --color-border: #232329;
-  --color-input: #1a1a1f;
-  --color-ring: #10b981;
+/* `dark:` follows the toggle (data-theme on <html>), not the OS setting. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-  --color-primary: #10b981;
-  --color-primary-foreground: #03130d;
-  --color-secondary: #a1a1aa;
-  --color-secondary-foreground: #0b0b0d;
-  --color-accent: #34d399;
+/* static: every variable is emitted, including the chart ones read at runtime. */
+@theme static {
+  --color-background: #f5f2ea;
+  --color-surface: #efebe1;
+  --color-card: #fbfaf6;
+  --color-card-foreground: #16150f;
+  --color-foreground: #16150f;
+  --color-muted: #ece7da;
+  --color-muted-foreground: #5e5a4e;
+  --color-border: #d9d3c4;
+  --color-border-strong: #16150f;
+  --color-input: #fffdf8;
+  --color-ring: #1d3a8a;
 
-  --color-success: #34d399;
-  --color-danger: #f87171;
-  --color-warning: #fbbf24;
-  --color-info: #93c5fd;
+  --color-primary: #1d3a8a;
+  --color-primary-foreground: #f5f2ea;
+  --color-secondary: #5e5a4e;
+  --color-secondary-foreground: #f5f2ea;
+  --color-accent: #1d3a8a;
 
-  --radius-lg: 0.625rem;
-  --radius-md: 0.5rem;
-  --radius-sm: 0.375rem;
+  --color-success: #0e7a52;
+  --color-danger: #b3362f;
+  --color-warning: #8a5800;
+  --color-info: #2b5bb5;
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --color-chart-1: #1d3a8a;
+  --color-chart-2: #b86b1f;
+  --color-chart-axis: #5e5a4e;
+  --color-chart-grid: #e3ddcf;
+  --color-chart-reference: #b8b09e;
+
+  /* Crisp, printed corners: pills (rounded-full) stay round. */
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 4px;
+  --radius-2xl: 6px;
+
+  --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-newsreader), ui-serif, Georgia, serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 }
 
 :root {
+  color-scheme: light;
+}
+
+/* The night edition: the same paper-and-ink hierarchy, inverted warm. */
+:root[data-theme="dark"] {
   color-scheme: dark;
+  --color-background: #131210;
+  --color-surface: #181714;
+  --color-card: #1c1b18;
+  --color-card-foreground: #ede8dc;
+  --color-foreground: #ede8dc;
+  --color-muted: #26241f;
+  --color-muted-foreground: #a8a193;
+  --color-border: #34312a;
+  --color-border-strong: #ede8dc;
+  --color-input: #1a1916;
+  --color-ring: #9db4f5;
+
+  --color-primary: #9db4f5;
+  --color-primary-foreground: #10131c;
+  --color-secondary: #a8a193;
+  --color-secondary-foreground: #131210;
+  --color-accent: #9db4f5;
+
+  --color-success: #4cc38a;
+  --color-danger: #f07b72;
+  --color-warning: #e2ae4a;
+  --color-info: #9db4f5;
+
+  --color-chart-1: #9db4f5;
+  --color-chart-2: #e59a4c;
+  --color-chart-axis: #a8a193;
+  --color-chart-grid: #2a2823;
+  --color-chart-reference: #4a463d;
 }
 
-* {
-  border-color: var(--color-border);
-}
+/* In the base layer, so utility classes (border-primary, font-sans…) still
+   win. Unlayered, `*` overrode every border colour utility in the app. */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
 
-body {
-  background: var(--color-background);
-  color: var(--color-foreground);
-  font-family: var(--font-sans);
-  min-height: 100vh;
+  body {
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    min-height: 100vh;
+    font-feature-settings: "ss01";
+  }
+
+  /* Headlines are set in the serif; numbers line up in tables everywhere. */
+  h1,
+  h2 {
+    font-family: var(--font-serif);
+  }
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
 }
 
 /* Card surface (legacy class name kept so every Card restyles automatically) */
@@ -60,16 +131,25 @@ body {
   transition: border-color 0.15s ease;
 }
 .glass-hover:hover {
-  border-color: #3f3f46;
+  border-color: var(--color-muted-foreground);
 }
 
-/* Legacy brand classes — now flat (no gradients, no glow) */
+/* Legacy brand classes — flat (no gradients, no glow) */
 .gradient-text {
   color: var(--color-foreground);
 }
 
 .gradient-primary {
   background: var(--color-primary);
+}
+
+/* A section kicker: the small navy capitals above a headline. */
+.kicker {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-primary);
 }
 
 ::-webkit-scrollbar {
@@ -80,13 +160,13 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a2a31;
+  background: var(--color-border);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: var(--color-muted-foreground);
   background-clip: content-box;
 }
 
@@ -102,4 +182,13 @@ body {
 }
 .animate-in {
   animation: fade-in-up 0.35s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-in {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
 }

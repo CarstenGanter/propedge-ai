@@ -4,6 +4,7 @@ import { ResearchLab } from "@/components/ResearchLab";
 import { OddsFetch } from "@/components/OddsFetch";
 import { getProps } from "@/lib/queries";
 import { hasKey } from "@/lib/providers/config";
+import { PageHeader } from "@/components/common";
 
 export const dynamic = "force-dynamic";
 
@@ -12,13 +13,16 @@ export default async function ResearchPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Research Lab</h1>
-        <p className="text-sm text-muted-foreground">
-          Fetch real market props, import your own, and preview the model's analysis before
-          generating picks.
-        </p>
-      </div>
+      <PageHeader
+        kicker="Props & data"
+        title="Research Lab"
+        description={
+          <>
+            Fetch real market props, import your own, and preview the model&apos;s analysis before
+            generating picks.
+          </>
+        }
+      />
 
       <OddsFetch configured={hasKey("ODDS_API_KEY")} />
 

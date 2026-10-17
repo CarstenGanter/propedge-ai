@@ -101,7 +101,7 @@ export function NflFetchButton({ date, disabled }: { date: string; disabled?: bo
       )}
       {msg && <p className="max-w-xl text-xs text-muted-foreground">{msg}</p>}
       {underdogPricesReal && (
-        <p className="max-w-xl text-xs font-medium text-success">
+        <p className="max-w-xl text-xs font-medium text-primary">
           Underdog&apos;s prices in this fetch vary instead of the usual -137 placeholder — they may be real payouts.
           Check two or three against the Underdog app before trusting them; if they match, payouts can be auto-filled
           from the feed.

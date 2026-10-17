@@ -2,7 +2,7 @@ import { ParlayBuilder } from "@/components/ParlayBuilder";
 import { ParlaysList } from "@/components/ParlaysList";
 import { TeamParlayBuilder } from "@/components/TeamParlayBuilder";
 import { TeamParlaysList } from "@/components/TeamParlaysList";
-import { SectionHeading } from "@/components/common";
+import { PageHeader, SectionHeading } from "@/components/common";
 import {
   getParlays,
   getPicksForParlayBuilder,
@@ -35,14 +35,17 @@ export default async function ParlaysPage({
 
   return (
     <div className="space-y-10">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Parlay Builder</h1>
-        <p className="text-sm text-muted-foreground">
-          Combine picks into a parlay. Player-prop parlays use a manual payout multiplier; team
-          (moneyline) parlays compute the payout from each team&apos;s price. Correlation warnings help
-          you avoid over-concentrated risk. Parlays are high variance.
-        </p>
-      </div>
+      <PageHeader
+        kicker="Slips & parlays"
+        title="Parlay Builder"
+        description={
+          <>
+            Combine picks into a parlay. Player-prop parlays use a manual payout multiplier; team
+            (moneyline) parlays compute the payout from each team&apos;s price. Correlation warnings help
+            you avoid over-concentrated risk. Parlays are high variance.
+          </>
+        }
+      />
 
       <section className="space-y-4">
         <SectionHeading

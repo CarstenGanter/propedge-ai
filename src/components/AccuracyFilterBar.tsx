@@ -61,11 +61,12 @@ function Pill({ href, active, children }: { href: string; active: boolean; child
   return (
     <Link
       href={href}
+      aria-current={active ? "true" : undefined}
       className={cn(
-        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+        "inline-flex h-9 items-center rounded-full border px-3.5 text-xs font-medium transition-colors",
         active
-          ? "border-primary/40 bg-primary/12 text-primary"
-          : "border-border bg-muted/30 text-muted-foreground hover:text-foreground",
+          ? "border-foreground bg-foreground text-background"
+          : "border-border text-muted-foreground hover:border-foreground/60 hover:text-foreground",
       )}
     >
       {children}

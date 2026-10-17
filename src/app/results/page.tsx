@@ -3,7 +3,7 @@ import { Award, CalendarDays, ListChecks, TrendingDown } from "lucide-react";
 import { prisma } from "@/lib/db/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { StatCard, EmptyState, SectionHeading } from "@/components/common";
+import { StatCard, EmptyState, PageHeader } from "@/components/common";
 import { StatusBadge, ConfidenceBadge, SportBadge, LeagueBadge, TeamStatusBadge, ValueBadge } from "@/components/badges";
 import { ResultSettlementModal } from "@/components/ResultSettlementModal";
 import { SettleAllButton } from "@/components/SettleAllButton";
@@ -87,10 +87,11 @@ export default async function ResultsPage({
 
   return (
     <div className="space-y-6">
-      <SectionHeading
+      <PageHeader
+        kicker="Settlement"
         title="Results & Settlement"
         description={`End-of-day review for ${formatSlate(date)}. Auto-settle uses your data provider; otherwise settle manually.`}
-        action={<SettleAllButton date={date} />}
+        actions={<SettleAllButton date={date} />}
       />
 
       {dates.length > 0 && (
@@ -109,7 +110,7 @@ export default async function ResultsPage({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-6 lg:grid-cols-4">
         <StatCard label="Daily accuracy" value={formatPercent(record.hitRate)} sub={`${hits.length}-${misses.length} decided`} accent="primary" />
         <StatCard label="Daily P/L" value={formatSignedCurrency(dailyPL)} accent={dailyPL >= 0 ? "success" : "danger"} />
         <StatCard label="Settled" value={`${settled.length}/${picks.length}`} sub={`${picks.length - settled.length} pending`} />

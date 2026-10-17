@@ -13,16 +13,18 @@ export function SportFilter({
 }) {
   const options = ["All", ...sports];
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter">
       {options.map((s) => (
         <button
           key={s}
+          type="button"
           onClick={() => onChange(s)}
+          aria-pressed={value === s}
           className={cn(
-            "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+            "inline-flex h-9 cursor-pointer items-center rounded-full border px-3.5 text-xs font-medium transition-colors",
             value === s
-              ? "border-primary/40 bg-primary/12 text-primary"
-              : "border-border bg-muted/30 text-muted-foreground hover:text-foreground",
+              ? "border-foreground bg-foreground text-background"
+              : "border-border text-muted-foreground hover:border-foreground/60 hover:text-foreground",
           )}
         >
           {s}

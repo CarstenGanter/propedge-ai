@@ -14,13 +14,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { fetchPropsFromOddsApi } from "@/server/actions/odds";
-import { SPORTS, type Sport } from "@/types";
+import type { Sport } from "@/types";
+import { VISIBLE_SPORTS } from "@/components/visibleSports";
 
 type OddsImportResult = Awaited<ReturnType<typeof fetchPropsFromOddsApi>>;
 
 export function OddsFetch({ configured }: { configured: boolean }) {
   const router = useRouter();
-  const [sport, setSport] = React.useState<Sport>("MLB");
+  const [sport, setSport] = React.useState<Sport>("NFL");
   const [pending, startTransition] = React.useTransition();
   const [result, setResult] = React.useState<OddsImportResult | null>(null);
 
@@ -61,7 +62,7 @@ export function OddsFetch({ configured }: { configured: boolean }) {
               <Select value={sport} onValueChange={(v) => setSport(v as Sport)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {SPORTS.map((s) => (
+                  {VISIBLE_SPORTS.map((s) => (
                     <SelectItem key={s} value={s}>{s}</SelectItem>
                   ))}
                 </SelectContent>
@@ -79,7 +80,7 @@ export function OddsFetch({ configured }: { configured: boolean }) {
             {result.ok ? (
               <p className="text-success">
                 Imported {result.imported} {result.sport} props from {result.events} game(s).
-                Head to Today's Picks and hit Generate.
+                Head to Today&apos;s Picks and hit Generate.
               </p>
             ) : (
               <p className="text-danger">{result.error}</p>

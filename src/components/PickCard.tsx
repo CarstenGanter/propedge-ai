@@ -69,7 +69,9 @@ export function PickCard({
             <span className="inline-flex items-center gap-1">
               <TrendingUp className="h-3 w-3" /> edge {formatSignedNumber(pick.edgeScore)}
             </span>
-            {pick.underdogEdge != null && <UnderdogEdgeBadge edge={pick.underdogEdge} />}
+            {pick.underdogEdge != null && (
+              <UnderdogEdgeBadge edge={pick.underdogEdge} priced={p.underdogRead?.priced !== false} />
+            )}
             <StatusBadge status={pick.status} />
           </div>
           <TrackPickButton
@@ -88,6 +90,7 @@ export function PickCard({
             underdogLine={p.underdogLine}
             marketLine={p.marketLine ?? p.line}
             edge={pick.underdogEdge}
+            priced={p.underdogRead?.priced !== false}
             compact
           />
         </div>

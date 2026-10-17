@@ -53,7 +53,7 @@ export function ResearchLab({ props }: { props: SerializedProp[] }) {
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader>
           <CardTitle>Prop library ({props.length})</CardTitle>
@@ -90,7 +90,7 @@ export function ResearchLab({ props }: { props: SerializedProp[] }) {
                   <Button size="sm" variant="secondary" onClick={() => analyze(p)} disabled={pending}>
                     <Sparkles className="h-3.5 w-3.5" /> Analyze
                   </Button>
-                  <Button size="icon" variant="ghost" onClick={() => remove(p.id)} disabled={pending}>
+                  <Button size="icon" variant="ghost" onClick={() => remove(p.id)} disabled={pending} aria-label={`Delete ${p.playerName} ${p.propType} prop`}>
                     <Trash2 className="h-4 w-4 text-muted-foreground" />
                   </Button>
                 </div>

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { CalendarDays, ChevronLeft, ChevronRight, RefreshCcw, Sparkles, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/common";
+import { EmptyState, PageHeader, StatCard } from "@/components/common";
 import { PickCard } from "@/components/PickCard";
 import { NflFetchButton } from "./NflFetchButton";
 import { NflGameCard } from "./NflGameCard";
@@ -59,28 +59,14 @@ export function NflGamedayView({ data }: { data: NflGamedayData }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">NFL Gameday</h1>
-            {data.week != null && <Badge variant="muted">Week {data.week}</Badge>}
-            {data.isToday && <Badge variant="success">Today</Badge>}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {formatSlate(data.date)} · {data.games.length} game{data.games.length === 1 ? "" : "s"} · {data.pickCount} pick
-            {data.pickCount === 1 ? "" : "s"} · {data.pendingPropCount} prop{data.pendingPropCount === 1 ? "" : "s"} stored
-            {data.credits && (
-              <>
-                {" "}
-                · <span className="text-foreground/80">{data.credits.remaining} Odds API credits left</span>
-              </>
-            )}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1">
+      <PageHeader
+        kicker={`NFL${data.week != null ? ` · Week ${data.week}` : ""} · ${formatSlate(data.date)}`}
+        title="NFL Gameday"
+        meta={data.isToday ? <Badge>Today</Badge> : undefined}
+        actions={
+          <nav aria-label="Slates" className="flex flex-wrap items-center gap-1">
             <Button asChild variant="ghost" size="sm" disabled={!data.prevDate}>
               <Link href={data.prevDate ? `/nfl?date=${data.prevDate}` : "#"} aria-disabled={!data.prevDate}>
                 <ChevronLeft className="h-4 w-4" /> Prev slate
@@ -96,9 +82,17 @@ export function NflGamedayView({ data }: { data: NflGamedayData }) {
                 Next slate <ChevronRight className="h-4 w-4" />
               </Link>
             </Button>
-          </div>
-        </div>
-      </div>
+          </nav>
+        }
+      />
+
+      {/* The slate in numbers, as a ruled stat line */}
+      <section aria-label="Slate summary" className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
+        <StatCard label={data.games.length === 1 ? "game on the slate" : "games on the slate"} value={data.games.length} />
+        <StatCard label={data.pickCount === 1 ? "pick on the board" : "picks on the board"} value={data.pickCount} />
+        <StatCard label={data.pendingPropCount === 1 ? "prop stored" : "props stored"} value={data.pendingPropCount} />
+        <StatCard label="Odds API credits left" value={data.credits ? data.credits.remaining : "—"} />
+      </section>
 
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-2">

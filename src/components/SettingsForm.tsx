@@ -16,8 +16,9 @@ import {
   addAvoidItem,
   removeAvoidItem,
 } from "@/server/actions/settings";
-import { NFL_MARKET_OPTIONS, SPORTS } from "@/types";
-import { TEAM_LEAGUES, LEAGUE_LABELS } from "@/lib/teamLeagues";
+import { NFL_MARKET_OPTIONS } from "@/types";
+import { LEAGUE_LABELS } from "@/lib/teamLeagues";
+import { VISIBLE_LEAGUES, VISIBLE_SPORTS } from "@/components/visibleSports";
 import type { AppSettingsData } from "@/lib/settings";
 import type { ProviderStatus } from "@/lib/providers/config";
 import { cn } from "@/lib/utils/cn";
@@ -105,7 +106,7 @@ export function SettingsForm({
           <div>
             <Label>Enabled sports</Label>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {SPORTS.map((s) => (
+              {VISIBLE_SPORTS.map((s) => (
                 <button
                   key={s}
                   onClick={() => toggleSport(s)}
@@ -141,7 +142,7 @@ export function SettingsForm({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-1.5">
-            {TEAM_LEAGUES.map((l) => (
+            {VISIBLE_LEAGUES.map((l) => (
               <button
                 key={l}
                 onClick={() => setLeagues((prev) => (prev.includes(l) ? prev.filter((x) => x !== l) : [...prev, l]))}

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Activity, DollarSign, Percent, Target, TrendingUp, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatCard, EmptyState, SectionHeading } from "@/components/common";
+import { StatCard, EmptyState, SectionHeading, PageHeader } from "@/components/common";
 import { PickCard } from "@/components/PickCard";
 import { DemoDataBadge } from "@/components/badges";
 import {
@@ -44,24 +44,22 @@ export default async function DashboardPage() {
   const topPicks = latestDate ? (await getPicksForDate(latestDate)).slice(0, 5) : [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Dashboard {settings.demoMode && <DemoDataBadge className="ml-2 align-middle" />}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Your prop research command center. All picks carry risk.
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/picks">
-            <Target className="h-4 w-4" /> Go to Today's Picks
-          </Link>
-        </Button>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        kicker="Your desk"
+        title="Dashboard"
+        meta={settings.demoMode ? <DemoDataBadge /> : undefined}
+        description="Your prop research command center. All picks carry risk."
+        actions={
+          <Button asChild>
+            <Link href="/picks">
+              <Target className="h-4 w-4" /> Go to Today&apos;s Picks
+            </Link>
+          </Button>
+        }
+      />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-6 lg:grid-cols-4">
         <StatCard
           label="Bankroll"
           value={formatCurrency(summary.currentBankroll)}

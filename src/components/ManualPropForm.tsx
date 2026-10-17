@@ -14,7 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { addManualProp } from "@/server/actions/props";
-import { PROP_TYPES, SPORTS, type Sport } from "@/types";
+import { PROP_TYPES, type Sport } from "@/types";
+import { VISIBLE_SPORTS } from "@/components/visibleSports";
 import { todaySlate } from "@/lib/utils/dates";
 
 export function ManualPropForm() {
@@ -73,7 +74,7 @@ export function ManualPropForm() {
             <Select value={sport} onValueChange={onSport}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {SPORTS.map((s) => (
+                {VISIBLE_SPORTS.map((s) => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
               </SelectContent>

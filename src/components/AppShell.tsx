@@ -3,126 +3,92 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  BarChart3,
-  CalendarDays,
-  FlaskConical,
-  LayoutDashboard,
-  Layers,
-  ListChecks,
-  Menu,
-  Settings,
-  Target,
-  Trophy,
-  X,
-} from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { DisclaimerBanner } from "@/components/DisclaimerBanner";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const NAV = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/picks", label: "Today's Picks", icon: Target },
-  { href: "/nfl", label: "NFL Gameday", icon: CalendarDays },
-  { href: "/teams", label: "Team Picks", icon: Trophy },
-  { href: "/research", label: "Research Lab", icon: FlaskConical },
-  { href: "/parlays", label: "Parlay Builder", icon: Layers },
-  { href: "/results", label: "Results", icon: ListChecks },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/", label: "Dashboard" },
+  { href: "/picks", label: "Today's Picks" },
+  { href: "/nfl", label: "NFL Gameday" },
+  { href: "/teams", label: "Team Picks" },
+  { href: "/research", label: "Research Lab" },
+  { href: "/parlays", label: "Parlay Builder" },
+  { href: "/results", label: "Results" },
+  { href: "/analytics", label: "Analytics" },
+  { href: "/settings", label: "Settings" },
 ];
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLinks() {
   const pathname = usePathname();
   return (
-    <nav className="flex flex-col gap-1">
-      {NAV.map(({ href, label, icon: Icon }) => {
-        const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-        return (
-          <Link
-            key={href}
-            href={href}
-            onClick={onNavigate}
-            className={cn(
-              "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              active
-                ? "bg-muted text-foreground before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary"
-                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-            )}
-          >
-            <Icon className={cn("h-4 w-4", active && "text-primary")} />
-            {label}
-          </Link>
-        );
-      })}
+    <nav aria-label="Main" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      <ul className="flex min-w-max gap-x-6 text-sm font-medium sm:min-w-0 sm:flex-wrap">
+        {NAV.map(({ href, label }) => {
+          const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+          return (
+            <li key={href}>
+              <Link
+                href={href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "inline-flex min-h-11 items-center border-b-2 transition-colors",
+                  active
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
     </nav>
   );
 }
 
-function Brand() {
+/** Today's date as a dateline. Server and browser share a clock here, but the text is allowed to differ at midnight. */
+function Dateline() {
+  const today = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
   return (
-    <Link href="/" className="flex items-center gap-2.5">
-      <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary">
-        <Target className="h-5 w-5 text-primary-foreground" />
-      </div>
-      <div className="leading-tight">
-        <p className="text-sm font-semibold text-foreground">PropEdge AI</p>
-        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-          Prop Research
-        </p>
-      </div>
-    </Link>
+    <p className="font-mono text-xs text-muted-foreground" suppressHydrationWarning>
+      {today}
+    </p>
   );
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const [open, setOpen] = React.useState(false);
-
   return (
     <div className="min-h-screen">
-      {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-surface px-4 py-6 lg:flex">
-        <Brand />
-        <div className="mt-8 flex-1">
-          <NavLinks />
-        </div>
-        <p className="text-[10px] leading-relaxed text-muted-foreground/70">
-          Not financial advice. Sports outcomes are uncertain.
-        </p>
-      </aside>
-
-      {/* Mobile drawer */}
-      {open && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-border bg-card px-4 py-6">
-            <div className="flex items-center justify-between">
-              <Brand />
-              <button onClick={() => setOpen(false)} className="text-muted-foreground">
-                <X className="h-5 w-5" />
-              </button>
+      <header className="mx-auto w-full max-w-7xl px-4 pt-5 sm:px-6 lg:px-8">
+        <div className="border-b-[3px] border-border-strong">
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1">
+            <Link href="/" className="font-serif text-[32px] font-medium italic leading-none tracking-tight text-foreground">
+              PropEdge
+            </Link>
+            <div className="flex items-center gap-3">
+              <Dateline />
+              <ThemeToggle />
             </div>
-            <div className="mt-8 flex-1">
-              <NavLinks onNavigate={() => setOpen(false)} />
-            </div>
-          </aside>
-        </div>
-      )}
-
-      {/* Main */}
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-surface px-4 py-3 lg:hidden">
-          <button onClick={() => setOpen(true)} className="text-foreground">
-            <Menu className="h-5 w-5" />
-          </button>
-          <Brand />
-        </header>
-        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <div className="mb-5">
-            <DisclaimerBanner />
           </div>
-          {children}
-        </main>
-      </div>
+          <div className="mt-2">
+            <NavLinks />
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mb-6">
+          <DisclaimerBanner />
+        </div>
+        {children}
+      </main>
     </div>
   );
 }

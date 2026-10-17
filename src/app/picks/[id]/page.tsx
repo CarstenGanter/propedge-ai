@@ -47,7 +47,7 @@ export default async function PickDetailPage({ params }: { params: Promise<{ id:
             <StatusBadge status={pick.status} />
             {pick.isDemo && <DemoDataBadge />}
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">{p.playerName}</h1>
+          <h1 className="font-serif text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">{p.playerName}</h1>
           <p className="text-muted-foreground">
             {p.team} vs {p.opponent} · {formatGameDateTime(p.gameStartTime, p.date)}
           </p>
@@ -145,6 +145,7 @@ export default async function PickDetailPage({ params }: { params: Promise<{ id:
                   underdogLine={p.underdogLine}
                   marketLine={p.marketLine ?? p.line}
                   edge={pick.underdogEdge}
+                  priced={p.underdogRead?.priced !== false}
                 />
                 <p className="text-xs text-muted-foreground">
                   Sharp market line{" "}

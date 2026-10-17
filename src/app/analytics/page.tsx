@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { StatCard } from "@/components/common";
+import { PageHeader, StatCard } from "@/components/common";
 import { AccuracyChart, CalibrationChart, ProfitLossChart, TrendChart } from "@/components/charts";
 import {
   getAllPickRecords,
@@ -37,6 +37,7 @@ import {
 import { breakEvenPerLeg } from "@/lib/analysis/pickemMath";
 import { PICKEM_MULTIPLIERS } from "@/lib/analysis/slipBuilder";
 import { AccuracyFilterBar } from "@/components/AccuracyFilterBar";
+import { isVisibleSport } from "@/components/visibleSports";
 import { LEAGUE_LABELS, type League } from "@/lib/teamLeagues";
 import { computeCalibration, recentTrend } from "@/lib/analysis/calibration";
 import { brierScore, logLoss, brierSkillScore, clvSummary } from "@/lib/analysis/modelQuality";
@@ -149,21 +150,24 @@ export default async function AnalyticsPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
-        <p className="text-sm text-muted-foreground">
-          {scope === "mine"
-            ? "How the picks you actually took have performed."
-            : "How every pick the model produced has performed."}{" "}
-          {sport !== "All" && `${sport} only. `}
-          Demo data is excluded. Past performance does not ensure future results.
-        </p>
-      </div>
+      <PageHeader
+        kicker="The record"
+        title="Analytics"
+        description={
+          <>
+            {scope === "mine"
+              ? "How the picks you actually took have performed."
+              : "How every pick the model produced has performed."}{" "}
+            {sport !== "All" && `${sport} only. `}
+            Demo data is excluded. Past performance does not ensure future results.
+          </>
+        }
+      />
 
       <AccuracyFilterBar
         scope={scope}
         sport={sport}
-        sports={sportsPresent}
+        sports={sportsPresent.filter(isVisibleSport)}
         mineCount={mineCount}
         allCount={allCount}
       />
@@ -176,7 +180,7 @@ export default async function AnalyticsPage({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-6 lg:grid-cols-4">
         <StatCard label="Overall record" value={`${overall.hits}-${overall.misses}`} sub={`${overall.pushes + overall.voids} push/void`} />
         <StatCard
           label="Hit rate"

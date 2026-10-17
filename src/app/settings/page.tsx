@@ -2,6 +2,7 @@ import { SettingsForm } from "@/components/SettingsForm";
 import { getSettings } from "@/lib/settings";
 import { getProviderStatuses } from "@/lib/providers/config";
 import { getAvoidList } from "@/lib/queries";
+import { PageHeader } from "@/components/common";
 
 export const dynamic = "force-dynamic";
 
@@ -11,12 +12,15 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Configure stakes, sports, data sources and your avoid list. Not financial advice.
-        </p>
-      </div>
+      <PageHeader
+        kicker="Configuration"
+        title="Settings"
+        description={
+          <>
+            Configure stakes, sports, data sources and your avoid list. Not financial advice.
+          </>
+        }
+      />
       <SettingsForm settings={settings} providers={providers} avoidList={avoidList} />
     </div>
   );

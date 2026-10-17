@@ -6,10 +6,10 @@ import { Sparkles, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SportFilter } from "@/components/SportFilter";
 import { PickCard } from "@/components/PickCard";
-import { EmptyState, SectionHeading } from "@/components/common";
+import { EmptyState, PageHeader } from "@/components/common";
 import { generateTodaysPicks } from "@/server/actions/picks";
 import { DailyRefreshButton } from "@/components/DailyRefreshButton";
-import { SPORTS } from "@/types";
+import { isVisibleSport } from "@/components/visibleSports";
 import { formatSlate } from "@/lib/utils/dates";
 import type { SerializedPick } from "@/lib/dto";
 import type { ScoringProfile } from "@/types";
@@ -31,9 +31,7 @@ export function PicksView({
   const [message, setMessage] = React.useState<string | null>(null);
 
   const filtered = sport === "All" ? picks : picks.filter((p) => p.prop.sport === sport);
-  const activeSports = [...new Set(picks.map((p) => p.prop.sport))].filter((s) =>
-    (SPORTS as readonly string[]).includes(s),
-  );
+  const activeSports = [...new Set(picks.map((p) => p.prop.sport))].filter(isVisibleSport);
 
   function handleGenerate() {
     setMessage(null);
@@ -53,10 +51,11 @@ export function PicksView({
 
   return (
     <div className="space-y-5">
-      <SectionHeading
+      <PageHeader
+        kicker="The board"
         title="Today's Picks"
         description={`Ranked by model confidence for ${formatSlate(date)}. All picks carry risk.`}
-        action={
+        actions={
           <div className="flex flex-wrap items-center gap-2">
             <DailyRefreshButton />
             <Button onClick={handleGenerate} disabled={pending}>

@@ -86,7 +86,7 @@ export function ParlaysList({ parlays }: { parlays: SerializedParlay[] }) {
                   Void
                 </Button>
               )}
-              <Button size="icon" variant="ghost" onClick={() => act(() => deleteParlayAction(p.id))} disabled={pending}>
+              <Button size="icon" variant="ghost" onClick={() => act(() => deleteParlayAction(p.id))} disabled={pending} aria-label={`Delete parlay ${p.name}`}>
                 <Trash2 className="h-4 w-4 text-muted-foreground" />
               </Button>
             </div>

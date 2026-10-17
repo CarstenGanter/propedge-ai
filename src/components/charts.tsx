@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import {
   Bar,
   BarChart,
@@ -20,57 +21,103 @@ import { formatCurrency } from "@/lib/utils/format";
 import { EmptyState } from "@/components/common";
 
 /**
- * Chart palette for the dark zinc surface. Series colors are a validated
- * categorical pair (CVD-safe, ≥3:1 on the card surface); chrome stays neutral
- * so the grid/axes recede behind the data.
+ * Chart palette, read from the theme so charts follow the paper and night
+ * editions. Series are ink-blue and burnt orange: a blue/orange pair stays
+ * distinct for colour-blind readers, and neither is a verdict colour. The
+ * fallback is the paper edition, used only before the browser can be asked.
  */
-export const CHART_COLORS = {
-  series1: "#199e70", // emerald — primary data series
-  series2: "#3987e5", // blue — comparison series (calibration "predicted")
-  axis: "#71717a",
-  grid: "#1f1f23",
-  reference: "#3f3f46",
-  tooltipBg: "#0e0e11",
-  tooltipBorder: "#232329",
-  tooltipText: "#ededf0",
-} as const;
+interface ChartPalette {
+  series1: string;
+  series2: string;
+  axis: string;
+  grid: string;
+  reference: string;
+  tooltipBg: string;
+  tooltipBorder: string;
+  tooltipText: string;
+}
 
-const AXIS = { stroke: CHART_COLORS.axis, fontSize: 11 } as const;
-
-const tooltipStyle = {
-  background: CHART_COLORS.tooltipBg,
-  border: `1px solid ${CHART_COLORS.tooltipBorder}`,
-  borderRadius: 8,
-  fontSize: 12,
-  color: CHART_COLORS.tooltipText,
+const PAPER_PALETTE: ChartPalette = {
+  series1: "#1d3a8a",
+  series2: "#b86b1f",
+  axis: "#5e5a4e",
+  grid: "#e3ddcf",
+  reference: "#b8b09e",
+  tooltipBg: "#fbfaf6",
+  tooltipBorder: "#d9d3c4",
+  tooltipText: "#16150f",
 };
 
-const legendStyle = { fontSize: 12, color: "#9b9ba4" } as const;
+function readPalette(): ChartPalette {
+  const css = getComputedStyle(document.documentElement);
+  const v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
+  return {
+    series1: v("--color-chart-1", PAPER_PALETTE.series1),
+    series2: v("--color-chart-2", PAPER_PALETTE.series2),
+    axis: v("--color-chart-axis", PAPER_PALETTE.axis),
+    grid: v("--color-chart-grid", PAPER_PALETTE.grid),
+    reference: v("--color-chart-reference", PAPER_PALETTE.reference),
+    tooltipBg: v("--color-card", PAPER_PALETTE.tooltipBg),
+    tooltipBorder: v("--color-border", PAPER_PALETTE.tooltipBorder),
+    tooltipText: v("--color-foreground", PAPER_PALETTE.tooltipText),
+  };
+}
+
+/** The current theme's chart colours, updated when the edition is switched. */
+function useChartPalette(): ChartPalette {
+  // Charts only draw in the browser (ResponsiveContainer measures first), so
+  // reading the DOM in the initializer cannot mismatch the server render.
+  const [palette, setPalette] = React.useState<ChartPalette>(() =>
+    typeof window === "undefined" ? PAPER_PALETTE : readPalette(),
+  );
+  React.useEffect(() => {
+    const observer = new MutationObserver(() => setPalette(readPalette()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
+  return palette;
+}
+
+function chrome(c: ChartPalette) {
+  return {
+    axis: { stroke: c.axis, fontSize: 11 } as const,
+    tooltip: {
+      background: c.tooltipBg,
+      border: `1px solid ${c.tooltipBorder}`,
+      borderRadius: 3,
+      fontSize: 12,
+      color: c.tooltipText,
+    },
+    legend: { fontSize: 12, color: c.axis } as const,
+  };
+}
 
 export function ProfitLossChart({
   data,
 }: {
   data: { date: string; bankroll: number; profitLoss: number }[];
 }) {
+  const c = useChartPalette();
+  const ui = chrome(c);
   if (data.length === 0) {
     return <EmptyState title="No settled bankroll history yet" description="Settle picks or load demo data to see your P/L curve." />;
   }
   return (
     <ResponsiveContainer width="100%" height={260}>
       <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
-        <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="3 3" />
-        <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)} {...AXIS} />
-        <YAxis {...AXIS} tickFormatter={(v) => `$${v}`} />
+        <CartesianGrid stroke={c.grid} strokeDasharray="3 3" />
+        <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)} {...ui.axis} />
+        <YAxis {...ui.axis} tickFormatter={(v) => `$${v}`} />
         <Tooltip
-          contentStyle={tooltipStyle}
+          contentStyle={ui.tooltip}
           formatter={(v, name) => [formatCurrency(Number(v)), name === "bankroll" ? "Bankroll" : "P/L"]}
           labelFormatter={(l) => formatSlate(String(l))}
         />
-        <ReferenceLine y={data[0]?.bankroll - data[0]?.profitLoss} stroke={CHART_COLORS.reference} strokeDasharray="4 4" />
+        <ReferenceLine y={data[0]?.bankroll - data[0]?.profitLoss} stroke={c.reference} strokeDasharray="4 4" />
         <Line
           type="monotone"
           dataKey="bankroll"
-          stroke={CHART_COLORS.series1}
+          stroke={c.series1}
           strokeWidth={2}
           dot={false}
           activeDot={{ r: 4 }}
@@ -81,6 +128,8 @@ export function ProfitLossChart({
 }
 
 export function CalibrationChart({ data }: { data: CalibrationPoint[] }) {
+  const c = useChartPalette();
+  const ui = chrome(c);
   const hasData = data.some((d) => d.count > 0);
   if (!hasData) {
     return (
@@ -93,40 +142,44 @@ export function CalibrationChart({ data }: { data: CalibrationPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
       <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
-        <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="3 3" />
-        <XAxis dataKey="bucket" {...AXIS} />
-        <YAxis domain={[0, 100]} {...AXIS} tickFormatter={(v) => `${v}%`} />
+        <CartesianGrid stroke={c.grid} strokeDasharray="3 3" />
+        <XAxis dataKey="bucket" {...ui.axis} />
+        <YAxis domain={[0, 100]} {...ui.axis} tickFormatter={(v) => `${v}%`} />
         <Tooltip
-          contentStyle={tooltipStyle}
+          contentStyle={ui.tooltip}
           formatter={(v, name) => [`${Number(v)}%`, name === "predicted" ? "Predicted" : "Actual hit rate"]}
         />
-        <Legend wrapperStyle={legendStyle} formatter={(v) => (v === "predicted" ? "Predicted" : "Actual hit rate")} />
-        <Line type="monotone" dataKey="predicted" stroke={CHART_COLORS.series2} strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} />
-        <Line type="monotone" dataKey="actual" stroke={CHART_COLORS.series1} strokeWidth={2} dot={{ r: 3 }} />
+        <Legend wrapperStyle={ui.legend} formatter={(v) => (v === "predicted" ? "Predicted" : "Actual hit rate")} />
+        <Line type="monotone" dataKey="predicted" stroke={c.series2} strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} />
+        <Line type="monotone" dataKey="actual" stroke={c.series1} strokeWidth={2} dot={{ r: 3 }} />
       </LineChart>
     </ResponsiveContainer>
   );
 }
 
 export function TrendChart({ data }: { data: { date: string; hitRate: number }[] }) {
+  const c = useChartPalette();
+  const ui = chrome(c);
   if (data.length === 0) {
     return <EmptyState title="No trend yet" description="Settle picks to see your rolling hit-rate trend." />;
   }
   return (
     <ResponsiveContainer width="100%" height={220}>
       <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
-        <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="3 3" />
-        <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)} {...AXIS} />
-        <YAxis domain={[0, 100]} {...AXIS} tickFormatter={(v) => `${v}%`} />
-        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${Number(v)}%`, "Rolling hit rate"]} />
-        <ReferenceLine y={50} stroke={CHART_COLORS.reference} strokeDasharray="4 4" />
-        <Line type="monotone" dataKey="hitRate" stroke={CHART_COLORS.series1} strokeWidth={2} dot={false} />
+        <CartesianGrid stroke={c.grid} strokeDasharray="3 3" />
+        <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)} {...ui.axis} />
+        <YAxis domain={[0, 100]} {...ui.axis} tickFormatter={(v) => `${v}%`} />
+        <Tooltip contentStyle={ui.tooltip} formatter={(v) => [`${Number(v)}%`, "Rolling hit rate"]} />
+        <ReferenceLine y={50} stroke={c.reference} strokeDasharray="4 4" />
+        <Line type="monotone" dataKey="hitRate" stroke={c.series1} strokeWidth={2} dot={false} />
       </LineChart>
     </ResponsiveContainer>
   );
 }
 
 export function AccuracyChart({ data }: { data: GroupedRecord[] }) {
+  const c = useChartPalette();
+  const ui = chrome(c);
   const chartData = data
     .filter((d) => d.record.hits + d.record.misses > 0)
     .map((d) => ({ key: d.key, hitRate: Math.round(d.record.hitRate), decided: d.record.hits + d.record.misses }));
@@ -136,17 +189,17 @@ export function AccuracyChart({ data }: { data: GroupedRecord[] }) {
   return (
     <ResponsiveContainer width="100%" height={Math.max(180, chartData.length * 44)}>
       <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
-        <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="3 3" horizontal={false} />
-        <XAxis type="number" domain={[0, 100]} {...AXIS} tickFormatter={(v) => `${v}%`} />
-        <YAxis type="category" dataKey="key" width={90} {...AXIS} />
+        <CartesianGrid stroke={c.grid} strokeDasharray="3 3" horizontal={false} />
+        <XAxis type="number" domain={[0, 100]} {...ui.axis} tickFormatter={(v) => `${v}%`} />
+        <YAxis type="category" dataKey="key" width={90} {...ui.axis} />
         <Tooltip
-          contentStyle={tooltipStyle}
+          contentStyle={ui.tooltip}
           formatter={(v, _n, item) => [
             `${Number(v)}% (${(item as { payload?: { decided?: number } })?.payload?.decided ?? 0} decided)`,
             "Hit rate",
           ]}
         />
-        <Bar dataKey="hitRate" fill={CHART_COLORS.series1} radius={[0, 4, 4, 0]} maxBarSize={18} />
+        <Bar dataKey="hitRate" fill={c.series1} radius={[0, 2, 2, 0]} maxBarSize={18} />
       </BarChart>
     </ResponsiveContainer>
   );

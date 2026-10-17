@@ -5,8 +5,8 @@ import type { RiskLevel, SettlementStatus, TeamStatus } from "@/types";
 import { LEAGUE_LABELS, type League } from "@/lib/teamLeagues";
 
 export function ConfidenceBadge({ score, className }: { score: number; className?: string }) {
-  const variant =
-    score >= 80 ? "success" : score >= 70 ? "default" : score >= 60 ? "warning" : "muted";
+  // Model confidence is not an edge (the books decide that), so it never borrows the verdict greens.
+  const variant = score >= 70 ? "default" : "muted";
   return (
     <Badge variant={variant} className={cn("font-mono tabular-nums", className)}>
       {Math.round(score)}<span className="opacity-60">/100</span>
@@ -53,51 +53,17 @@ export function DemoDataBadge({ className }: { className?: string }) {
   );
 }
 
-const SPORT_COLORS: Record<string, string> = {
-  NFL: "bg-amber-500/10 text-amber-400",
-  NBA: "bg-orange-500/10 text-orange-400",
-  NCAAB: "bg-blue-500/10 text-blue-400",
-  MLB: "bg-red-500/10 text-red-400",
-  WNBA: "bg-fuchsia-500/10 text-fuchsia-400",
-  NHL: "bg-cyan-500/10 text-cyan-400",
-  Soccer: "bg-emerald-500/10 text-emerald-400",
-};
+// Sports and leagues are labels, set like a printed tag. Colour is kept for
+// verdicts, so no sport gets a hue of its own.
+const TAG_CLASS =
+  "inline-flex items-center rounded-sm border border-border px-1.5 py-0.5 font-mono text-[11px] font-medium uppercase tracking-wide text-foreground";
 
 export function SportBadge({ sport }: { sport: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold",
-        SPORT_COLORS[sport] ?? "bg-muted text-muted-foreground",
-      )}
-    >
-      {sport}
-    </span>
-  );
+  return <span className={TAG_CLASS}>{sport}</span>;
 }
 
-const LEAGUE_COLORS: Record<string, string> = {
-  NFL: "bg-amber-500/10 text-amber-400",
-  MLB: "bg-red-500/10 text-red-400",
-  CBB: "bg-blue-500/10 text-blue-400",
-  WNBA: "bg-fuchsia-500/10 text-fuchsia-400",
-  EPL: "bg-violet-500/10 text-violet-400",
-  Bundesliga: "bg-rose-500/10 text-rose-400",
-  UCL: "bg-indigo-500/10 text-indigo-400",
-  WorldCup: "bg-emerald-500/10 text-emerald-400",
-};
-
 export function LeagueBadge({ league }: { league: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold",
-        LEAGUE_COLORS[league] ?? "bg-muted text-muted-foreground",
-      )}
-    >
-      {LEAGUE_LABELS[league as League] ?? league}
-    </span>
-  );
+  return <span className={TAG_CLASS}>{LEAGUE_LABELS[league as League] ?? league}</span>;
 }
 
 /** Value edge (percentage points): green when the model beats the price. */

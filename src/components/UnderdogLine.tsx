@@ -10,8 +10,28 @@ import { setUnderdogLine } from "@/server/actions/picks";
 import { formatSignedNumber } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
-export function UnderdogEdgeBadge({ edge, className }: { edge: number | null; className?: string }) {
+export function UnderdogEdgeBadge({
+  edge,
+  priced = true,
+  className,
+}: {
+  edge: number | null;
+  /** False when Underdog's line is beyond every line the books posted: no edge can be read off it. */
+  priced?: boolean;
+  className?: string;
+}) {
   if (edge == null) return null;
+  if (!priced) {
+    return (
+      <Badge
+        variant="muted"
+        className={cn("whitespace-nowrap font-mono", className)}
+        title="Underdog's line is beyond every line the books posted (an alternate line), so there is no books' price to judge it against."
+      >
+        ~ no books&apos; price
+      </Badge>
+    );
+  }
   const variant = edge >= 0.4 ? "success" : edge <= -0.4 ? "danger" : "muted";
   const label = edge >= 0.4 ? "soft" : edge <= -0.4 ? "sharp" : "in line";
   return (
@@ -26,12 +46,14 @@ export function UnderdogLineInput({
   underdogLine,
   marketLine,
   edge,
+  priced = true,
   compact = false,
 }: {
   pickId: string;
   underdogLine: number | null;
   marketLine: number | null;
   edge: number | null;
+  priced?: boolean;
   compact?: boolean;
 }) {
   const router = useRouter();
@@ -51,7 +73,7 @@ export function UnderdogLineInput({
   }
 
   return (
-    <div className={cn("flex items-center gap-2", compact && "text-xs")}>
+    <div className={cn("flex flex-wrap items-center gap-2", compact && "text-xs")}>
       <span className="text-muted-foreground whitespace-nowrap">Underdog line</span>
       <Input
         type="number"
@@ -65,7 +87,7 @@ export function UnderdogLineInput({
       <Button size="sm" variant="secondary" onClick={save} disabled={pending} className={cn(compact && "h-7 px-2 text-xs")}>
         {saved ? <Check className="h-3.5 w-3.5" /> : pending ? "…" : "Set"}
       </Button>
-      <UnderdogEdgeBadge edge={edge} />
+      <UnderdogEdgeBadge edge={edge} priced={priced} />
     </div>
   );
 }

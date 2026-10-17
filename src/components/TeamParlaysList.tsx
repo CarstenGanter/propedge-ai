@@ -53,10 +53,10 @@ export function TeamParlaysList({ parlays }: { parlays: SerializedTeamParlay[] }
   }
 
   return (
-    <div className="grid gap-3 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       {parlays.map((p) => (
         <Card key={p.id}>
-          <CardHeader className="flex-row items-start justify-between space-y-0">
+          <CardHeader className="flex-row flex-wrap items-start justify-between gap-2 space-y-0">
             <div>
               <CardTitle className="flex items-center gap-2">
                 {p.name}
@@ -107,6 +107,7 @@ export function TeamParlaysList({ parlays }: { parlays: SerializedTeamParlay[] }
               )}
               <Button
                 size="icon"
+                aria-label="Delete parlay"
                 variant="ghost"
                 onClick={() => act(() => deleteTeamParlayAction(p.id))}
                 disabled={pending}
