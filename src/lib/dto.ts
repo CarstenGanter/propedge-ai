@@ -48,9 +48,10 @@ export interface SerializedProp {
   /** At least three independent books behind the market; null for older props. */
   marketReliable: boolean | null;
   /** The Underdog line read against the books' consensus, when both exist. */
-  underdogRead: { flag: LineFlag; lineGap: number; probAtLine: number } | null;
+  /** `priced` is false when Underdog's line is beyond what the books posted — the probability is extrapolated. */
+  underdogRead: { flag: LineFlag; lineGap: number; probAtLine: number; priced: boolean } | null;
   /** PrizePicks' line and the side the books favour at it (its multiplier is the same either way). */
-  prizePicks: { line: number; direction: Direction; prob: number; value: number } | null;
+  prizePicks: { line: number; direction: Direction; prob: number; value: number; priced: boolean } | null;
   direction: Direction;
   source: string;
   projection: number | null;
@@ -147,9 +148,9 @@ export function serializeProp(p: PlayerProp): SerializedProp {
   return {
     underdogLineSource: snap?.underdogLineSource ?? (p.underdogLine != null ? "manual" : null),
     marketReliable: consensus ? consensus.reliable : null,
-    underdogRead: ud ? { flag: ud.flag, lineGap: ud.lineGap, probAtLine: ud.probAtVenue } : null,
+    underdogRead: ud ? { flag: ud.flag, lineGap: ud.lineGap, probAtLine: ud.probAtVenue, priced: ud.priced } : null,
     prizePicks: pp && ppLine != null
-      ? { line: ppLine, direction: pp.dir, prob: pp.read.probAtVenue, value: prizePicksValue(pp.read) }
+      ? { line: ppLine, direction: pp.dir, prob: pp.read.probAtVenue, value: prizePicksValue(pp.read), priced: pp.read.priced }
       : null,
     id: p.id,
     date: p.date,

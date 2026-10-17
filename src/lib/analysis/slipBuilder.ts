@@ -98,7 +98,7 @@ export interface SlipCandidate extends ParlayLegInput {
   pickMultiplier?: number | null;
   /** Books' no-vig probability of this side at the line being played, when known. */
   marketProb?: number | null;
-  /** False when fewer than three independent books priced it — too thin to call an edge. */
+  /** False when fewer than three independent books priced it, or the line is beyond what they posted — no edge can be called. */
   marketReliable?: boolean | null;
 }
 
@@ -156,7 +156,8 @@ export function pickToSlipCandidate(p: SerializedPick): SlipCandidate {
     available: p.prop.underdogAvailable,
     pickMultiplier: p.prop.underdogPickMultiplier,
     marketProb: p.marketProb,
-    marketReliable: p.prop.marketReliable,
+    // An Underdog line beyond what the books posted has no books' price, only an extrapolation.
+    marketReliable: p.prop.underdogRead?.priced === false ? false : p.prop.marketReliable,
   };
 }
 

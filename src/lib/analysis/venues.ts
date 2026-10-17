@@ -1,5 +1,5 @@
 import type { Direction } from "@/types";
-import { consensusSideProb, type ConsensusModel } from "./marketConsensus";
+import { consensusSideProb, pricedAt, type ConsensusModel } from "./marketConsensus";
 import { STANDARD_PICK_PAYOUT } from "./pickemMath";
 import type { LineSource } from "@/lib/marketSnapshot";
 
@@ -59,18 +59,23 @@ export interface VenueRead {
   /** The same at the books' own line. */
   probAtReference: number;
   flag: LineFlag;
+  /** False when the venue line is beyond what the books posted: probAtVenue is then an extrapolation. */
+  priced: boolean;
 }
 
 export function readVenueLine(m: ConsensusModel, venueLine: number, dir: Direction): VenueRead {
   const probAtVenue = consensusSideProb(m, venueLine, dir);
   const probAtReference = consensusSideProb(m, m.referenceLine, dir);
   const diff = probAtVenue - probAtReference;
+  const priced = pricedAt(m, venueLine);
   return {
     line: venueLine,
     lineGap: venueLine - m.referenceLine,
     probAtVenue,
     probAtReference,
-    flag: diff >= SOFT_LINE_THRESHOLD ? "soft" : diff <= -SOFT_LINE_THRESHOLD ? "tough" : "none",
+    // An extrapolated probability can't call a line soft or tough either.
+    flag: !priced ? "none" : diff >= SOFT_LINE_THRESHOLD ? "soft" : diff <= -SOFT_LINE_THRESHOLD ? "tough" : "none",
+    priced,
   };
 }
 

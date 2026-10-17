@@ -1,6 +1,6 @@
 import type { MarketContext, ScorablePropInput } from "@/types";
 import { consensusOf, parseSnapshot } from "@/lib/marketSnapshot";
-import { consensusProbOver } from "@/lib/analysis/marketConsensus";
+import { consensusProbOver, pricedAt } from "@/lib/analysis/marketConsensus";
 import { demoMarket } from "./demoData";
 import type { ProviderContext } from "./config";
 import { hasKey } from "./config";
@@ -35,7 +35,12 @@ export const liveOddsProvider: OddsProvider = {
           ...m,
           marketLine: m.marketLine ?? prop.marketLine ?? undefined,
           ...(consensus
-            ? { probOverAtLine: consensusProbOver(consensus, prop.line), atLine: prop.line, reliable: consensus.reliable }
+            ? {
+                probOverAtLine: consensusProbOver(consensus, prop.line),
+                atLine: prop.line,
+                // A line well outside what the books posted is extrapolated, not priced.
+                reliable: consensus.reliable && pricedAt(consensus, prop.line),
+              }
             : {}),
           source: m.source ?? "The Odds API",
         };

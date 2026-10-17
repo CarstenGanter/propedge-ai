@@ -68,3 +68,33 @@ describe("reading venue lines (real feed)", () => {
     expect(readVenueLine(model!, 30.5, "OVER").flag).toBe("none");
   });
 });
+
+describe("venue lines beyond what the books posted", () => {
+  // Tory Horton receiving yards, 2026-10-15: books at 2.5-6.5, Underdog's
+  // alternate Under 14.5 at 1.30x read 85% and showed green.
+  const { model } = buildConsensus("Receiving Yards", [
+    { book: "draftkings", line: 2.5, over: -112, under: -112 },
+    { book: "fanduel", line: 3.5, over: -113, under: -113 },
+    { book: "betonlineag", line: 3.5, over: -123, under: -104 },
+    { book: "betmgm", line: 2.5, over: -145, under: 105 },
+    { book: "espnbet", line: 6.5, over: 115, under: -150 },
+    { book: "hardrockbet", line: 2.5, over: -120, under: -110 },
+  ]);
+
+  it("records the range of lines the books used", () => {
+    expect(model!.minLine).toBe(2.5);
+    expect(model!.maxLine).toBe(6.5);
+  });
+
+  it("treats Underdog's alternate 14.5 as unpriced, and calls it neither soft nor tough", () => {
+    const read = readVenueLine(model!, 14.5, "UNDER");
+    expect(read.priced).toBe(false);
+    expect(read.flag).toBe("none");
+  });
+
+  it("still prices a line one point past the range — the 1-yard soft lines", () => {
+    expect(readVenueLine(model!, 7.5, "UNDER").priced).toBe(true);
+    expect(readVenueLine(model!, 1.5, "OVER").priced).toBe(true);
+    expect(readVenueLine(model!, 8.5, "UNDER").priced).toBe(false);
+  });
+});

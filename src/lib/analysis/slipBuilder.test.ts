@@ -332,4 +332,15 @@ describe("pickToSlipCandidate / whyLineFor", () => {
   it("prefers the first reason-for when present", () => {
     expect(whyLineFor({ ...pick, reasonsFor: ["Hot recent stretch."] } as SerializedPick)).toBe("Hot recent stretch.");
   });
+
+  it("marks an Underdog line beyond the books' lines as unreliable, keeping it out of market slips", () => {
+    const beyond = {
+      ...pick,
+      marketProb: 0.85,
+      prop: { ...pick.prop, underdogPickMultiplier: 1.3, marketReliable: true, underdogRead: { flag: "none", lineGap: 11, probAtLine: 0.85, priced: false } },
+    } as unknown as SerializedPick;
+    const c = pickToSlipCandidate(beyond);
+    expect(c.marketReliable).toBe(false);
+    expect(buildSuggestedSlips([c, { ...c, pickId: "p2", playerName: "Other", gameKey: "other" }], [2])).toHaveLength(0);
+  });
 });

@@ -59,6 +59,9 @@ export interface ConsensusModel {
   /** Distinct pricing groups behind the consensus. */
   groups: number;
   reliable: boolean;
+  /** Lowest and highest line the used books posted. Absent on older stored models. */
+  minLine?: number;
+  maxLine?: number;
 }
 
 /** Fewer independent pricing sources than this and the price is flagged as thin. */
@@ -222,9 +225,29 @@ export function buildConsensus(
       pOverAtReference: probOver(spec, mean, referenceLine),
       groups,
       reliable: groups >= RELIABLE_MIN_GROUPS,
+      minLine: Math.min(...used.map((q) => q.line)),
+      maxLine: Math.max(...used.map((q) => q.line)),
     },
     quotes,
   };
+}
+
+/**
+ * How far beyond the lines the books actually posted a venue line may sit and
+ * still be read off the consensus. One point keeps the 1-yard soft Underdog
+ * lines, the range LINE_SHIFT_TRUST was measured on. Past it the number is the
+ * fitted curve's extrapolation, not a price: on 2026-10-15 Underdog's
+ * alternate Under 14.5 on Tory Horton (books 2.5-6.5) read 85% — the 0.7
+ * trust's ceiling (0.5 + 0.7 x 0.5), the same for any player — and showed
+ * green at 1.30x.
+ */
+export const QUOTED_RANGE_TOLERANCE = 1;
+
+/** Whether the books' consensus prices `line`, or only extrapolates to it. */
+export function pricedAt(m: ConsensusModel, line: number): boolean {
+  const lo = m.minLine ?? m.referenceLine;
+  const hi = m.maxLine ?? m.referenceLine;
+  return line >= lo - QUOTED_RANGE_TOLERANCE - 1e-9 && line <= hi + QUOTED_RANGE_TOLERANCE + 1e-9;
 }
 
 function specOf(m: ConsensusModel): DistSpec {

@@ -112,7 +112,11 @@ own line, outliers dropped, weighted toward the books that set prop lines). It's
 books' probability × payout clears **1.02** — a 2% cushion, because the price is itself an estimate.
 **Amber** is break-even (1.00–1.02): not an edge. **Red** means you're paying too much. A **"~"** in
 front means fewer than three independent books priced it; that's too thin to call an edge, so it's
-never green.
+never green. It also appears when your Underdog line sits more than a point beyond every line the books
+posted — an **alternate line** like Tory Horton Lower 14.5 against books at 2.5–6.5 (2026-10-15). There
+the number is the curve stretched, not a price: it showed 85%, which is simply the cap the app's
+line-shift correction can reach, and on 2021–25 games that method overstated such Unders by 6–14 points.
+Alternate-line Unders are **off the table** until a model passes the test in the 2026-10-17 review.
 
 **The PrizePicks column** shows PrizePicks' line and the side the books favour there. PrizePicks
 pays the same multiplier whichever side you pick, so a stale line pays in full — that's the classic
