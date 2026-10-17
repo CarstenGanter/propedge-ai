@@ -7,7 +7,7 @@ import { toSlateDate } from "@/lib/utils/dates";
 import type { Sport } from "@/types";
 import { planIngest, propKey, refreshableFields } from "@/lib/ingestMerge";
 import { parseSnapshot, snapshotFrom } from "@/lib/marketSnapshot";
-import { mergeAvailability, mergeUnderdogLine } from "@/lib/analysis/venues";
+import { mergeAvailability, mergeUnderdogLine, underdogPricesLookReal } from "@/lib/analysis/venues";
 
 export interface OddsIngestResult {
   ok: boolean;
@@ -21,6 +21,8 @@ export interface OddsIngestResult {
   events: number;
   creditsRemaining: number | null;
   dates: string[];
+  /** Underdog's prices varied instead of the usual one placeholder — possibly real payouts. Null: none in the feed. */
+  underdogPricesReal?: boolean | null;
   error?: string;
 }
 
@@ -166,5 +168,6 @@ export async function ingestOddsPropsForSport(
     events: result.events,
     creditsRemaining: result.status.remaining,
     dates: [...dates],
+    underdogPricesReal: underdogPricesLookReal(result.props.flatMap((p) => p.quotes ?? [])),
   };
 }

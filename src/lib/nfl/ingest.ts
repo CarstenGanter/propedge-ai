@@ -119,6 +119,8 @@ export interface NflIngestSummary {
   prepare: NflPrepareSummary | null;
   picks: GenerationSummary | null;
   teamPicks: TeamGenerationSummary | null;
+  /** See OddsIngestResult.underdogPricesReal. */
+  underdogPricesReal?: boolean | null;
   error?: string;
 }
 
@@ -158,6 +160,7 @@ export async function ingestNflSlate(
       });
       summary.propsImported = r.imported;
       summary.creditsRemaining = r.creditsRemaining ?? summary.creditsRemaining;
+      summary.underdogPricesReal = r.underdogPricesReal;
       if (!r.ok) summary.error = r.error;
     } else {
       summary.reason = estimate.reason;

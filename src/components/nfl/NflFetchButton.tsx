@@ -18,6 +18,7 @@ export function NflFetchButton({ date, disabled }: { date: string; disabled?: bo
   const [teamPicks, setTeamPicks] = React.useState(false);
   const [phase, setPhase] = React.useState<"idle" | "estimating" | "fetching">("idle");
   const [msg, setMsg] = React.useState<string | null>(null);
+  const [underdogPricesReal, setUnderdogPricesReal] = React.useState(false);
 
   function estimate_() {
     setMsg(null);
@@ -34,6 +35,7 @@ export function NflFetchButton({ date, disabled }: { date: string; disabled?: bo
     setPhase("fetching");
     startTransition(async () => {
       const s = await fetchNflSlateAction(date, { includeTeamPicks: teamPicks });
+      setUnderdogPricesReal(s.underdogPricesReal === true);
       const picks = s.picks ? `${s.picks.created} pick(s) from ${s.picks.evaluated} prop(s)` : "no picks generated";
       setMsg(
         s.skipped
@@ -98,6 +100,13 @@ export function NflFetchButton({ date, disabled }: { date: string; disabled?: bo
         </div>
       )}
       {msg && <p className="max-w-xl text-xs text-muted-foreground">{msg}</p>}
+      {underdogPricesReal && (
+        <p className="max-w-xl text-xs font-medium text-success">
+          Underdog&apos;s prices in this fetch vary instead of the usual -137 placeholder — they may be real payouts.
+          Check two or three against the Underdog app before trusting them; if they match, payouts can be auto-filled
+          from the feed.
+        </p>
+      )}
     </div>
   );
 }

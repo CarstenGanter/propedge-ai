@@ -6,6 +6,7 @@ import {
   prizePicksValue,
   PRIZEPICKS_LEG_BAR,
   readVenueLine,
+  underdogPricesLookReal,
   underdogValue,
 } from "./venues";
 import { buildConsensus } from "./marketConsensus";
@@ -96,5 +97,26 @@ describe("venue lines beyond what the books posted", () => {
     expect(readVenueLine(model!, 7.5, "UNDER").priced).toBe(true);
     expect(readVenueLine(model!, 1.5, "OVER").priced).toBe(true);
     expect(readVenueLine(model!, 8.5, "UNDER").priced).toBe(false);
+  });
+});
+
+describe("underdogPricesLookReal", () => {
+  it("reads one price repeated on every quote as the placeholder", () => {
+    expect(underdogPricesLookReal([
+      { book: "underdog", over: -137, under: -137 },
+      { book: "underdog", over: -137, under: -137 },
+      { book: "fanduel", over: -110, under: -120 },
+    ])).toBe(false);
+  });
+
+  it("reads varied prices as possibly real payouts", () => {
+    expect(underdogPricesLookReal([
+      { book: "underdog", over: -179, under: -120 },
+      { book: "underdog", over: -137, under: -137 },
+    ])).toBe(true);
+  });
+
+  it("says nothing when Underdog isn't in the feed", () => {
+    expect(underdogPricesLookReal([{ book: "draftkings", over: -110, under: -110 }])).toBeNull();
   });
 });

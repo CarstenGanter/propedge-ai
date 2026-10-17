@@ -43,6 +43,23 @@ export function mergeAvailability(prev: boolean | null, feedLine: number | undef
   return prev;
 }
 
+/**
+ * Whether Underdog's prices in a fetch look like real payouts. On every slate
+ * stored from 2026-10-01 to 10-15, each Underdog quote in the main markets came
+ * back at one placeholder price on both sides (-137), so payouts are typed by
+ * hand. Real payouts vary by player and side; one price repeated everywhere
+ * does not. Null when the fetch carried no Underdog prices at all.
+ */
+export function underdogPricesLookReal(quotes: { book: string; over: number | null; under: number | null }[]): boolean | null {
+  const prices = new Set<number>();
+  for (const q of quotes) {
+    if (q.book !== "underdog") continue;
+    if (q.over != null) prices.add(q.over);
+    if (q.under != null) prices.add(q.under);
+  }
+  return prices.size === 0 ? null : prices.size > 1;
+}
+
 // ---- Reading a venue line against the market ----
 
 export type LineFlag = "soft" | "tough" | "none";
