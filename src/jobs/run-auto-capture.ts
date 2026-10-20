@@ -11,6 +11,7 @@ import { prisma } from "@/lib/db/client";
 import { runAutoCapture } from "@/lib/nfl/runAutoCapture";
 import { runAutoSettle } from "@/lib/runAutoSettle";
 import { runInjuryWatch } from "@/lib/nfl/injuryWatch";
+import { runNewsFetches } from "@/lib/nfl/newsFetch";
 
 // Capture first: it is time-critical (20-60 min before kickoff); settling can wait.
 runAutoCapture("launchd")
@@ -18,6 +19,8 @@ runAutoCapture("launchd")
   .then(() => runAutoSettle("launchd"))
   .then((line) => console.log(line))
   .then(() => runInjuryWatch("launchd"))
+  .then((line) => console.log(line))
+  .then(() => runNewsFetches("launchd"))
   .then((line) => console.log(line))
   .catch((e) => {
     console.error(`[${new Date().toISOString()}] launchd`, e);

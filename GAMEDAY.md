@@ -130,6 +130,11 @@ double-counted context (fixed in model v1.5.0). On 2026-09-27 not one pick on th
 the best was Parkinson at exactly break-even — and both slips lost. **Most weeks few or none will be
 green. That is the honest answer, not a bug.**
 
+**Running back out.** When a back with recent carries is ruled out, a card above the games lists
+his teammates' rushing lines — the books', Underdog's and PrizePicks' — and where the fitted
+redistribution expects his carries to go. It's a prompt to check those lines on the venue, not a
+pick: a venue still sitting on the old number after the books have moved is the timing edge.
+
 ### 6. Mark anything that isn't there
 
 If a recommended prop doesn't exist on Underdog, click **Not offered?** on that row.

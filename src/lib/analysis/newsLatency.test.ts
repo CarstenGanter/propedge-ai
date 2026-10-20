@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookMoves, latencyByGroup, type TimedQuote } from "./newsLatency";
+import { bookMoves, latencyByGroup, venueGapsAtFetch, type TimedQuote } from "./newsLatency";
 
 const at = (min: number) => new Date(Date.UTC(2026, 9, 25, 15, 0) + min * 60_000);
 const q = (book: string, line: number, fetchMin: number, o: Partial<TimedQuote> = {}): TimedQuote => ({
@@ -55,5 +55,13 @@ describe("latencyByGroup", () => {
     expect(g.find((x) => x.group === "fanduel")).toMatchObject({ props: 1, moved: 1, medianMinutes: 30 });
     expect(g.find((x) => x.group === "kambi")).toMatchObject({ props: 2, moved: 1, medianMinutes: 60, censoredAtLeast: 60 });
     expect(g.find((x) => x.group === "prizepicks")).toMatchObject({ moved: 0, medianMinutes: null, censoredAtLeast: 30 });
+  });
+});
+
+describe("venueGapsAtFetch", () => {
+  it("puts each venue's line beside the books' consensus line at one fetch", () => {
+    const quotes = [q("fanduel", 49.5, 10), q("draftkings", 49.5, 10), q("underdog", 44.5, 10), q("prizepicks", 46.5, 10)];
+    const rows = venueGapsAtFetch(quotes, (_t, books) => books[0].line);
+    expect(rows).toEqual([{ key: "Teammate|Receiving Yards", books: 49.5, underdog: 44.5, prizepicks: 46.5 }]);
   });
 });

@@ -107,6 +107,25 @@ with picks. A news-triggered fetch would make it measurable: ~13 games a week ha
 pass-catcher; one fetch of the affected markets after Sunday inactives is ~20–60 credits a week.
 Not enabled — the cost needs approval.
 
+### The news-fetch trial (approved 2026-10-20, through 2026-10-27, 30 credits)
+
+When a running back with carries in his last four games is newly ruled Out — on Friday's final
+injury report (Friday, Eastern time) or at game-day inactives (within two hours of kickoff) — the
+affected game's rushing markets (rush yards, rush attempts, rush+rec) are bought twice, ~10 and ~40
+minutes after the change is first seen (`NewsFetch`, `newsFetchTrial.ts`). Up to 3 credits a fetch;
+both fetches are reserved together and an event is skipped if it would breach the 30-credit cap or
+the credit floor. The app checks the queue every 5 minutes (launchd every 15, so with the app closed
+the fetches land nearer +15 and +45). `npm run research:latency` reports the two windows apart:
+venue moves since the last pre-news quote, venues still moving between the two fetches, and each
+venue's gap to the books' line at each. The injury watch now looks 96 hours ahead so Friday reaches
+Monday night.
+
+### Carries alert
+
+A running back newly out (with recent carries) raises an alert on the gameday page and in the
+scheduler log: teammates' rushing lines, each venue's gap to the books, and the carry share the
+fitted redistribution expects each to inherit. An alert only — no probability changes.
+
 ## Removing the teammate-out +6% from receiving props (2026-10-20)
 
 Decision: the flat +6% projection boost when a WR/TE teammate is out no longer applies to Receiving

@@ -11,7 +11,7 @@ import type { ConsensusModel } from "@/lib/analysis/marketConsensus";
  * alternate market, shown in the fetch estimate.
  */
 
-export type FetchKind = "slate" | "closing" | "alt";
+export type FetchKind = "slate" | "closing" | "alt" | "news";
 
 function toDate(iso: string | undefined): Date | null {
   if (!iso) return null;

@@ -364,3 +364,30 @@ model InjuryStatusChange {
   @@index([eventId, team, playerName, detectedAt])
   @@index([toStatus, detectedAt])
 }
+
+// The news-fetch trial (2026-10-20 → 10-27, 30 credits): after a running back
+// is ruled Out, the affected game's rushing markets are bought twice — ~10 and
+// ~40 minutes after the change was first seen — so each venue's reaction is
+// bracketed. One row per planned fetch; both are reserved together.
+model NewsFetch {
+  id              String    @id @default(cuid())
+  createdAt       DateTime  @default(now())
+  changeId        String // InjuryStatusChange.id
+  window          String // friday (the final injury report) | inactives (within 2h of kickoff)
+  eventId         String // ESPN event id
+  homeTeam        String
+  awayTeam        String
+  kickoff         DateTime
+  team            String
+  playerName      String
+  seq             Int // 1 (~10 min) or 2 (~40 min)
+  dueAt           DateTime
+  status          String // queued | done | skipped | failed
+  creditsReserved Int
+  creditsSpent    Int?
+  quotes          Int?
+  note            String?
+  executedAt      DateTime?
+
+  @@index([status, dueAt])
+}

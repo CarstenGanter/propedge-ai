@@ -116,3 +116,30 @@ export function latencyByGroup(moves: BookMove[]): GroupLatency[] {
     })
     .sort((a, b) => a.group.localeCompare(b.group));
 }
+
+export interface VenueGapAtFetch {
+  key: string;
+  /** The books' consensus reference line at that fetch, from sportsbooks only. */
+  books: number | null;
+  underdog: number | null;
+  prizepicks: number | null;
+}
+
+/**
+ * Each venue's line against the books' at one fetch, per teammate prop. A
+ * venue far from the books right after the news, closing by the next fetch, is
+ * the lag a news edge would live in.
+ */
+export function venueGapsAtFetch(
+  quotes: TimedQuote[],
+  consensusLine: (propType: string, quotes: { book: string; line: number; over: number | null; under: number | null }[]) => number | null,
+): VenueGapAtFetch[] {
+  const byKey = new Map<string, TimedQuote[]>();
+  for (const q of quotes) (byKey.get(q.key) ?? byKey.set(q.key, []).get(q.key)!).push(q);
+  return [...byKey.entries()].map(([key, qs]) => {
+    const propType = key.split("|")[1] ?? "";
+    const books = qs.filter((q) => profileFor(q.book).role !== "dfs");
+    const venue = (b: string) => qs.find((q) => q.book === b)?.line ?? null;
+    return { key, books: books.length ? consensusLine(propType, books) : null, underdog: venue("underdog"), prizepicks: venue("prizepicks") };
+  });
+}
