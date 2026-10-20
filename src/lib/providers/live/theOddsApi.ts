@@ -382,6 +382,41 @@ export function collectQuotes(event: OddsEventOdds, sportKey: string): EventQuot
   return [...out.values()];
 }
 
+/** One book's quote as fetched, with the event it belongs to — a row for the odds store. */
+export interface FetchedQuote extends RawQuote {
+  sportKey: string;
+  eventId: string;
+  commenceTime: string;
+  homeTeam: string;
+  awayTeam: string;
+  playerName: string;
+  propType: string;
+}
+
+/**
+ * Every quote in one event, flattened for storage (pure). Includes books with
+ * only one side posted and props no sportsbook priced on both sides — the
+ * store keeps what was fetched, not just what the consensus used.
+ */
+export function flattenEventQuotes(event: OddsEventOdds & { id?: string }, sportKey: string, eventId: string): FetchedQuote[] {
+  const out: FetchedQuote[] = [];
+  for (const e of collectQuotes(event, sportKey)) {
+    for (const q of e.quotes) {
+      out.push({
+        ...q,
+        sportKey,
+        eventId,
+        commenceTime: event.commence_time,
+        homeTeam: event.home_team,
+        awayTeam: event.away_team,
+        playerName: e.player,
+        propType: e.propType,
+      });
+    }
+  }
+  return out;
+}
+
 function venueLine(quotes: RawQuote[], book: string): number | undefined {
   const lines = quotes.filter((q) => q.book === book).map((q) => q.line);
   if (lines.length === 0) return undefined;
@@ -435,6 +470,8 @@ export interface FetchPropsResult {
   /** Events a paid request actually returned odds for — what credits were spent on. */
   pricedEvents: { home: string; away: string }[];
   sportKey: string;
+  /** Every quote fetched, for the odds store. */
+  quotes: FetchedQuote[];
 }
 
 export interface FetchPropsOptions {
@@ -480,11 +517,12 @@ export async function fetchPlayerProps(
   const maxEvents = options.maxEvents ?? 12;
   const comps = competitionsForSport(sport);
   if (comps.length === 0) {
-    return { status: { ok: false, remaining: null, used: null, error: "Unsupported sport" }, props: [], events: 0, pricedEvents: [], sportKey: "" };
+    return { status: { ok: false, remaining: null, used: null, error: "Unsupported sport" }, props: [], events: 0, pricedEvents: [], sportKey: "", quotes: [] };
   }
   const perComp = Math.max(1, Math.floor(maxEvents / comps.length));
 
   const all: NormalizedProp[] = [];
+  const quotes: FetchedQuote[] = [];
   const priced: { home: string; away: string }[] = [];
   let remaining: number | null = null;
   let used: number | null = null;
@@ -517,6 +555,7 @@ export async function fetchPlayerProps(
       if (r.error) lastError = r.error;
       if (r.data) {
         all.push(...normalizeEvent(r.data, comp.sportKey, comp.label));
+        quotes.push(...flattenEventQuotes(r.data, comp.sportKey, ev.id));
         priced.push({ home: ev.home_team, away: ev.away_team });
       }
       // Each event should cost at most one credit per market. If it costs more
@@ -535,5 +574,6 @@ export async function fetchPlayerProps(
     events: totalEvents,
     pricedEvents: priced,
     sportKey: comps[0].sportKey,
+    quotes,
   };
 }

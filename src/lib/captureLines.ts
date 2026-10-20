@@ -8,10 +8,12 @@ import { isLeague, type League } from "@/lib/teamLeagues";
 import { todaySlate } from "@/lib/utils/dates";
 import { toNflSlateDate } from "@/lib/nfl/slate";
 import { nameMatch } from "@/lib/utils/playerName";
-import { consensusProbOver } from "@/lib/analysis/marketConsensus";
+import { sideProbsAtLine } from "@/lib/analysis/quoteHistory";
+import { consensusOf, parseSnapshot } from "@/lib/marketSnapshot";
+import { saveQuotes } from "@/lib/oddsStore";
 import { playedLine } from "@/lib/settlement";
 import { recordOddsCredits } from "@/lib/providerCache";
-import type { Sport, TeamSide } from "@/types";
+import type { Direction, Sport, TeamSide } from "@/types";
 
 export interface CaptureSummary {
   ok: boolean;
@@ -114,6 +116,7 @@ export async function captureClosingLines(opts?: {
       });
       if (res.status.remaining != null) creditsRemaining = res.status.remaining;
       await recordOddsCredits(res.status.remaining, res.status.used);
+      await saveQuotes(res.quotes, new Date(), "closing");
       pricedGames.push(...res.pricedEvents);
       if (res.status.error) fetchError = res.status.error;
       if (res.props.length === 0) continue;
@@ -127,16 +130,27 @@ export async function captureClosingLines(opts?: {
               (teamsMatch(x.homeTeam, pp.opponent) && teamsMatch(x.awayTeam, pp.team))),
         );
         if (!np) continue;
-        // Read the close at the line actually played, as the entry was, so CLV
-        // compares one line at two moments rather than two different lines.
-        const pOverClose = np.consensus
-          ? consensusProbOver(np.consensus, playedLine(pp.line, pp.underdogLine))
-          : np.noVigProbOver;
-        const closingProb = pp.direction === "OVER" ? pOverClose : 1 - pOverClose;
-        await prisma.pick.update({
-          where: { id: pick.id },
-          data: { closingProb, closingCapturedAt: new Date() },
-        });
+        const line = playedLine(pp.line, pp.underdogLine);
+        if (np.consensus) {
+          // Entry and close both at the line played now: the entry from the
+          // quotes stored on the prop (the gameday fetch), the close from this
+          // fetch. The entry recorded when the board was built may sit at
+          // another line if the Underdog line was typed afterwards.
+          const { entryProb, closingProb } = sideProbsAtLine(
+            consensusOf(parseSnapshot(pp.marketDataJson)),
+            np.consensus,
+            line,
+            pp.direction as Direction,
+          );
+          await prisma.pick.update({
+            where: { id: pick.id },
+            data: { closingProb, closingCapturedAt: new Date(), ...(entryProb != null ? { entryProb } : {}) },
+          });
+        } else {
+          const pOverClose = np.noVigProbOver;
+          const closingProb = pp.direction === "OVER" ? pOverClose : 1 - pOverClose;
+          await prisma.pick.update({ where: { id: pick.id }, data: { closingProb, closingCapturedAt: new Date() } });
+        }
         propPicksUpdated++;
       }
     }

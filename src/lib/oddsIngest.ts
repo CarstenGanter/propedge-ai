@@ -8,6 +8,7 @@ import type { Sport } from "@/types";
 import { planIngest, propKey, refreshableFields } from "@/lib/ingestMerge";
 import { parseSnapshot, snapshotFrom } from "@/lib/marketSnapshot";
 import { mergeAvailability, mergeUnderdogLine, underdogPricesLookReal } from "@/lib/analysis/venues";
+import { saveQuotes } from "@/lib/oddsStore";
 
 export interface OddsIngestResult {
   ok: boolean;
@@ -64,6 +65,9 @@ export async function ingestOddsPropsForSport(
     propTypes: options.propTypes,
   });
   await recordOddsCredits(result.status.remaining, result.status.used);
+  // When these quotes were fetched: the odds store and any forecast logged from them are as of this time.
+  const fetchedAtDate = new Date();
+  await saveQuotes(result.quotes, fetchedAtDate, "slate");
 
   if (result.props.length === 0) {
     return {
@@ -78,8 +82,7 @@ export async function ingestOddsPropsForSport(
   }
 
   const dates = new Set<string>();
-  // When these quotes were fetched: a forecast logged from them is as of this time.
-  const fetchedAt = new Date().toISOString();
+  const fetchedAt = fetchedAtDate.toISOString();
   const rows = result.props.map((p) => {
     const date = toSlate(p.commenceTime);
     dates.add(date);

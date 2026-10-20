@@ -54,7 +54,6 @@ model PlayerProp {
   updatedAt       DateTime  @updatedAt
 
   picks         Pick[]
-  lineSnapshots LineSnapshot[]
   predictions   PropPrediction[]
 
   @@index([date])
@@ -307,14 +306,6 @@ model TeamParlayLeg {
 }
 
 // Reserved for future line-movement tracking (multiple snapshots per prop).
-model LineSnapshot {
-  id           String   @id @default(cuid())
-  playerPropId String
-  playerProp   PlayerProp @relation(fields: [playerPropId], references: [id], onDelete: Cascade)
-  line         Float
-  capturedAt   DateTime @default(now())
-}
-
 // "Avoid list": players / prop types the model has performed poorly on.
 model AvoidListItem {
   id        String   @id @default(cuid())
@@ -324,4 +315,29 @@ model AvoidListItem {
   createdAt DateTime @default(now())
 
   @@unique([type, value])
+}
+
+// Every player-prop quote we fetch, kept with the time we fetched it, so the
+// consensus can be rebuilt as of any moment we hold data for (backtests,
+// closing-line value, line movement). Append-only. History starts 2026-10-20:
+// earlier odds would need The Odds API's paid historical tier.
+model OddsQuote {
+  id            String    @id @default(cuid())
+  fetchedAt     DateTime
+  fetchKind     String // slate (the gameday fetch) | closing (the pre-kickoff capture)
+  sportKey      String
+  eventId       String
+  commenceTime  DateTime
+  homeTeam      String
+  awayTeam      String
+  playerName    String
+  propType      String
+  book          String
+  line          Float
+  over          Int? // American odds; null when the book posted one side only
+  under         Int?
+  bookUpdatedAt DateTime? // the book's own last_update for the market
+
+  @@index([eventId, playerName, propType, fetchedAt])
+  @@index([fetchedAt])
 }

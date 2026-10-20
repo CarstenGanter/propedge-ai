@@ -21,6 +21,11 @@ export interface StoredQuote {
   over: number | null;
   under: number | null;
   status: QuoteStatus;
+  /**
+   * The book's last_update. Kept so a rebuilt consensus still halves stale
+   * quotes; rows stored before 2026-10-20 lack it and rebuild without that weighting.
+   */
+  lastUpdate?: string;
 }
 
 export type LineSource = "feed" | "manual";
@@ -52,7 +57,7 @@ export function snapshotFrom(p: NormalizedProp): MarketSnapshot {
     marketLine: p.line,
     source: "The Odds API",
     consensus: p.consensus,
-    quotes: p.quotes?.map((q) => ({ book: q.book, line: q.line, over: q.over, under: q.under, status: q.status })),
+    quotes: p.quotes?.map((q) => ({ book: q.book, line: q.line, over: q.over, under: q.under, status: q.status, lastUpdate: q.lastUpdate })),
     venues: p.venues,
   };
 }
@@ -74,7 +79,7 @@ export function parseSnapshot(json: string | null | undefined): MarketSnapshot |
 export function consensusOf(snap: MarketSnapshot | null): ConsensusModel | null {
   if (!snap?.consensus) return null;
   if (!snap.quotes?.length) return snap.consensus;
-  const raw: RawQuote[] = snap.quotes.map((q) => ({ book: q.book, line: q.line, over: q.over, under: q.under }));
+  const raw: RawQuote[] = snap.quotes.map((q) => ({ book: q.book, line: q.line, over: q.over, under: q.under, lastUpdate: q.lastUpdate }));
   return buildConsensus(snap.consensus.propType, raw).model ?? snap.consensus;
 }
 
