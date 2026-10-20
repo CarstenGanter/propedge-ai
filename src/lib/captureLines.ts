@@ -14,6 +14,7 @@ import { saveQuotes } from "@/lib/oddsStore";
 import { playedLine } from "@/lib/settlement";
 import { recordOddsCredits } from "@/lib/providerCache";
 import { withCreditKind } from "@/lib/creditLedger";
+import { marketsForEvent } from "@/lib/closingPlan";
 import type { Direction, Sport, TeamSide } from "@/types";
 
 export interface CaptureSummary {
@@ -107,12 +108,13 @@ export async function captureClosingLines(opts?: {
 
     for (const sport of sports) {
       const sportPicks = marketPicks.filter((p) => p.playerProp.sport === sport);
-      // Only re-price the markets we actually hold picks in, and (NFL) only that slate's games.
-      const propTypes = [...new Set(sportPicks.map((p) => p.playerProp.propType))];
+      // Per game, buy only the markets of the picks being re-priced there; a
+      // game without one costs nothing. (NFL) Only that slate's games.
+      const closing = sportPicks.map((p) => p.playerProp);
       const res = await withCreditKind("closing", () =>
         fetchPlayerProps(apiKey, sport, {
           maxEvents: opts?.maxEventsPerSport ?? 8,
-          propTypes,
+          propTypesForEvent: (e) => marketsForEvent(closing, e),
           eventFilter: opts?.eventFilter,
           ...(sport === "NFL" ? { slateDate: date, toSlate: toNflSlateDate } : {}),
         }),

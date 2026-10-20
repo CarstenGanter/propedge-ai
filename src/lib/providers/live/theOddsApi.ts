@@ -509,6 +509,12 @@ export interface FetchPropsOptions {
    * an event it rejects costs nothing — the event list is free.
    */
   eventFilter?: (event: { commence_time: string; home_team: string; away_team: string }) => boolean;
+  /**
+   * Per-event markets: each event buys only these prop types (within
+   * `propTypes`, when given). An event that needs none is dropped before the
+   * `maxEvents` cap and costs nothing.
+   */
+  propTypesForEvent?: (event: { commence_time: string; home_team: string; away_team: string }) => string[];
 }
 
 function defaultToSlate(iso: string): string {
@@ -553,6 +559,11 @@ export async function fetchPlayerProps(
       ? options.propTypes.map((p) => fam[p]).filter((k): k is string => Boolean(k))
       : Object.values(fam);
     if (marketKeys.length === 0) continue;
+    const keysFor = (ev: { commence_time: string; home_team: string; away_team: string }) => {
+      if (!options.propTypesForEvent) return marketKeys;
+      const wanted = new Set(options.propTypesForEvent(ev).map((p) => fam[p]));
+      return marketKeys.filter((k) => wanted.has(k));
+    };
 
     const events = await getEvents(apiKey, comp.sportKey);
     let candidates = notStartedYet(events);
@@ -563,11 +574,13 @@ export async function fetchPlayerProps(
       const keep = options.eventFilter;
       candidates = candidates.filter((e) => keep(e));
     }
+    if (options.propTypesForEvent) candidates = candidates.filter((e) => keysFor(e).length > 0);
     const upcoming = candidates.slice(0, perComp);
     totalEvents += upcoming.length;
 
     for (const ev of upcoming) {
-      const r = await getEventProps(apiKey, comp.sportKey, ev.id, marketKeys);
+      const evKeys = keysFor(ev);
+      const r = await getEventProps(apiKey, comp.sportKey, ev.id, evKeys);
       if (r.remaining != null) remaining = r.remaining;
       if (r.used != null) used = r.used;
       if (r.error) lastError = r.error;
@@ -579,8 +592,8 @@ export async function fetchPlayerProps(
       // Each event should cost at most one credit per market. If it costs more
       // the billing assumption behind the bookmaker list is wrong: stop before
       // the rest of the slate spends double.
-      if (r.last != null && r.last > marketKeys.length) {
-        lastError = `Credit regression: one event cost ${r.last} credits for ${marketKeys.length} markets — stopped fetching.`;
+      if (r.last != null && r.last > evKeys.length) {
+        lastError = `Credit regression: one event cost ${r.last} credits for ${evKeys.length} markets — stopped fetching.`;
         break;
       }
     }
