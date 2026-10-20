@@ -39,7 +39,21 @@ export interface Appearance {
 
 export interface SeasonData {
   rows: StatRow[];
+  /** Offensive snaps only: a special-teams snap is not a chance to record an offensive stat. */
   appearances: Appearance[];
+  /**
+   * Dressed but played special teams only. Graded void, not 0 — the prop never
+   * had a chance — and listed so such a player is still matched by name rather
+   * than reported as unmatched.
+   */
+  specialTeamsOnly?: Appearance[];
+  /**
+   * The league's players with their team (nflverse players.csv). A prop whose
+   * player is on one of the two teams but has no snap and no stat that week did
+   * not play: void. `team` is the player's latest team, so a mid-season move
+   * can still leave a prop unmatched rather than wrongly voided.
+   */
+  roster?: { gsisId: string; name: string; team: string }[];
 }
 
 const n0 = (v: string | undefined): number => {
@@ -125,7 +139,7 @@ export function weekForGame(rows: StatRow[], home: string, away: string): number
 
 export type Grade =
   | { kind: "graded"; value: number; gsisId: string; week: number; fromSnapsOnly: boolean }
-  | { kind: "void"; gsisId: string; week: number }
+  | { kind: "void"; gsisId: string; week: number; reason: "special teams only" | "did not play" }
   | { kind: "unmatched"; week: number }
   | { kind: "pending" };
 
@@ -134,12 +148,21 @@ interface Candidate {
   name: string;
 }
 
+/**
+ * A folded name without a generational suffix. The feed writes "Travis Etienne
+ * Jr." where nflverse writes "Travis Etienne" (12 of 37 unmatched props on
+ * 2026-10-19). Local to grading: the shared normName feeds other matching.
+ */
+export function baseName(name: string): string {
+  return normName(name).replace(/\s+(jr|sr|ii|iii|iv|v)$/, "");
+}
+
 function matchPlayer(playerName: string, candidates: Candidate[]): string | null {
-  const target = normName(playerName);
-  const exact = [...new Set(candidates.filter((c) => normName(c.name) === target).map((c) => c.gsisId))];
+  const target = baseName(playerName);
+  const exact = [...new Set(candidates.filter((c) => baseName(c.name) === target).map((c) => c.gsisId))];
   if (exact.length === 1) return exact[0];
   if (exact.length > 1) return null;
-  const loose = [...new Set(candidates.filter((c) => nameMatch(c.name, playerName)).map((c) => c.gsisId))];
+  const loose = [...new Set(candidates.filter((c) => nameMatch(baseName(c.name), target)).map((c) => c.gsisId))];
   return loose.length === 1 ? loose[0] : null;
 }
 
@@ -157,15 +180,19 @@ export function gradeProp(
   const teams = new Set([prop.home, prop.away]);
   const rows = season.rows.filter((r) => r.week === week && teams.has(r.team));
   const apps = season.appearances.filter((a) => a.week === week && teams.has(a.team));
-  const gsisId = matchPlayer(prop.playerName, [...rows, ...apps]);
-  if (!gsisId) return { kind: "unmatched", week };
+  const stOnly = (season.specialTeamsOnly ?? []).filter((a) => a.week === week && teams.has(a.team));
+  const gsisId = matchPlayer(prop.playerName, [...rows, ...apps, ...stOnly]);
+  if (!gsisId) {
+    const rostered = matchPlayer(prop.playerName, (season.roster ?? []).filter((r) => teams.has(r.team)));
+    return rostered ? { kind: "void", gsisId: rostered, week, reason: "did not play" } : { kind: "unmatched", week };
+  }
   const row = rows.find((r) => r.gsisId === gsisId);
   if (row) {
     const value = statValue(row, prop.propType);
     return value == null ? { kind: "unmatched", week } : { kind: "graded", value, gsisId, week, fromSnapsOnly: false };
   }
   if (apps.some((a) => a.gsisId === gsisId)) return { kind: "graded", value: 0, gsisId, week, fromSnapsOnly: true };
-  return { kind: "void", gsisId, week };
+  return { kind: "void", gsisId, week, reason: "special teams only" };
 }
 
 /** Games a player appeared in during a season, most recent first, with the stat (0 for a snap with no stat line). */

@@ -96,25 +96,40 @@ export interface Interval {
  * Percentile interval for `stat`, resampling whole games with replacement.
  * Null with fewer than two games: one game cannot be resampled into a spread.
  */
-export function clusterBootstrap(
-  items: SkillItem[],
-  stat: (sample: SkillItem[]) => number | null,
+export function clusterBootstrap<T extends { cluster: string }>(
+  items: T[],
+  stat: (sample: T[]) => number | null,
   opts: { reps?: number; seed?: number; level?: number } = {},
 ): Interval | null {
+  return clusterBootstrapMany(items, (s) => {
+    const v = stat(s);
+    return v == null ? null : [v];
+  }, opts)?.[0] ?? null;
+}
+
+/** The same for a statistic with several components (e.g. regression coefficients), one interval each. */
+export function clusterBootstrapMany<T extends { cluster: string }>(
+  items: T[],
+  stat: (sample: T[]) => number[] | null,
+  opts: { reps?: number; seed?: number; level?: number } = {},
+): Interval[] | null {
   const clusters = [...groupBy(items, (i) => i.cluster).values()];
   if (clusters.length < 2) return null;
   const reps = opts.reps ?? 2000;
   const rand = mulberry32(opts.seed ?? 20261019);
   const level = opts.level ?? 0.95;
-  const out: number[] = [];
+  const draws: number[][] = [];
   for (let r = 0; r < reps; r++) {
-    const sample: SkillItem[] = [];
+    const sample: T[] = [];
     for (let c = 0; c < clusters.length; c++) sample.push(...clusters[Math.floor(rand() * clusters.length)]);
     const v = stat(sample);
-    if (v != null && Number.isFinite(v)) out.push(v);
+    if (v && v.every((x) => Number.isFinite(x))) draws.push(v);
   }
-  out.sort((a, b) => a - b);
-  return { lo: quantile(out, (1 - level) / 2), hi: quantile(out, 1 - (1 - level) / 2) };
+  if (draws.length === 0) return null;
+  return draws[0].map((_, k) => {
+    const col = draws.map((d) => d[k]).sort((a, b) => a - b);
+    return { lo: quantile(col, (1 - level) / 2), hi: quantile(col, 1 - (1 - level) / 2) };
+  });
 }
 
 /** The side the model rates above the market, or null when they agree. */
@@ -254,4 +269,83 @@ export function edgeSourceFor(input: {
     return "news";
   }
   return "model";
+}
+
+// ---- does the player layer add anything? ----
+
+export function logit(p: number): number {
+  const q = Math.min(1 - 1e-4, Math.max(1e-4, p));
+  return Math.log(q / (1 - q));
+}
+
+/**
+ * Logistic regression by Newton–Raphson (IRLS). `x` rows exclude the
+ * intercept, which is added as the first coefficient. Null when the fit does
+ * not converge (e.g. perfect separation in a small resample).
+ */
+export function fitLogistic(x: number[][], y: boolean[], maxIter = 50): number[] | null {
+  const k = (x[0]?.length ?? 0) + 1;
+  let b = new Array(k).fill(0);
+  for (let iter = 0; iter < maxIter; iter++) {
+    const g = new Array(k).fill(0);
+    const h = Array.from({ length: k }, () => new Array(k).fill(0));
+    for (let i = 0; i < x.length; i++) {
+      const row = [1, ...x[i]];
+      const eta = row.reduce((s, v, j) => s + v * b[j], 0);
+      const p = 1 / (1 + Math.exp(-eta));
+      const w = p * (1 - p);
+      for (let j = 0; j < k; j++) {
+        g[j] += row[j] * ((y[i] ? 1 : 0) - p);
+        for (let l = 0; l < k; l++) h[j][l] += w * row[j] * row[l];
+      }
+    }
+    const step = solve(h, g);
+    if (!step) return null;
+    b = b.map((v, j) => v + step[j]);
+    if (Math.max(...step.map(Math.abs)) < 1e-9) return b;
+  }
+  return b.every(Number.isFinite) ? b : null;
+}
+
+/** Gaussian elimination with partial pivoting; null for a singular system. */
+function solve(a: number[][], rhs: number[]): number[] | null {
+  const n = rhs.length;
+  const m = a.map((row, i) => [...row, rhs[i]]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(m[r][c]) > Math.abs(m[piv][c])) piv = r;
+    if (Math.abs(m[piv][c]) < 1e-12) return null;
+    [m[c], m[piv]] = [m[piv], m[c]];
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = m[r][c] / m[c][c];
+      for (let j = c; j <= n; j++) m[r][j] -= f * m[c][j];
+    }
+  }
+  return m.map((row, i) => row[n] / row[i]);
+}
+
+export interface StackingResult {
+  n: number;
+  games: number;
+  /** [intercept, market coefficient, model coefficient] on the logit scale. */
+  coef: number[];
+  intervals: Interval[] | null;
+}
+
+/**
+ * outcome ~ logit(p_market) + logit(p_model). A calibrated market alone gives a
+ * market coefficient near 1; the model adds information only if its
+ * coefficient's interval excludes 0.
+ */
+export function stackingFit(items: SkillItem[], opts: { reps?: number; seed?: number } = {}): StackingResult | null {
+  const fit = (xs: SkillItem[]) => fitLogistic(xs.map((i) => [logit(i.pMarket), logit(i.pModel)]), xs.map((i) => i.over));
+  const coef = items.length >= 3 ? fit(items) : null;
+  if (!coef) return null;
+  return {
+    n: items.length,
+    games: new Set(items.map((i) => i.cluster)).size,
+    coef,
+    intervals: clusterBootstrapMany(items, fit, opts),
+  };
 }

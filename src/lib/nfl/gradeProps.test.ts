@@ -85,6 +85,37 @@ describe("gradeProp", () => {
     expect(g.kind === "graded" && g.gsisId).toBe("humphrey");
   });
 
+  it("voids a player who only played special teams — never 0", () => {
+    const withSt: SeasonData = { ...season, specialTeamsOnly: [{ gsisId: "gunner", name: "Special Teamer", week: 6, team: "SEA" }] };
+    expect(gradeProp({ playerName: "Special Teamer", propType: "Receptions", home: "DEN", away: "SEA" }, withSt)).toEqual({
+      kind: "void",
+      gsisId: "gunner",
+      week: 6,
+      reason: "special teams only",
+    });
+  });
+
+  it("matches through a generational suffix", () => {
+    const withJr: SeasonData = {
+      ...season,
+      rows: [...season.rows, row({ gsisId: "etienne", name: "Travis Etienne", week: 6, team: "DEN", opponent: "SEA", rushingYards: 71 })],
+    };
+    expect(gradeProp({ playerName: "Travis Etienne Jr.", propType: "Rushing Yards", home: "DEN", away: "SEA" }, withJr)).toMatchObject({
+      kind: "graded",
+      value: 71,
+    });
+  });
+
+  it("voids a rostered player with no snap and no stat — he did not play", () => {
+    const withRoster: SeasonData = { ...season, roster: [{ gsisId: "inactive", name: "Jordan Addison", team: "SEA" }] };
+    expect(gradeProp({ playerName: "Jordan Addison", propType: "Receptions", home: "DEN", away: "SEA" }, withRoster)).toEqual({
+      kind: "void",
+      gsisId: "inactive",
+      week: 6,
+      reason: "did not play",
+    });
+  });
+
   it("is unmatched when nobody on either team has the name", () => {
     expect(gradeProp({ playerName: "Nobody Here", propType: "Receptions", home: "DEN", away: "SEA" }, season).kind).toBe("unmatched");
   });

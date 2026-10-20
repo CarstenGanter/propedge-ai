@@ -16,18 +16,27 @@
  *    bootstrap intervals: consensus-v2 props (per-book quotes, 2026-10-01 on)
  *    as the primary result, novig-v1 props as a separate secondary table, live
  *    rows separately again. Never pooled.
+ * 4. Diagnostics, no probability changes:
+ *    - player layer: the model with market weight 0 scored against the market,
+ *      and outcome ~ logit(p_market) + logit(p_model) on the primary sample;
+ *    - books at the venue line: reliability of the Books column's number (the
+ *      consensus read at Underdog's line, current σ method) on every graded
+ *      prop with an Underdog line — the baseline for the σ task.
  */
 import zlib from "node:zlib";
 import { prisma } from "@/lib/db/client";
 import { parseCsv } from "@/lib/utils/csv";
 import { nflverseCode } from "@/lib/nfl/teamCodes";
-import { GRADABLE_PROPS, gradeProp, parseGradingStats, priorGames, type Appearance, type SeasonData } from "@/lib/nfl/gradeProps";
+import { baseName, GRADABLE_PROPS, gradeProp, parseGradingStats, priorGames, type Appearance, type SeasonData } from "@/lib/nfl/gradeProps";
 import { estimateProbability } from "@/lib/analysis/probabilityModel";
 import { consensusProbOver } from "@/lib/analysis/marketConsensus";
 import { consensusOf, parseSnapshot } from "@/lib/marketSnapshot";
 import { BASELINE_V0, marketMethodOf, overProb } from "@/lib/predictionLog";
 import { liveModelVersions, loadSkillItems, payoutRoi, skillSection, type SkillSection } from "@/lib/predictionReport";
-import { skillBy, type SkillBreakdown } from "@/lib/analysis/marketSkill";
+import { clusterBootstrap, skillBy, skillScore, stackingFit, type SkillBreakdown, type SkillItem } from "@/lib/analysis/marketSkill";
+import { readVenueLine } from "@/lib/analysis/venues";
+import { calibrationSummary, excessByVenueGap, reliabilityTable, type BucketRow, type VenueItem } from "@/lib/analysis/venueCalibration";
+
 import type { Prisma } from "@prisma/client";
 
 const BASE = "https://github.com/nflverse/nflverse-data/releases/download";
@@ -49,13 +58,16 @@ async function loadSeason(season: number, pfrToGsis: Map<string, string>): Promi
   // A snap-count player without a players.csv link is tied to a stat row by name and team.
   const byNameTeam = new Map(rows.map((r) => [`${r.name}|${r.team}`, r.gsisId]));
   const appearances: Appearance[] = [];
+  const specialTeamsOnly: Appearance[] = [];
   for (const r of parseCsv(snaps).rows) {
     if (r.game_type && r.game_type !== "REG" && r.game_type !== "POST") continue;
-    if (!(Number(r.offense_snaps) > 0)) continue;
     const gsisId = pfrToGsis.get(r.pfr_player_id) ?? byNameTeam.get(`${r.player}|${r.team}`) ?? `pfr:${r.pfr_player_id}`;
-    appearances.push({ gsisId, name: r.player, week: Number(r.week), team: r.team });
+    const a = { gsisId, name: r.player, week: Number(r.week), team: r.team };
+    // Offensive snaps only: a special-teams snap is no chance at an offensive stat.
+    if (Number(r.offense_snaps) > 0) appearances.push(a);
+    else if (Number(r.st_snaps) > 0) specialTeamsOnly.push(a);
   }
-  return { rows, appearances };
+  return { rows, appearances, specialTeamsOnly };
 }
 
 function pct(x: number | undefined | null, d = 1) {
@@ -92,11 +104,60 @@ function printSection(s: SkillSection) {
   printBreakdown("by edge source", r.byEdgeSource);
 }
 
+function printPlayerLayer(items: SkillItem[]) {
+  console.log("\n=== DIAGNOSTIC — player layer (market weight 0), primary sample ===");
+  console.log("  The model on the player's own sample only, unclipped, vs the de-vigged consensus at the books' line.");
+  const s = skillScore(items);
+  if (!s) return console.log("  no props");
+  const iv = clusterBootstrap(items, (x) => skillScore(x)?.skill ?? null);
+  console.log(
+    `  props ${s.n}, games ${s.games} | log-loss player layer ${s.llModel.toFixed(4)}, market ${s.llMarket.toFixed(4)} | ` +
+      `skill ${pct(s.skill, 2)}` + (iv ? ` (95% ${pct(iv.lo, 2)} to ${pct(iv.hi, 2)})` : ""),
+  );
+  const st = stackingFit(items);
+  if (!st) return console.log("  stacking fit did not converge");
+  const names = ["intercept", "logit(p_market)", "logit(p_model)"];
+  console.log("  stacking: outcome ~ logit(p_market) + logit(p_model)  (game-bootstrap 95%)");
+  st.coef.forEach((c, k) => {
+    const ci = st.intervals?.[k];
+    console.log(`    ${names[k].padEnd(16)} ${c.toFixed(3).padStart(7)}  ${ci ? `[${ci.lo.toFixed(3)}, ${ci.hi.toFixed(3)}]` : ""}`);
+  });
+}
+
+function printBuckets(rows: BucketRow[]) {
+  for (const r of rows) {
+    const iv = r.excessInterval ? `[${r.excessInterval.lo.toFixed(1)}, ${r.excessInterval.hi.toFixed(1)}]` : "";
+    console.log(
+      `    ${r.label.padEnd(24)} n=${String(r.n).padStart(4)}  books ${r.predictedPts.toFixed(1).padStart(5)}  actual ${r.actualPts.toFixed(1).padStart(5)}  hits−expected ${r.excessPts.toFixed(1).padStart(6)} ${iv}`,
+    );
+  }
+}
+
+function printVenueCalibration(items: VenueItem[], skippedOldMethod: number) {
+  console.log("\n=== DIAGNOSTIC — books at the Underdog line (current σ method): the σ-task baseline ===");
+  console.log(`  Every graded consensus-v2 prop with an Underdog line, for the side stored on the prop. (${skippedOldMethod} older-method props left out.)`);
+  for (const [label, xs] of [
+    ["all", items],
+    ["priced (within a point of the books' lines)", items.filter((i) => i.priced)],
+    ["beyond the books' lines", items.filter((i) => !i.priced)],
+  ] as const) {
+    const c = calibrationSummary([...xs]);
+    if (c) console.log(`  ${label.padEnd(44)} n=${String(c.n).padStart(4)} games=${String(c.games).padStart(3)}  log-loss ${c.logLoss.toFixed(4)}  Brier ${c.brier.toFixed(4)}  ECE ${c.ecePts.toFixed(1)} pts`);
+  }
+  console.log("  reliability, 5-point bins of the books' probability");
+  printBuckets(reliabilityTable(items));
+  console.log("  hits minus books-expected hits, by venue gap (stat units, + = easier for the side)");
+  printBuckets(excessByVenueGap(items));
+}
+
 async function main() {
   console.log("Loading nflverse…");
   const players = parseCsv(await fetchCsv(`${BASE}/players/players.csv`)).rows;
   const pfrToGsis = new Map(players.filter((p) => p.pfr_id && p.gsis_id).map((p) => [p.pfr_id, p.gsis_id]));
   const [current, prior] = await Promise.all([loadSeason(SEASON, pfrToGsis), loadSeason(SEASON - 1, pfrToGsis)]);
+  current.roster = players
+    .filter((pl) => pl.gsis_id && pl.latest_team)
+    .map((pl) => ({ gsisId: pl.gsis_id, name: pl.display_name ?? "", team: pl.latest_team }));
 
   const now = Date.now();
   const props = await prisma.playerProp.findMany({
@@ -105,20 +166,41 @@ async function main() {
 
   const tally = { graded: 0, snapsOnly: 0, void: 0, unmatched: 0, pending: 0, filled: 0, noGames: 0, noMarket: 0 };
   const mismatches: string[] = [];
+  const unmatched: { label: string; reason: string }[] = [];
+  const voided: string[] = [];
+  const knownPlayers = new Map<string, string>(players.map((pl) => [baseName(pl.display_name ?? ""), pl.latest_team ?? ""]));
+  const playerLayer: SkillItem[] = [];
+  const venue: VenueItem[] = [];
+  let venueSkippedOldMethod = 0;
   const fills: { id: string; value: number }[] = [];
   const forecasts: Prisma.PropPredictionCreateManyInput[] = [];
 
   for (const p of props) {
     const home = nflverseCode(p.team);
     const away = nflverseCode(p.opponent);
+    const label = `${p.date} ${p.playerName} — ${p.propType} (${p.opponent} @ ${p.team})`;
     if (!home || !away) {
       tally.unmatched++;
+      unmatched.push({ label, reason: "team name has no nflverse code" });
       continue;
     }
     const g = gradeProp({ playerName: p.playerName, propType: p.propType, home, away }, current);
     if (g.kind === "pending") { tally.pending++; continue; }
-    if (g.kind === "unmatched") { tally.unmatched++; continue; }
-    if (g.kind === "void") { tally.void++; continue; }
+    if (g.kind === "unmatched") {
+      tally.unmatched++;
+      const team = knownPlayers.get(baseName(p.playerName));
+      unmatched.push({
+        label,
+        reason:
+          team === undefined
+            ? "name not in nflverse players"
+            : team === home || team === away
+              ? `on ${team}'s roster, no snaps or stats that week (did not play)`
+              : `nflverse lists him on ${team || "no team"}`,
+      });
+      continue;
+    }
+    if (g.kind === "void") { tally.void++; voided.push(`${label}: ${g.reason}`); continue; }
     tally.graded++;
     if (g.fromSnapsOnly) tally.snapsOnly++;
     if (p.actualResult == null) fills.push({ id: p.id, value: g.value });
@@ -145,6 +227,30 @@ async function main() {
     const direction = marketOver >= 0.5 ? "OVER" : "UNDER";
     const est = estimateProbability({ line, direction, propType: p.propType, games, marketProbOver: marketOver, marketLine: line, adjustments: [] });
     if (!est) { tally.noGames++; continue; }
+    const cluster = `${p.date}|${p.team}|${p.opponent}`;
+
+    if (method === "consensus-v2" && g.value !== line) {
+      // Player layer: the same model with market weight 0 — the player's own sample only.
+      const solo = estimateProbability({ line, direction: "OVER", propType: p.propType, games, adjustments: [] });
+      if (solo) playerLayer.push({ pModel: solo.rawProbability, pMarket: marketOver, over: g.value > line, cluster, propType: p.propType });
+    }
+
+    // Books at the venue line: the Books column's number, current σ method.
+    if (p.underdogLine != null && g.value !== p.underdogLine) {
+      const m = method === "consensus-v2" ? consensusOf(snapshot) : null;
+      if (!m) venueSkippedOldMethod++;
+      else {
+        const dir = p.direction as "OVER" | "UNDER";
+        const read = readVenueLine(m, p.underdogLine, dir);
+        venue.push({
+          p: read.probAtVenue,
+          hit: dir === "OVER" ? g.value > p.underdogLine : g.value < p.underdogLine,
+          cluster,
+          gap: dir === "OVER" ? m.referenceLine - p.underdogLine : p.underdogLine - m.referenceLine,
+          priced: read.priced,
+        });
+      }
+    }
     const fetched = snapshot?.fetchedAt ? new Date(snapshot.fetchedAt) : p.updatedAt;
     forecasts.push({
       playerPropId: p.id,
@@ -170,6 +276,16 @@ async function main() {
   console.log(`Results filled where empty: ${tally.filled}. Disagreements with stored results: ${mismatches.length}`);
   for (const m of mismatches.slice(0, 15)) console.log(`  ${m}`);
   console.log(`baseline-v0 forecasts written: ${forecasts.length}`);
+  console.log(`\nVoided (special teams only, or rostered with no snap — never graded 0): ${voided.length}`);
+  for (const v of voided) console.log(`  ${v}`);
+  console.log(`\nUnmatched props: ${unmatched.length}`);
+  for (const u of unmatched) console.log(`  ${u.label}: ${u.reason}`);
+  const reasons = new Map<string, number>();
+  for (const u of unmatched) {
+    const key = u.reason.startsWith("on ") ? "on the roster, did not play" : u.reason.startsWith("nflverse lists him") ? "nflverse lists another team" : u.reason;
+    reasons.set(key, (reasons.get(key) ?? 0) + 1);
+  }
+  console.log(`  by reason: ${JSON.stringify(Object.fromEntries(reasons))}`);
 
   const primary = await skillSection(
     `PRIMARY — ${BASELINE_V0}, consensus-v2 market (2026-10-01 on)`,
@@ -193,6 +309,9 @@ async function main() {
       await skillSection(`LIVE — model ${v}, consensus-v2`, "Logged at scoring time, at the line played.", { source: "live", marketMethod: "consensus-v2", modelVersion: v }),
     );
   }
+
+  printPlayerLayer(playerLayer);
+  printVenueCalibration(venue, venueSkippedOldMethod);
 
   const roi = await payoutRoi();
   console.log(`\nROI on settled picks with Underdog's payout entered: ${roi ? `${pct(roi.roi)} over ${roi.n} picks` : "none"}`);
