@@ -43,7 +43,7 @@ import { computeCalibration, recentTrend } from "@/lib/analysis/calibration";
 import { brierScore, logLoss, brierSkillScore, clvSummary } from "@/lib/analysis/modelQuality";
 import { CaptureClosingLinesButton } from "@/components/CaptureClosingLinesButton";
 import { MarketSkillPanel } from "@/components/MarketSkillPanel";
-import { liveModelVersions, payoutRoi, skillSection } from "@/lib/predictionReport";
+import { liveModelVersions, overGapRows, payoutRoi, skillSection } from "@/lib/predictionReport";
 import { BASELINE_V0 } from "@/lib/predictionLog";
 import { confidenceTier, CONFIDENCE_TIERS } from "@/lib/analysis/confidenceModel";
 import { formatPercent, formatSignedCurrency } from "@/lib/utils/format";
@@ -90,6 +90,7 @@ export default async function AnalyticsPage({
     liveModelVersions(),
     payoutRoi(),
   ]);
+  const overGap = await overGapRows(liveVersions, skillReps);
   const skillLive = await Promise.all(
     liveVersions.map((v) =>
       skillSection(`Live model ${v} — logged at scoring time`, "The production model's forecast at the line played, the last one before kickoff.", {
@@ -294,7 +295,7 @@ export default async function AnalyticsPage({
         </TabsList>
 
         <TabsContent value="market">
-          <MarketSkillPanel sections={[skillPrimary, ...skillLive, skillSecondary]} roi={roi} />
+          <MarketSkillPanel sections={[skillPrimary, ...skillLive, skillSecondary]} roi={roi} overGap={overGap} />
         </TabsContent>
 
         <TabsContent value="accuracy" className="space-y-4">

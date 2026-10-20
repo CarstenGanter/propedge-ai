@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { roiWithPayouts, skillReport, type SkillItem, type SkillReport } from "@/lib/analysis/marketSkill";
-import type { MarketMethod } from "@/lib/predictionLog";
+import { overGap, roiWithPayouts, skillReport, type OverGap, type SkillItem, type SkillReport } from "@/lib/analysis/marketSkill";
+import { BASELINE_V0, type MarketMethod } from "@/lib/predictionLog";
 
 /**
  * Scored forecasts from the log, for the model-vs-market report. One forecast
@@ -81,4 +81,30 @@ export async function skillSection(
 ): Promise<SkillSection> {
   const items = await loadSkillItems(filter);
   return { title, note, items: items.length, report: items.length ? skillReport(items, opts) : null };
+}
+
+export interface OverGapRow {
+  label: string;
+  gap: OverGap | null;
+}
+
+/**
+ * The standing Over-vs-books metric: at Underdog and PrizePicks lines, how
+ * often the Over landed minus the books' P(over). Backfilled rows and live
+ * rows are separate lines, never pooled.
+ */
+export async function overGapRows(modelVersions: string[], opts: { reps?: number } = {}): Promise<OverGapRow[]> {
+  const rows: OverGapRow[] = [];
+  for (const [label, lineKind] of [
+    ["Underdog lines", "venue"],
+    ["PrizePicks lines", "prizepicks"],
+  ] as const) {
+    const items = await loadSkillItems({ source: "backfill", marketMethod: "consensus-v2", modelVersion: BASELINE_V0, lineKind });
+    rows.push({ label: `${label} — graded history`, gap: overGap(items, opts) });
+  }
+  for (const v of modelVersions) {
+    const items = await loadSkillItems({ source: "live", marketMethod: "consensus-v2", modelVersion: v, lineKind: "venue" });
+    rows.push({ label: `Underdog lines — live forecasts, model ${v}`, gap: overGap(items, opts) });
+  }
+  return rows;
 }

@@ -8,6 +8,8 @@ import {
   leanSide,
   logit,
   mulberry32,
+  overGap,
+  overGapPts,
   roiWithPayouts,
   skillReport,
   skillScore,
@@ -169,5 +171,19 @@ describe("fitLogistic and stackingFit", () => {
   it("clamps logit at the edges", () => {
     expect(Number.isFinite(logit(0))).toBe(true);
     expect(logit(0.5)).toBeCloseTo(0, 12);
+  });
+});
+
+describe("overGap", () => {
+  it("is Overs landed minus the books' expected Overs, in points", () => {
+    // Books 0.5 and 0.6; one Over landed: (1 − 0.5 + 0 − 0.6) / 2 = −0.05.
+    expect(overGapPts([{ over: true, pMarket: 0.5 }, { over: false, pMarket: 0.6 }])).toBeCloseTo(-5, 10);
+  });
+
+  it("counts games and gives an interval", () => {
+    const xs = Array.from({ length: 30 }, (_, i) => item(0.5, 0.5, i % 2 === 0, `g${i % 6}`));
+    const g = overGap(xs, { reps: 100 })!;
+    expect(g.games).toBe(6);
+    expect(g.interval!.lo).toBeLessThanOrEqual(g.gapPts);
   });
 });

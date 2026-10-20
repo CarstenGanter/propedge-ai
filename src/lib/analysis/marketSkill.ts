@@ -349,3 +349,28 @@ export function stackingFit(items: SkillItem[], opts: { reps?: number; seed?: nu
     intervals: clusterBootstrapMany(items, fit, opts),
   };
 }
+
+// ---- the Over against the books ----
+
+/**
+ * How often the Over landed minus how often the books said it would, per prop,
+ * in points. Negative means Overs finish below the books' probability — the
+ * public-leans-Over shading the research expects at venue lines.
+ */
+export function overGapPts(items: Pick<SkillItem, "over" | "pMarket">[]): number | null {
+  if (items.length === 0) return null;
+  return (items.reduce((s, i) => s + (i.over ? 1 : 0) - i.pMarket, 0) / items.length) * 100;
+}
+
+export interface OverGap {
+  n: number;
+  games: number;
+  gapPts: number;
+  interval: Interval | null;
+}
+
+export function overGap(items: SkillItem[], opts: { reps?: number; seed?: number } = {}): OverGap | null {
+  const g = overGapPts(items);
+  if (g == null) return null;
+  return { n: items.length, games: new Set(items.map((i) => i.cluster)).size, gapPts: g, interval: clusterBootstrap(items, overGapPts, opts) };
+}

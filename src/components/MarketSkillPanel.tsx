@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState, StatCard } from "@/components/common";
 import type { Interval, SkillBreakdown } from "@/lib/analysis/marketSkill";
-import type { SkillSection } from "@/lib/predictionReport";
+import type { OverGapRow, SkillSection } from "@/lib/predictionReport";
 import { cn } from "@/lib/utils/cn";
 
 function pct(x: number, digits = 2) {
@@ -119,7 +119,58 @@ function Section({ s }: { s: SkillSection }) {
  * de-vigged consensus does not? Scored on every settled prop with a market,
  * intervals from resampling whole games.
  */
-export function MarketSkillPanel({ sections, roi }: { sections: SkillSection[]; roi: { n: number; roi: number } | null }) {
+function OverGapCard({ rows }: { rows: OverGapRow[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>The Over against the books, at venue lines</CardTitle>
+        <CardDescription>
+          How often the Over landed minus how often the books said it would, per prop. Negative means Overs finish
+          below the books&apos; probability — the public-leans-Over shading the research expects. A standing metric:
+          it only means something once its interval excludes zero.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead />
+              <TableHead className="text-right">Lines</TableHead>
+              <TableHead className="text-right">Games</TableHead>
+              <TableHead className="text-right">Over − books (pts)</TableHead>
+              <TableHead className="text-right">95% interval</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow key={r.label}>
+                <TableCell>{r.label}</TableCell>
+                <TableCell className="text-right font-mono">{r.gap?.n ?? 0}</TableCell>
+                <TableCell className="text-right font-mono">{r.gap?.games ?? 0}</TableCell>
+                <TableCell className={cn("text-right font-mono", r.gap?.interval && (r.gap.interval.hi < 0 || r.gap.interval.lo > 0) ? "font-semibold" : "")}>
+                  {r.gap ? `${r.gap.gapPts >= 0 ? "+" : ""}${r.gap.gapPts.toFixed(1)}` : "—"}
+                </TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {r.gap?.interval ? `${r.gap.interval.lo.toFixed(1)} to ${r.gap.interval.hi.toFixed(1)}` : "—"}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function MarketSkillPanel({
+  sections,
+  roi,
+  overGap,
+}: {
+  sections: SkillSection[];
+  roi: { n: number; roi: number } | null;
+  overGap: OverGapRow[];
+}) {
   return (
     <div className="space-y-4">
       <p className="max-w-[70ch] text-sm leading-relaxed text-muted-foreground">
@@ -130,6 +181,7 @@ export function MarketSkillPanel({ sections, roi }: { sections: SkillSection[]; 
       {sections.map((s) => (
         <Section key={s.title} s={s} />
       ))}
+      <OverGapCard rows={overGap} />
       <Card>
         <CardHeader>
           <CardTitle>Return where real payouts exist</CardTitle>
