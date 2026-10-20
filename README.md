@@ -86,6 +86,7 @@ Then open **Settings → Load demo data** at any time to (re)populate the app, o
 | `npm run daily` | Headless fetch + generate (props & team picks) |
 | `npm run capture` | Capture closing lines for CLV by hand (`npm run capture -- --props` also captures prop lines) |
 | `npm run capture:auto` | One pass of the automatic closing-line capture (what the scheduler runs) |
+| `npm run research:skill` | Grade settled NFL props from nflverse and score the model against the market (no Odds API credits) |
 | `npm run lint` | ESLint |
 | `npm run db:reset` | Reset the SQLite database |
 
@@ -287,6 +288,13 @@ assuming it — the honest core of a research tool.
 - **Calibration score.** **Brier score** and **log-loss** grade how well the stated probabilities
   match reality (props use confidence ÷ 100; team picks use the model win probability), plus a
   **skill-vs-coin-flip** number (>0 beats guessing). Lower Brier/log-loss is better.
+- **Model vs market (the headline).** Analytics opens on log-loss skill against the de-vigged
+  consensus on *every* settled prop with a market, not just picks, with intervals from resampling
+  whole games. Every scored prop's forecast is logged (`PropPrediction`); `npm run research:skill`
+  grades outcomes from nflverse and prints the report. Entry and closing CLV are read at the same
+  line. Every fetched quote is kept with its fetch time (`OddsQuote`), so the market can be rebuilt
+  as of any moment. See [docs/ROADMAP.md](docs/ROADMAP.md) for what's measured, what's built next
+  and why.
 
 **Capturing closing lines and settling — automatic.** Two schedulers capture prop closing lines
 **20–60 minutes before each kickoff** and settle finished picks from ESPN box scores (eligible 3½
