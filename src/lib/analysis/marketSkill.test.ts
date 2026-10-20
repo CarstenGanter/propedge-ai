@@ -1,0 +1,133 @@
+import { describe, expect, it } from "vitest";
+import {
+  bucketedEdge,
+  clusterBootstrap,
+  edgeSourceFor,
+  excessPts,
+  leanSide,
+  roiWithPayouts,
+  skillReport,
+  skillScore,
+  type SkillItem,
+} from "./marketSkill";
+
+const item = (pModel: number, pMarket: number, over: boolean, cluster = "g1", propType = "Receptions"): SkillItem => ({
+  pModel,
+  pMarket,
+  over,
+  cluster,
+  propType,
+});
+
+describe("skillScore", () => {
+  it("is zero when the model is the market", () => {
+    const s = skillScore([item(0.55, 0.55, true), item(0.48, 0.48, false)])!;
+    expect(s.skill).toBeCloseTo(0, 12);
+    expect(s.llModel).toBeCloseTo(s.llMarket, 12);
+  });
+
+  it("matches a hand computation", () => {
+    // Model 0.6 vs market 0.5 on one Over that hit: LL_model = −ln 0.6, LL_market = −ln 0.5.
+    const s = skillScore([item(0.6, 0.5, true)])!;
+    expect(s.llModel).toBeCloseTo(-Math.log(0.6), 12);
+    expect(s.llMarket).toBeCloseTo(-Math.log(0.5), 12);
+    expect(s.skill).toBeCloseTo(1 - Math.log(0.6) / Math.log(0.5), 12);
+  });
+
+  it("is negative when the model leans the wrong way", () => {
+    expect(skillScore([item(0.65, 0.5, false), item(0.35, 0.5, true)])!.skill).toBeLessThan(0);
+  });
+
+  it("counts games, not props", () => {
+    const s = skillScore([item(0.5, 0.5, true, "a"), item(0.5, 0.5, true, "a"), item(0.5, 0.5, true, "b")])!;
+    expect(s.n).toBe(3);
+    expect(s.games).toBe(2);
+  });
+});
+
+describe("clusterBootstrap", () => {
+  const items = Array.from({ length: 40 }, (_, i) => item(0.55, 0.5, i % 3 !== 0, `g${i % 10}`));
+
+  it("is deterministic for a seed", () => {
+    const stat = (s: SkillItem[]) => skillScore(s)?.skill ?? null;
+    expect(clusterBootstrap(items, stat, { seed: 7, reps: 300 })).toEqual(clusterBootstrap(items, stat, { seed: 7, reps: 300 }));
+  });
+
+  it("brackets the point estimate", () => {
+    const iv = clusterBootstrap(items, (s) => skillScore(s)?.skill ?? null, { reps: 500 })!;
+    const point = skillScore(items)!.skill;
+    expect(iv.lo).toBeLessThanOrEqual(point);
+    expect(iv.hi).toBeGreaterThanOrEqual(point);
+  });
+
+  it("needs at least two games to resample", () => {
+    expect(clusterBootstrap([item(0.5, 0.5, true, "only")], (s) => s.length)).toBeNull();
+  });
+});
+
+describe("edge buckets and excess hits", () => {
+  it("leans to the side the model rates above the market", () => {
+    expect(leanSide({ pModel: 0.56, pMarket: 0.52 })).toBe("OVER");
+    expect(leanSide({ pModel: 0.47, pMarket: 0.52 })).toBe("UNDER");
+    expect(leanSide({ pModel: 0.5, pMarket: 0.5 })).toBeNull();
+  });
+
+  it("measures hits on the leaned side against what the market expected there", () => {
+    // Leans Under twice (market Under = 0.45 each); one Under hits: (1 − 0.45 + 0 − 0.45) / 2 = 0.05.
+    expect(excessPts([item(0.5, 0.55, false), item(0.5, 0.55, true)])).toBeCloseTo(5, 10);
+  });
+
+  it("bins by claimed edge in points", () => {
+    const b = bucketedEdge([item(0.505, 0.5, true, "a"), item(0.53, 0.5, false, "b"), item(0.6, 0.5, true, "c")], [0, 1, 2, 4, 8], { reps: 50 });
+    expect(b.map((x) => x.label)).toEqual(["0–1", "2–4", "8+"]);
+    expect(b[2].meanClaimedPts).toBeCloseTo(10, 10);
+  });
+});
+
+describe("skillReport", () => {
+  it("splits by prop type, lean and edge source", () => {
+    const xs = [item(0.6, 0.5, true, "a", "Receptions"), item(0.4, 0.5, false, "b", "Rushing Yards"), item(0.5, 0.5, true, "c", "Receptions")];
+    const r = skillReport(xs, { reps: 50 });
+    expect(r.overall!.n).toBe(3);
+    expect(r.byPropType.map((g) => g.key).sort()).toEqual(["Receptions", "Rushing Yards"]);
+    expect(r.byLean.map((g) => g.key).sort()).toEqual(["OVER", "UNDER", "agrees"]);
+    expect(r.byEdgeSource.map((g) => g.key)).toEqual(["unknown"]);
+  });
+});
+
+describe("roiWithPayouts", () => {
+  it("pays (payout − 1) on a win and −1 on a loss", () => {
+    expect(roiWithPayouts([{ payout: 1.8, won: true }, { payout: 1.5, won: false }])).toEqual({ n: 2, roi: (0.8 - 1) / 2 });
+  });
+
+  it("ignores payouts that cannot be per-pick payouts", () => {
+    expect(roiWithPayouts([{ payout: 0.79, won: true }])).toBeNull();
+  });
+});
+
+describe("edgeSourceFor", () => {
+  const base = { previous: null, playerStatus: null, teammateOut: false };
+
+  it("calls a soft or tough venue line a venue edge", () => {
+    expect(edgeSourceFor({ ...base, venueFlag: "soft" })).toBe("venue");
+    expect(edgeSourceFor({ ...base, venueFlag: "tough" })).toBe("venue");
+  });
+
+  it("calls a status change since the last forecast news", () => {
+    expect(
+      edgeSourceFor({ venueFlag: "none", previous: { playerStatus: null, teammateOut: false }, playerStatus: "questionable", teammateOut: false }),
+    ).toBe("news");
+    expect(
+      edgeSourceFor({ venueFlag: null, previous: { playerStatus: "active", teammateOut: false }, playerStatus: "active", teammateOut: true }),
+    ).toBe("news");
+  });
+
+  it("is model otherwise, including the first forecast of a prop", () => {
+    expect(edgeSourceFor({ ...base, venueFlag: "none" })).toBe("model");
+    expect(edgeSourceFor({ venueFlag: null, previous: { playerStatus: "active", teammateOut: false }, playerStatus: "active", teammateOut: false })).toBe("model");
+  });
+
+  it("prefers venue over news", () => {
+    expect(edgeSourceFor({ venueFlag: "soft", previous: { playerStatus: null, teammateOut: false }, playerStatus: "out", teammateOut: false })).toBe("venue");
+  });
+});

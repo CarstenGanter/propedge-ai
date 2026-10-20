@@ -195,6 +195,13 @@ export interface PickAnalysis {
    * the model's, because it is the one the record says to trust.
    */
   marketProbability?: number | null;
+  /**
+   * The model's exact probability for this side (probability profile only):
+   * confidenceScore is it rounded to a whole percent, too coarse for scoring.
+   * `modelRawProbability` is the same before the 0.33–0.70 clip.
+   */
+  modelProbability?: number | null;
+  modelRawProbability?: number | null;
   edgeScore: number; // projected edge vs. the line (can be negative)
   riskLevel: RiskLevel;
   scoreBreakdown: ScoreBreakdown;

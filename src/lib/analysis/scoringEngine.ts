@@ -707,6 +707,7 @@ export function analyzeProp(
   let probability: number | null = null;
   let probabilityNote: string | undefined;
   let marketProbability: number | null = null;
+  let rawProbability: number | null = null;
   if (profile === "distribution") {
     const est = estimateProbability({
       line: prop.line,
@@ -721,6 +722,7 @@ export function analyzeProp(
     });
     if (est) {
       probability = est.probability;
+      rawProbability = est.rawProbability;
       probabilityNote = est.note;
       marketProbability = est.marketProbability;
     }
@@ -763,6 +765,8 @@ export function analyzeProp(
   return {
     confidenceScore,
     marketProbability,
+    modelProbability: probability,
+    modelRawProbability: rawProbability,
     edgeScore: round1(edgeScore),
     riskLevel,
     scoreBreakdown: breakdown,

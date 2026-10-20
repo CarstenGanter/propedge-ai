@@ -78,6 +78,8 @@ export async function ingestOddsPropsForSport(
   }
 
   const dates = new Set<string>();
+  // When these quotes were fetched: a forecast logged from them is as of this time.
+  const fetchedAt = new Date().toISOString();
   const rows = result.props.map((p) => {
     const date = toSlate(p.commenceTime);
     dates.add(date);
@@ -95,7 +97,7 @@ export async function ingestOddsPropsForSport(
       source: "The Odds API",
       projection: p.projection,
       gameStartTime: new Date(p.commenceTime),
-      marketDataJson: JSON.stringify(snapshotFrom(p)),
+      marketDataJson: JSON.stringify({ ...snapshotFrom(p), fetchedAt }),
       isDemo: false,
       feedUnderdogLine: p.venues?.underdog,
     };

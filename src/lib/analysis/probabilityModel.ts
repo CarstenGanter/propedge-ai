@@ -96,6 +96,8 @@ export const MAX_PROB = 0.7;
 export interface ProbabilityEstimate {
   /** P(the pick's side wins), already clipped to a defensible band. */
   probability: number;
+  /** The same before the clip. */
+  rawProbability: number;
   projection: number;
   sigma: number;
   /** Games behind the estimate. */
@@ -255,7 +257,7 @@ export function estimateProbability(input: ProbabilityInputs): ProbabilityEstima
     (clipped ? ". Clipped — the raw estimate exceeded what prop markets plausibly allow" : "") +
     ".";
 
-  return { probability, projection, sigma, games: n, usedMarket, clipped, marketProbability, note };
+  return { probability, rawProbability: raw, projection, sigma, games: n, usedMarket, clipped, marketProbability, note };
 }
 
 /** Context signals expressed as bounded nudges to the projection. */

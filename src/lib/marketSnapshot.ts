@@ -38,6 +38,8 @@ export interface MarketSnapshot {
   venues?: VenueLines;
   /** Where PlayerProp.underdogLine came from. Absent on older rows. */
   underdogLineSource?: LineSource;
+  /** ISO time the quotes were fetched. Absent on rows stored before 2026-10-20. */
+  fetchedAt?: string;
 }
 
 export function snapshotFrom(p: NormalizedProp): MarketSnapshot {

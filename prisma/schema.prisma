@@ -55,9 +55,36 @@ model PlayerProp {
 
   picks         Pick[]
   lineSnapshots LineSnapshot[]
+  predictions   PropPrediction[]
 
   @@index([date])
   @@index([sport])
+}
+
+// One forecast of one prop at one moment: the model's and the books' P(over)
+// at the same line, so the model can be scored against the market rather than
+// a coin flip. Every scored prop gets a row, not just picks. Rows from
+// different sources, model versions or market methods are never pooled.
+model PropPrediction {
+  id             String     @id @default(cuid())
+  playerPropId   String
+  playerProp     PlayerProp @relation(fields: [playerPropId], references: [id], onDelete: Cascade)
+  createdAt      DateTime   @default(now())
+  quotedAt       DateTime // when the market data behind the row was fetched
+  line           Float
+  lineKind       String // reference (the books' own line) | venue (the line played)
+  modelProbOver  Float // model P(over), after the production clip on the side it favours
+  modelRawProbOver Float? // the same before the clip, for diagnostics
+  marketProbOver Float // de-vigged consensus P(over) at the same line
+  marketMethod   String // consensus-v2 (per-book quotes) | novig-v1 (one stored probability)
+  modelVersion   String
+  source         String // live | backfill
+  edgeSource     String // venue | news | model | unknown
+  playerStatus   String? // injury status when scored, for the news rule
+  teammateOut    Boolean? // a teammate absence was boosting the player when scored
+
+  @@index([playerPropId, createdAt])
+  @@index([source, modelVersion])
 }
 
 model Pick {

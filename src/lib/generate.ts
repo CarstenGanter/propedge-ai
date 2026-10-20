@@ -1,5 +1,5 @@
 import "server-only";
-import type { PlayerProp } from "@prisma/client";
+import type { PlayerProp, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/client";
 import { getSettings } from "@/lib/settings";
 import { analyzeProp, SCORING_MODEL_VERSION, versionAtLeast } from "@/lib/analysis/scoringEngine";
@@ -9,6 +9,7 @@ import { prewarmMlb } from "@/lib/providers/live/mlbStats";
 import { prewarmEspn } from "@/lib/providers/live/espnPlayerStats";
 import type { Direction, ScorablePropInput } from "@/types";
 import { consensusOf, parseSnapshot } from "@/lib/marketSnapshot";
+import { buildLivePrediction, type PreviousForecast } from "@/lib/predictionLog";
 import { favouredSide } from "@/lib/analysis/marketConsensus";
 import {
   boardValue,
@@ -207,6 +208,19 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
   }
   const candidates: Candidate[] = [];
 
+  // The forecast log: every scored prop, pick or not, so the model can be
+  // scored against the market. The previous live forecast of each prop is what
+  // the "news" edge-source rule compares against.
+  const forecasts: Prisma.PropPredictionCreateManyInput[] = [];
+  const previousForecasts = new Map<string, PreviousForecast>();
+  for (const f of await prisma.propPrediction.findMany({
+    where: { source: "live", playerPropId: { in: props.map((p) => p.id) } },
+    orderBy: { createdAt: "desc" },
+    select: { playerPropId: true, playerStatus: true, teammateOut: true },
+  })) {
+    if (!previousForecasts.has(f.playerPropId)) previousForecasts.set(f.playerPropId, f);
+  }
+
   let sideFlips = 0;
   for (const prop of props) {
     if (alreadySettled.has(prop.id)) {
@@ -225,7 +239,8 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
     // typed belongs to the side shown. Flipping it would pair one side's odds
     // with the other side's payout — on 2026-10-08 that would have shown
     // Flournoy Higher 24.5 "green" at 1.40 using Lower's 2.38x.
-    const consensus = consensusOf(parseSnapshot(prop.marketDataJson));
+    const snapshot = parseSnapshot(prop.marketDataJson);
+    const consensus = consensusOf(snapshot);
     if (
       consensus &&
       prop.underdogPickMultiplier == null &&
@@ -256,6 +271,19 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
       filters["Player OUT"]++;
       continue;
     }
+
+    const forecast = buildLivePrediction({
+      prop,
+      modelProbability: analysis.modelProbability,
+      modelRawProbability: analysis.modelRawProbability,
+      consensus,
+      snapshot,
+      playerStatus: bundle.news?.playerStatus ?? null,
+      teammateOut: bundle.news?.teammateAbsencesBoost ?? null,
+      previous: previousForecasts.get(prop.id) ?? null,
+      modelVersion: SCORING_MODEL_VERSION,
+    });
+    if (forecast) forecasts.push(forecast);
 
     // Filter: low volume / insufficient data. A real market snapshot (no-vig
     // probability / projection) counts as sufficient on its own.
@@ -292,6 +320,8 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
     const entryProb = clvEntryProb(bundle.market?.probOverAtLine ?? bundle.market?.noVigProbOver, prop.direction as Direction);
     candidates.push({ prop, analysis, entryProb, reliable: bundle.market?.reliable !== false });
   }
+
+  if (forecasts.length > 0) await prisma.propPrediction.createMany({ data: forecasts });
 
   let selected: Candidate[];
   if (probabilityBoard) {

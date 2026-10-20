@@ -42,6 +42,9 @@ import { LEAGUE_LABELS, type League } from "@/lib/teamLeagues";
 import { computeCalibration, recentTrend } from "@/lib/analysis/calibration";
 import { brierScore, logLoss, brierSkillScore, clvSummary } from "@/lib/analysis/modelQuality";
 import { CaptureClosingLinesButton } from "@/components/CaptureClosingLinesButton";
+import { MarketSkillPanel } from "@/components/MarketSkillPanel";
+import { liveModelVersions, payoutRoi, skillSection } from "@/lib/predictionReport";
+import { BASELINE_V0 } from "@/lib/predictionLog";
 import { confidenceTier, CONFIDENCE_TIERS } from "@/lib/analysis/confidenceModel";
 import { formatPercent, formatSignedCurrency } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
@@ -67,6 +70,35 @@ export default async function AnalyticsPage({
     getLineEdgeInputs(sportParam === "All" ? undefined : sportParam),
   ]);
   const lineEdge = summarizeLineEdge(lineEdgeInputs);
+
+  // Model vs market: the backfilled baseline (primary and secondary market
+  // methods) and each live model version, scored separately, never pooled.
+  const skillReps = { reps: 1000 };
+  const [skillPrimary, skillSecondary, liveVersions, roi] = await Promise.all([
+    skillSection(
+      `${BASELINE_V0} — consensus market, from 2026-10-01`,
+      "Primary result. Model and market at the books' own line; each prop sees only earlier weeks. A baseline, not the live model.",
+      { source: "backfill", marketMethod: "consensus-v2", modelVersion: BASELINE_V0 },
+      skillReps,
+    ),
+    skillSection(
+      `${BASELINE_V0} — older single no-vig market, before 2026-10-01`,
+      "Secondary. A different market method, so it is never pooled with the primary result.",
+      { source: "backfill", marketMethod: "novig-v1", modelVersion: BASELINE_V0 },
+      skillReps,
+    ),
+    liveModelVersions(),
+    payoutRoi(),
+  ]);
+  const skillLive = await Promise.all(
+    liveVersions.map((v) =>
+      skillSection(`Live model ${v} — logged at scoring time`, "The production model's forecast at the line played, the last one before kickoff.", {
+        source: "live",
+        marketMethod: "consensus-v2",
+        modelVersion: v,
+      }, skillReps),
+    ),
+  );
 
   // Accuracy views are scoped; demo-seeded picks are excluded so synthetic
   // results never inflate a real hit rate.
@@ -252,13 +284,18 @@ export default async function AnalyticsPage({
         </Card>
       )}
 
-      <Tabs defaultValue="accuracy">
+      <Tabs defaultValue="market">
         <TabsList>
+          <TabsTrigger value="market">Model vs market</TabsTrigger>
           <TabsTrigger value="accuracy">Accuracy</TabsTrigger>
           <TabsTrigger value="pl">Profit / Loss</TabsTrigger>
           <TabsTrigger value="calibration">Calibration</TabsTrigger>
           <TabsTrigger value="quality">Model quality</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="market">
+          <MarketSkillPanel sections={[skillPrimary, ...skillLive, skillSecondary]} roi={roi} />
+        </TabsContent>
 
         <TabsContent value="accuracy" className="space-y-4">
           <LineEdgeCard summary={lineEdge} />
