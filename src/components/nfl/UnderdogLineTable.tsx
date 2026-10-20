@@ -284,6 +284,19 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
  * That is Underdog mispricing a pick relative to sharp books — the one edge that
  * does not depend on the model being right. The model's number is in the tooltip.
  */
+/** One line on where the venue sits against the market and how fresh the market is. */
+function marketNote(f: SerializedPick["prop"]["marketFeatures"]): string {
+  if (!f) return "";
+  const parts: string[] = [];
+  if (f.venueGapSigma != null && f.venueGapUnits != null) {
+    parts.push(`Underdog's line is ${f.venueGapUnits >= 0 ? "+" : ""}${f.venueGapUnits.toFixed(1)} (${f.venueGapSigma >= 0 ? "+" : ""}${f.venueGapSigma.toFixed(2)}σ) from the books' line for this side`);
+  }
+  if (f.groupDispersion != null) parts.push(`book groups spread ${f.groupDispersion.toFixed(2)}σ`);
+  if (f.oldestQuoteMinutes != null) parts.push(`oldest quote ${Math.round(f.oldestQuoteMinutes)} min`);
+  if (f.staleGroups.length) parts.push(`stale: ${f.staleGroups.join(", ")}`);
+  return parts.length ? ` ${parts.join("; ")}.` : "";
+}
+
 function NeedsCell({ pick, tagRaw }: { pick: SerializedPick; tagRaw: string }) {
   const typed = tagRaw.trim() === "" ? null : Number(tagRaw);
   const payout = typed != null && Number.isFinite(typed) && typed > 0 ? typed : null;
@@ -301,6 +314,7 @@ function NeedsCell({ pick, tagRaw }: { pick: SerializedPick; tagRaw: string }) {
     (fewBooks ? " Fewer than three independent books priced it — too thin to call an edge." : "") +
     (beyondBooks ? " Underdog's line is beyond any line the books posted, so this is the curve extrapolated, not a price — never an edge." : "") +
     (model != null ? ` Model: ${(model * 100).toFixed(0)}%.` : "") +
+    marketNote(pick.prop.marketFeatures) +
     ` Green needs value ≥ ${VALUE_MARGIN.toFixed(2)}; amber is break-even.`;
   return (
     <>
@@ -341,7 +355,7 @@ function PrizePicksCell({ pick }: { pick: SerializedPick }) {
         "py-2 pr-3 text-right tabular-nums",
         verdict === "edge" ? "font-medium text-success" : verdict === "break-even" ? "text-warning" : "text-muted-foreground",
       )}
-      title={`PrizePicks line ${pp.line}. Books give ${pp.direction === "OVER" ? "More" : "Less"} ${(pp.prob * 100).toFixed(1)}% there (ties refunded); its 5-pick Power Play needs ${(PRIZEPICKS_LEG_BAR * 100).toFixed(1)}% a leg. Value ${pp.value.toFixed(3)}.${pp.priced ? "" : " Beyond any line the books posted — extrapolated, not a price."}`}
+      title={`PrizePicks line ${pp.line}. Books give ${pp.direction === "OVER" ? "More" : "Less"} ${(pp.prob * 100).toFixed(1)}% there (ties refunded); its 5-pick Power Play needs ${(PRIZEPICKS_LEG_BAR * 100).toFixed(1)}% a leg. Value ${pp.value.toFixed(3)}.${pp.gapSigma != null ? ` ${pp.gapSigma >= 0 ? "+" : ""}${pp.gapSigma.toFixed(2)}σ from the books' line for that side.` : ""}${pp.priced ? "" : " Beyond any line the books posted — extrapolated, not a price."}`}
     >
       {pp.direction === "OVER" ? "More" : "Less"} {pp.line} · {pp.priced ? "" : "~"}{(pp.prob * 100).toFixed(0)}%
     </td>

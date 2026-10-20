@@ -16,7 +16,7 @@ the default when nothing clears the books' price.
 | --- | --- | --- |
 | 1 | Market-relative scoring: log-loss skill vs consensus, game-bootstrap intervals, edge buckets, attribution | Done (`c8392f7`) |
 | 2 | Timestamped odds store; consensus as of any time; same-line CLV | Done (`93bc954`) |
-| 3 | Venue-gap and dispersion features in σ units, staleness flags | In progress |
+| 3 | Venue-gap and dispersion features in σ units, staleness flags | Done |
 | 3b | Consensus σ for reading the books at another line (inserted after 3) | Next — gated on task 1's metric |
 | 4 | Vacated-volume redistribution on injury-report changes | Kept — a news-timing edge, not a player-layer one |
 | 5 | Team volume model | Open |

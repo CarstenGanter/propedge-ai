@@ -67,6 +67,12 @@ export interface ConsensusModel {
 /** Fewer independent pricing sources than this and the price is flagged as thin. */
 export const RELIABLE_MIN_GROUPS = 3;
 
+/**
+ * A quote this much older than the freshest one in the same fetch counts half
+ * toward the consensus, and is flagged stale.
+ */
+export const STALE_QUOTE_MS = 6 * 3_600_000;
+
 /** A side priced beyond ~-300 is almost always an alternate or stale line. */
 const JUICE_LIMIT = 0.75;
 
@@ -194,7 +200,7 @@ export function buildConsensus(
   const freshest = Math.max(...live().map((q) => (q.lastUpdate ? Date.parse(q.lastUpdate) : 0)));
   for (const q of live()) {
     const p = profileFor(q.book);
-    const stale = q.lastUpdate && freshest - Date.parse(q.lastUpdate) > 6 * 3_600_000;
+    const stale = q.lastUpdate && freshest - Date.parse(q.lastUpdate) > STALE_QUOTE_MS;
     q.weight = (p.weight / (groupSize.get(p.group) ?? 1)) * (stale ? 0.5 : 1);
   }
 

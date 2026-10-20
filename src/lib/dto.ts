@@ -22,6 +22,7 @@ import type {
 import type { PickRecord } from "@/lib/analytics";
 import { consensusOf, parseSnapshot, type LineSource } from "@/lib/marketSnapshot";
 import { bestPrizePicksSide, prizePicksValue, readVenueLine, type LineFlag } from "@/lib/analysis/venues";
+import { marketFeatures, type MarketFeatures } from "@/lib/analysis/marketFeatures";
 
 export interface SerializedProp {
   id: string;
@@ -51,7 +52,9 @@ export interface SerializedProp {
   /** `priced` is false when Underdog's line is beyond what the books posted — the probability is extrapolated. */
   underdogRead: { flag: LineFlag; lineGap: number; probAtLine: number; priced: boolean } | null;
   /** PrizePicks' line and the side the books favour at it (its multiplier is the same either way). */
-  prizePicks: { line: number; direction: Direction; prob: number; value: number; priced: boolean } | null;
+  prizePicks: { line: number; direction: Direction; prob: number; value: number; priced: boolean; gapSigma: number | null } | null;
+  /** Venue gap, book-group dispersion and quote age, from the stored quotes. Features only. */
+  marketFeatures: MarketFeatures | null;
   direction: Direction;
   source: string;
   projection: number | null;
@@ -149,9 +152,26 @@ export function serializeProp(p: PlayerProp): SerializedProp {
     underdogLineSource: snap?.underdogLineSource ?? (p.underdogLine != null ? "manual" : null),
     marketReliable: consensus ? consensus.reliable : null,
     underdogRead: ud ? { flag: ud.flag, lineGap: ud.lineGap, probAtLine: ud.probAtVenue, priced: ud.priced } : null,
-    prizePicks: pp && ppLine != null
-      ? { line: ppLine, direction: pp.dir, prob: pp.read.probAtVenue, value: prizePicksValue(pp.read), priced: pp.read.priced }
+    prizePicks: pp && ppLine != null && consensus
+      ? {
+          line: ppLine,
+          direction: pp.dir,
+          prob: pp.read.probAtVenue,
+          value: prizePicksValue(pp.read),
+          priced: pp.read.priced,
+          gapSigma: consensus.sigma > 0 ? (pp.dir === "OVER" ? consensus.referenceLine - ppLine : ppLine - consensus.referenceLine) / consensus.sigma : null,
+        }
       : null,
+    marketFeatures:
+      snap?.quotes?.length && snap.consensus
+        ? marketFeatures({
+            propType: snap.consensus.propType,
+            quotes: snap.quotes.map((q) => ({ book: q.book, line: q.line, over: q.over, under: q.under, lastUpdate: q.lastUpdate })),
+            venueLine: p.underdogLine,
+            direction: p.direction as Direction,
+            fetchedAt: snap.fetchedAt ? new Date(snap.fetchedAt) : null,
+          })
+        : null,
     id: p.id,
     date: p.date,
     sport: p.sport,
