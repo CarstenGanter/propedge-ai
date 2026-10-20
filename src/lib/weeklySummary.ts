@@ -1,4 +1,4 @@
-import type { Interval } from "@/lib/analysis/marketSkill";
+import { OVER_CONFIRM_WEEKS, type Interval, type OverGapStatus } from "@/lib/analysis/marketSkill";
 
 /**
  * Pure pieces of research:weekly (src/jobs/research/weekly.ts): the NFL
@@ -89,6 +89,15 @@ export function unaccountedCredits(rows: LedgerRow[]): number {
     gap += prev.remaining! - cur.remaining! - cur.credits;
   }
   return gap;
+}
+
+/** One line for the Over-vs-books rule's state. */
+export function overStatusLine(s: OverGapStatus): string {
+  if (s.state === "none") return "no flag — the cumulative interval has never excluded zero";
+  const side = s.direction === "below" ? "Over below the books" : "Over above the books";
+  const after = s.after ? `; weeks after alone ${fmtInterval(s.after.gapPts, s.after.interval, 1, " pts")}` : "";
+  if (s.state === "confirmed") return `CONFIRMED — ${side}; first crossed week of ${s.crossedWeek}, held over ${s.weeksAfter} later weeks${after}`;
+  return `FLAGGED — ${side}, first crossed week of ${s.crossedWeek}; ${s.weeksAfter} of ${OVER_CONFIRM_WEEKS} later weeks needed to confirm${after}`;
 }
 
 /** "+0.42 pts [−1.10, +1.95]" with a marker when the interval excludes zero. */

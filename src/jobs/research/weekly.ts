@@ -19,11 +19,11 @@ import { creditsByKind } from "@/lib/creditLedger";
 import { parseSummaries } from "@/lib/jobSummary";
 import { liveModelVersions, loadSkillItems, overGapRows, skillSection, type SkillSection } from "@/lib/predictionReport";
 import { BASELINE_V0 } from "@/lib/predictionLog";
-import { clusterBootstrap, skillScore } from "@/lib/analysis/marketSkill";
+import { clusterBootstrap, OVER_CONFIRM_WEEKS, skillScore } from "@/lib/analysis/marketSkill";
 import type { GroupLatency } from "@/lib/analysis/newsLatency";
 import { NEWS_TRIAL } from "@/lib/nfl/newsFetchTrial";
 import { todayNflSlate } from "@/lib/nfl/slate";
-import { fmtInterval, nflWeekStart, sigmaVerdict, unaccountedCredits, type SigmaSample } from "@/lib/weeklySummary";
+import { fmtInterval, nflWeekStart, overStatusLine, sigmaVerdict, unaccountedCredits, type SigmaSample } from "@/lib/weeklySummary";
 
 const JOBS = [
   { name: "skill", script: "src/jobs/research/scoreVsMarket.ts", label: "grading + research:skill" },
@@ -100,10 +100,12 @@ async function main() {
   if (versions.length === 0) out("  LIVE: none yet — logged at scoring time since 2026-10-20; the first section appears once a slate generated since then is graded");
 
   out("\nOVER VS BOOKS (Over hit rate − books' P(over) at the venue's line, pts)");
-  for (const r of await overGapRows(versions)) {
+  for (const r of await overGapRows(versions, { withStatus: true })) {
     if (!r.gap) out(`  ${r.label.padEnd(52)} no graded lines`);
     else out(`  ${r.label.padEnd(52)} n=${String(r.gap.n).padStart(4)} games=${String(r.gap.games).padStart(3)}  ${fmtInterval(r.gap.gapPts, r.gap.interval, 1, " pts")}`);
+    if (r.status) out(`    status: ${overStatusLine(r.status)}`);
   }
+  out(`  (flag on the first week the cumulative interval excludes zero; confirmed only if the weeks after it alone, ≥ ${OVER_CONFIRM_WEEKS}, still exclude zero on the same side)`);
 
   out("\nσ GATE (fitted spread vs current at venue lines; log-loss fitted − current, − favours fitted)");
   const sigma = results.get("sigma")!.summaries.get("sigma") as { types: string[]; samples: SigmaSample[] } | undefined;

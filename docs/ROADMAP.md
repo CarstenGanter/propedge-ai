@@ -84,6 +84,19 @@ alternate-line reading.
 An observation, not a finding: at venue lines the Over finished 2–8 points below the books'
 probability in both periods; no interval excludes zero.
 
+### Over vs books: the standing metric and its rule (decided 2026-10-21)
+
+At each venue's line, how often the Over landed minus the books' P(over), in points, with a 95%
+game-bootstrap interval; Underdog and PrizePicks graded history, and live forecasts, each on its
+own row, never pooled. Shown on the analytics page and in `npm run research:weekly`.
+
+- **Flag:** the first NFL week (Wednesday to Tuesday) through which the cumulative interval
+  excludes zero raises the flag — as on the analytics page. A flag is not a finding.
+- **Confirmed:** only on data the crossing never saw. Using only the weeks after the crossing week,
+  once there are at least 4 of them, the interval must still exclude zero on the same side. Until
+  then, or if it doesn't, the row stays flagged. `research:weekly` prints each row's status (no
+  flag / flagged with weeks so far / confirmed).
+
 ## Task 4: vacated volume and the news edge (2026-10-20)
 
 **Redistribution** (`npm run research:redistribution`). nflverse 2022–25, regular season. "Out" =

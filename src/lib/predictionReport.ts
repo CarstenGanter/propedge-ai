@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { overGap, roiWithPayouts, skillReport, type OverGap, type SkillItem, type SkillReport } from "@/lib/analysis/marketSkill";
+import { overGap, overGapStatus, roiWithPayouts, skillReport, type OverGap, type OverGapStatus, type SkillItem, type SkillReport } from "@/lib/analysis/marketSkill";
 import { BASELINE_V0, type MarketMethod } from "@/lib/predictionLog";
 
 /**
@@ -93,18 +93,22 @@ export interface OverGapRow {
  * often the Over landed minus the books' P(over). Backfilled rows and live
  * rows are separate lines, never pooled.
  */
-export async function overGapRows(modelVersions: string[], opts: { reps?: number } = {}): Promise<OverGapRow[]> {
-  const rows: OverGapRow[] = [];
-  for (const [label, lineKind] of [
-    ["Underdog lines", "venue"],
-    ["PrizePicks lines", "prizepicks"],
-  ] as const) {
-    const items = await loadSkillItems({ source: "backfill", marketMethod: "consensus-v2", modelVersion: BASELINE_V0, lineKind });
-    rows.push({ label: `${label} — graded history`, gap: overGap(items, opts) });
-  }
-  for (const v of modelVersions) {
-    const items = await loadSkillItems({ source: "live", marketMethod: "consensus-v2", modelVersion: v, lineKind: "venue" });
-    rows.push({ label: `Underdog lines — live forecasts, model ${v}`, gap: overGap(items, opts) });
+export async function overGapRows(
+  modelVersions: string[],
+  opts: { reps?: number; withStatus?: boolean } = {},
+): Promise<(OverGapRow & { status?: OverGapStatus })[]> {
+  const samples: [string, Parameters<typeof loadSkillItems>[0]][] = [
+    ["Underdog lines — graded history", { source: "backfill", marketMethod: "consensus-v2", modelVersion: BASELINE_V0, lineKind: "venue" }],
+    ["PrizePicks lines — graded history", { source: "backfill", marketMethod: "consensus-v2", modelVersion: BASELINE_V0, lineKind: "prizepicks" }],
+    ...modelVersions.map((v): [string, Parameters<typeof loadSkillItems>[0]] => [
+      `Underdog lines — live forecasts, model ${v}`,
+      { source: "live", marketMethod: "consensus-v2", modelVersion: v, lineKind: "venue" },
+    ]),
+  ];
+  const rows: (OverGapRow & { status?: OverGapStatus })[] = [];
+  for (const [label, filter] of samples) {
+    const items = await loadSkillItems(filter);
+    rows.push({ label, gap: overGap(items, opts), ...(opts.withStatus ? { status: overGapStatus(items, opts) } : {}) });
   }
   return rows;
 }

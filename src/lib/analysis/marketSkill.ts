@@ -374,3 +374,51 @@ export function overGap(items: SkillItem[], opts: { reps?: number; seed?: number
   if (g == null) return null;
   return { n: items.length, games: new Set(items.map((i) => i.cluster)).size, gapPts: g, interval: clusterBootstrap(items, overGapPts, opts) };
 }
+
+/** The NFL week a slate date belongs to, keyed by its Wednesday (no games are played on one). */
+export function nflWeekKey(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const t = Date.UTC(y, m - 1, d);
+  const back = (new Date(t).getUTCDay() - 3 + 7) % 7;
+  return new Date(t - back * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** Weeks after a first crossing needed before it can be confirmed. */
+export const OVER_CONFIRM_WEEKS = 4;
+
+export interface OverGapStatus {
+  /** none: never crossed. flagged: crossed, not (yet) confirmed. confirmed: see overGapStatus. */
+  state: "none" | "flagged" | "confirmed";
+  /** The week (its Wednesday) through which the cumulative interval first excluded zero. */
+  crossedWeek: string | null;
+  direction: "below" | "above" | null;
+  /** Graded weeks after the crossing week. */
+  weeksAfter: number;
+  /** The metric on those weeks alone. */
+  after: OverGap | null;
+}
+
+/**
+ * The Over-vs-books rule (decided 2026-10-21). Week by week, on everything
+ * graded through that week, the first time the interval excludes zero raises
+ * the flag. It is confirmed only on fresh data: using only the weeks after the
+ * crossing week, once there are at least OVER_CONFIRM_WEEKS of them, the
+ * interval must still exclude zero on the same side. Until then — or if it
+ * doesn't — it stays flagged.
+ */
+export function overGapStatus(items: SkillItem[], opts: { reps?: number; seed?: number } = {}): OverGapStatus {
+  const dated = items.filter((i): i is SkillItem & { date: string } => !!i.date);
+  const weeks = [...new Set(dated.map((i) => nflWeekKey(i.date)))].sort();
+  const none: OverGapStatus = { state: "none", crossedWeek: null, direction: null, weeksAfter: 0, after: null };
+  for (const w of weeks) {
+    const iv = overGap(dated.filter((i) => nflWeekKey(i.date) <= w), opts)?.interval;
+    if (!iv || (iv.lo <= 0 && iv.hi >= 0)) continue;
+    const direction = iv.hi < 0 ? "below" : "above";
+    const later = dated.filter((i) => nflWeekKey(i.date) > w);
+    const weeksAfter = new Set(later.map((i) => nflWeekKey(i.date))).size;
+    const after = overGap(later, opts);
+    const held = !!after?.interval && (direction === "below" ? after.interval.hi < 0 : after.interval.lo > 0);
+    return { state: weeksAfter >= OVER_CONFIRM_WEEKS && held ? "confirmed" : "flagged", crossedWeek: w, direction, weeksAfter, after };
+  }
+  return none;
+}
