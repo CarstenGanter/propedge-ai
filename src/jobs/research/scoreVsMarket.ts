@@ -34,6 +34,7 @@ import { estimateProbability } from "@/lib/analysis/probabilityModel";
 import { consensusProbOver, consensusSideProb, pricedAt } from "@/lib/analysis/marketConsensus";
 import { consensusOf, parseSnapshot } from "@/lib/marketSnapshot";
 import { BASELINE_V0, marketMethodOf, overProb } from "@/lib/predictionLog";
+import { emitSummary } from "@/lib/jobSummary";
 import { liveModelVersions, loadSkillItems, payoutRoi, skillSection, type SkillSection } from "@/lib/predictionReport";
 import { clusterBootstrap, skillBy, skillScore, stackingFit, type SkillBreakdown, type SkillItem } from "@/lib/analysis/marketSkill";
 import { calibrationSummary, excessByVenueGap, reliabilityTable, type BucketRow, type VenueItem } from "@/lib/analysis/venueCalibration";
@@ -273,6 +274,7 @@ async function main() {
   for (const v of voided) console.log(`  ${v}`);
   console.log(`\nUnmatched props: ${unmatched.length}`);
   for (const u of unmatched) console.log(`  ${u.label}: ${u.reason}`);
+  emitSummary("grading", { ...tally, mismatches: mismatches.length, voided: voided.length, unmatched: unmatched.length, forecasts: forecasts.length });
 
 
   const primary = await skillSection(

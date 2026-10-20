@@ -22,6 +22,7 @@ import { buildConsensus } from "@/lib/analysis/marketConsensus";
 import { classifyWindow } from "@/lib/nfl/newsFetchTrial";
 import { resolveEspnAthlete } from "@/lib/providers/live/espnPlayerStats";
 import { teamsMatch } from "@/lib/utils/teamName";
+import { emitSummary } from "@/lib/jobSummary";
 
 const fmt = (x: number | null) => (x == null ? "—" : `${Math.round(x)} min`);
 const signed = (x: number | null) => (x == null ? "—" : `${x >= 0 ? "+" : ""}${x.toFixed(1)}`);
@@ -112,6 +113,15 @@ async function main() {
     if (!b.pre.length && !b.between.length) console.log("  nothing measurable yet");
   }
   if (byWindow.size === 0) console.log("\nNothing to measure yet — needs a change to Out with stored quotes of that game around it.");
+  emitSummary("latency", {
+    changes: changes.length,
+    trial: {
+      done: trialRows.filter((r) => r.status === "done").length,
+      skipped: trialRows.filter((r) => r.status === "skipped").length,
+      credits: trialRows.reduce((s, r) => s + (r.creditsSpent ?? 0), 0),
+    },
+    windows: [...byWindow.entries()].map(([window, b]) => ({ window, events: b.events, pre: latencyByGroup(b.pre), between: latencyByGroup(b.between) })),
+  });
   await prisma.$disconnect();
 }
 

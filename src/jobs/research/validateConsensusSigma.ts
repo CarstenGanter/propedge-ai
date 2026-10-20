@@ -10,6 +10,8 @@
  * Primary result: held-out weeks — before the fit's slate week (2026-10-15).
  * The fit week, which holds the alternate-line props behind the 85% reading,
  * is reported separately: its prices were used to fit, its outcomes were not.
+ * Weeks after it (2026-10-20 on) are reported apart again: neither their
+ * prices nor their outcomes were seen by the fit.
  *
  * Gate (stated before running): the fitted spread ships only if its held-out
  * log-loss is lower with the 95% game-bootstrap interval of the difference
@@ -22,8 +24,12 @@ import { CV_PRIOR_SPREAD, FITTED_SPREAD } from "@/lib/analysis/consensusSpread";
 import { FITTED_SPREAD_PARAMS } from "@/lib/analysis/marketConsensus";
 import { clusterBootstrap } from "@/lib/analysis/marketSkill";
 import { calibrationSummary, excessByVenueGap, reliabilityTable, type BucketRow, type VenueItem } from "@/lib/analysis/venueCalibration";
+import { emitSummary } from "@/lib/jobSummary";
+import type { SigmaSample } from "@/lib/weeklySummary";
 
+/** The fit's slate week: Thursday 2026-10-15 through Monday 2026-10-19 (Eastern slate dates). */
 const FIT_WEEK_START = "2026-10-15";
+const FIT_WEEK_END = "2026-10-20";
 
 interface Pair {
   old: VenueItem;
@@ -45,9 +51,12 @@ function printBuckets(title: string, rows: BucketRow[]) {
   }
 }
 
-function report(title: string, pairs: Pair[], gate: boolean) {
+function report(sample: SigmaSample["sample"], title: string, pairs: Pair[], gate: boolean): SigmaSample {
   console.log(`\n=== ${title} ===`);
-  if (pairs.length === 0) return console.log("  no props");
+  if (pairs.length === 0) {
+    console.log("  no props");
+    return { sample, n: 0, games: 0, diff: null, interval: null, eceCurrent: null, eceFitted: null, gate: null };
+  }
   const old = pairs.map((p) => p.old);
   const fit = pairs.map((p) => p.fit);
   const co = calibrationSummary(old)!;
@@ -73,6 +82,16 @@ function report(title: string, pairs: Pair[], gate: boolean) {
     const pass = iv != null && iv.hi < 0 && cf.ecePts <= co.ecePts;
     console.log(`\n  GATE: ${pass ? "PASS" : "FAIL"} — log-loss interval ${iv ? `[${iv.lo.toFixed(5)}, ${iv.hi.toFixed(5)}]` : "n/a"} must sit below 0; ECE ${cf.ecePts.toFixed(2)} vs ${co.ecePts.toFixed(2)} must not be worse.`);
   }
+  return {
+    sample,
+    n: co.n,
+    games: co.games,
+    diff: mean(diffItems),
+    interval: iv,
+    eceCurrent: co.ecePts,
+    eceFitted: cf.ecePts,
+    gate: gate ? (iv != null && iv.hi < 0 && cf.ecePts <= co.ecePts ? "PASS" : "FAIL") : null,
+  };
 }
 
 async function main() {
@@ -107,8 +126,12 @@ async function main() {
     }
   }
   console.log(`Fitted prop types: ${types.join(", ")}. Fit-week start ${FIT_WEEK_START}.`);
-  report(`PRIMARY — held-out weeks (before ${FIT_WEEK_START})`, pairs.filter((p) => p.date < FIT_WEEK_START), true);
-  report(`SECONDARY — the fit week (its prices fitted σ; its outcomes did not)`, pairs.filter((p) => p.date >= FIT_WEEK_START), false);
+  const samples = [
+    report("held-out", `PRIMARY — held-out weeks (before ${FIT_WEEK_START})`, pairs.filter((p) => p.date < FIT_WEEK_START), true),
+    report("fit-week", `SECONDARY — the fit week (its prices fitted σ; its outcomes did not)`, pairs.filter((p) => p.date >= FIT_WEEK_START && p.date < FIT_WEEK_END), false),
+    report("after-fit", `AFTER — weeks from ${FIT_WEEK_END} (prices and outcomes both unseen by the fit)`, pairs.filter((p) => p.date >= FIT_WEEK_END), false),
+  ];
+  emitSummary("sigma", { types, samples });
   await prisma.$disconnect();
 }
 
