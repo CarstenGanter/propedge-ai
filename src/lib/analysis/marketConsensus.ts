@@ -71,10 +71,32 @@ export interface ConsensusModel {
 }
 
 /**
+ * σ = a + b × line, fitted to the books' alternate ladders by
+ * src/jobs/research/fitConsensusSigma.ts: least squares in probability space
+ * over every de-vigged rung, grid search, prices only.
+ *
+ *   Receiving Yards  a = 13.5, b = 0.27   132 ladders, 6,286 rungs, 13 games
+ *                    (the 2026-10-18 slate, fetched 2026-10-17)
+ *                    RMSE vs the ladders: CV-prior spread 9.51 pts → 3.30;
+ *                    within 5 yards of the main line 3.35 → 3.04,
+ *                    over 20 yards away 11.64 → 3.02.
+ *
+ * In production since 2026-10-20: passes on prices; the outcome gate is
+ * underpowered (log-loss +0.0002, 95% −0.0014 to +0.0020, n = 361 held-out
+ * venue lines). Re-run research:sigma-validate as off-line props accumulate
+ * and revert if that interval ends up clearly above zero. A fitted prop type
+ * reads the distribution undamped (no LINE_SHIFT_TRUST). Others keep the CV
+ * prior × the line.
+ */
+export const FITTED_SPREAD_PARAMS: Record<string, { a: number; b: number }> = {
+  "Receiving Yards": { a: 13.5, b: 0.27 },
+};
+
+/**
  * How wide the consensus distribution is, and how much of a line move to
- * believe — what reading the books at another line depends on. The default
- * reproduces the measured CV prior × the line with LINE_SHIFT_TRUST; a fitted
- * spread replaces both (src/jobs/research/fitConsensusSigma.ts).
+ * believe — what reading the books at another line depends on. Without one,
+ * buildConsensus uses the production spread: FITTED_SPREAD_PARAMS where fitted,
+ * the CV prior × the line with LINE_SHIFT_TRUST elsewhere.
  */
 export interface ConsensusSpread {
   name: string;
@@ -209,9 +231,12 @@ export function buildConsensus(
 
   // One dispersion for every book on this prop, so means are comparable.
   const scale = median(live().map((q) => q.line));
+  const fitted = FITTED_SPREAD_PARAMS[propType];
   const spec = opts.spread
     ? { propType, sigma: Math.max(1e-6, opts.spread.sigma(propType, scale)), df: CONSENSUS_DF }
-    : specFor(propType, scale);
+    : fitted
+      ? { propType, sigma: Math.max(1e-6, fitted.a + fitted.b * scale), df: CONSENSUS_DF }
+      : specFor(propType, scale);
   for (const q of live()) q.impliedMean = solveMean(spec, q.line, q.pOver!);
 
   // Same line and prices within a group: one source posted twice.
@@ -266,7 +291,11 @@ export function buildConsensus(
       reliable: groups >= RELIABLE_MIN_GROUPS,
       minLine: Math.min(...used.map((q) => q.line)),
       maxLine: Math.max(...used.map((q) => q.line)),
-      ...(opts.spread ? { lineShiftTrust: opts.spread.lineShiftTrust(propType) } : {}),
+      ...(opts.spread
+        ? { lineShiftTrust: opts.spread.lineShiftTrust(propType) }
+        : fitted
+          ? { lineShiftTrust: null }
+          : {}),
     },
     quotes,
   };
@@ -308,6 +337,8 @@ function specOf(m: ConsensusModel): DistSpec {
  * Applied to all yardage: where the model was already accurate (higher lines)
  * this under-claims slightly, which is the safe direction for an edge.
  */
+// Applies to prop types without a ladder-fitted spread (FITTED_SPREAD_PARAMS);
+// receiving yards' entry is kept for the CV-prior comparison spread only.
 export const LINE_SHIFT_TRUST: Record<string, number> = {
   "Receiving Yards": 0.7,
   "Rushing Yards": 0.7,

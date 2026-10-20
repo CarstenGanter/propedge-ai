@@ -3,7 +3,9 @@ import {
   americanToProb,
   buildConsensus,
   consensusProbOver,
+  LINE_SHIFT_TRUST,
   powerDevigExponent,
+  FITTED_SPREAD_PARAMS,
   type ConsensusSpread,
   type RawQuote,
 } from "./marketConsensus";
@@ -17,11 +19,14 @@ import { profileFor } from "./bookProfiles";
  * PrizePicks line.
  */
 
-/** Today's spread: the measured CV prior × the line, damped by LINE_SHIFT_TRUST. */
-export const CURRENT_SPREAD: ConsensusSpread = {
+/**
+ * The spread used before 2026-10-20 for every prop type: the measured CV prior ×
+ * the line, damped by LINE_SHIFT_TRUST. Kept to compare against.
+ */
+export const CV_PRIOR_SPREAD: ConsensusSpread = {
   name: "cv-prior",
   sigma: (propType, scale) => cvPrior(propType) * Math.max(scale, 1),
-  lineShiftTrust: () => undefined,
+  lineShiftTrust: (propType) => LINE_SHIFT_TRUST[propType] ?? null,
 };
 
 /** σ = a + b × line for the fitted prop types, no damping; the current spread elsewhere. */
@@ -30,7 +35,7 @@ export function affineSpread(params: Record<string, { a: number; b: number }>, n
     name,
     sigma: (propType, scale) => {
       const p = params[propType];
-      return p ? p.a + p.b * scale : CURRENT_SPREAD.sigma(propType, scale);
+      return p ? p.a + p.b * scale : CV_PRIOR_SPREAD.sigma(propType, scale);
     },
     // A fitted spread already reproduces prices off the main line, so no damping;
     // other prop types keep the default (undefined = the LINE_SHIFT_TRUST table).
@@ -130,22 +135,6 @@ export function fitAffineSigma(
   return best;
 }
 
-/**
- * σ = a + b × line, fitted to the books' alternate ladders by
- * src/jobs/research/fitConsensusSigma.ts: least squares in probability space
- * over every de-vigged rung, grid search, no outcomes used.
- *
- *   Receiving Yards  a = 13.5, b = 0.27   132 ladders, 6,286 rungs, 13 games
- *                    (the 2026-10-18 slate, fetched 2026-10-17)
- *                    RMSE vs the ladders: current spread 9.51 pts → 3.30;
- *                    within 5 yards of the main line 3.35 → 3.04,
- *                    over 20 yards away 11.64 → 3.02.
- *
- * Other prop types have no ladders yet and keep the current spread. Whether
- * this replaces the current spread in production is decided by its graded
- * outcomes on held-out weeks (src/jobs/research/validateConsensusSigma.ts).
- */
-export const FITTED_SPREAD_PARAMS: Record<string, { a: number; b: number }> = {
-  "Receiving Yards": { a: 13.5, b: 0.27 },
-};
+
+/** The production spread: FITTED_SPREAD_PARAMS where fitted (see marketConsensus.ts), the CV prior elsewhere. */
 export const FITTED_SPREAD = affineSpread(FITTED_SPREAD_PARAMS, "ladder-fit-2026-10-18");

@@ -14,7 +14,7 @@
 import { prisma } from "@/lib/db/client";
 import { parseSnapshot } from "@/lib/marketSnapshot";
 import { buildConsensus, consensusProbOver, type ConsensusSpread, type RawQuote } from "@/lib/analysis/marketConsensus";
-import { affineSpread, CURRENT_SPREAD, devigLadder, fitAffineSigma, type Ladder } from "@/lib/analysis/consensusSpread";
+import { affineSpread, CV_PRIOR_SPREAD, devigLadder, fitAffineSigma, type Ladder } from "@/lib/analysis/consensusSpread";
 import { teamsMatch } from "@/lib/utils/teamName";
 
 function rmsePts(ladders: Ladder[], spread: ConsensusSpread, bucket?: (d: number) => boolean) {
@@ -82,7 +82,7 @@ async function main() {
   ];
   console.log("\nRMSE vs the de-vigged ladder, probability points  (current = CV prior × line, damped 0.7)");
   for (const [label, f] of buckets) {
-    const cur = rmsePts(ladders, CURRENT_SPREAD, f);
+    const cur = rmsePts(ladders, CV_PRIOR_SPREAD, f);
     const fit = rmsePts(ladders, fitted, f);
     console.log(`  ${label.padEnd(26)} n=${String(cur.n).padStart(5)}   current ${cur.rmse.toFixed(2).padStart(6)}   fitted ${fit.rmse.toFixed(2).padStart(6)}`);
   }
@@ -98,7 +98,7 @@ async function main() {
     const test = ladders.filter((_, i) => ladderDay[i] === last);
     const trainParams: Record<string, { a: number; b: number }> = {};
     for (const t of types) trainParams[t] = (({ a, b }) => ({ a, b }))(fitAffineSigma(t, train));
-    const cur = rmsePts(test, CURRENT_SPREAD);
+    const cur = rmsePts(test, CV_PRIOR_SPREAD);
     const held = rmsePts(test, affineSpread(trainParams));
     console.log(`\nHeld-out price test (fit on slates before ${last}, scored on ${last}): ${JSON.stringify(trainParams)}`);
     console.log(`  RMSE on ${held.n} held-out rungs: current ${cur.rmse.toFixed(2)} pts, fitted ${held.rmse.toFixed(2)} pts`);

@@ -171,10 +171,10 @@ describe("favouredSide", () => {
 });
 
 describe("line-shift trust", () => {
-  it("credits only 0.7 of the modelled gain from a softer yardage line", async () => {
+  it("credits only 0.7 of the modelled gain from a softer yardage line (unfitted types)", async () => {
     const { LINE_SHIFT_TRUST, consensusProbOver } = await import("./marketConsensus");
     const { probOver } = await import("./propDistribution");
-    const { model } = buildConsensus("Receiving Yards", [
+    const { model } = buildConsensus("Rushing Yards", [
       { book: "fanduel", line: 10.5, over: -105, under: -125 },
       { book: "draftkings", line: 10.5, over: -108, under: -122 },
       { book: "betmgm", line: 10.5, over: -110, under: -120 },
@@ -183,9 +183,24 @@ describe("line-shift trust", () => {
     const spec = { propType: m.propType, sigma: m.sigma, df: m.df };
     const rawGain = probOver(spec, m.mean, 9.5) - probOver(spec, m.mean, 10.5);
     const gain = consensusProbOver(m, 9.5) - consensusProbOver(m, 10.5);
-    expect(gain).toBeCloseTo(LINE_SHIFT_TRUST["Receiving Yards"] * rawGain, 9);
+    expect(gain).toBeCloseTo(LINE_SHIFT_TRUST["Rushing Yards"] * rawGain, 9);
     // The books' own line is untouched.
     expect(consensusProbOver(m, 10.5)).toBeCloseTo(m.pOverAtReference, 9);
+  });
+
+  it("reads a ladder-fitted prop type undamped, with the fitted σ", async () => {
+    const { FITTED_SPREAD_PARAMS, consensusProbOver } = await import("./marketConsensus");
+    const { probOver } = await import("./propDistribution");
+    const { model } = buildConsensus("Receiving Yards", [
+      { book: "fanduel", line: 10.5, over: -105, under: -125 },
+      { book: "draftkings", line: 10.5, over: -108, under: -122 },
+    ]);
+    const m = model!;
+    const { a, b } = FITTED_SPREAD_PARAMS["Receiving Yards"];
+    expect(m.sigma).toBeCloseTo(a + b * 10.5, 9);
+    expect(m.lineShiftTrust).toBeNull();
+    const spec = { propType: m.propType, sigma: m.sigma, df: m.df };
+    expect(consensusProbOver(m, 20.5)).toBeCloseTo(probOver(spec, m.mean, 20.5), 12);
   });
 
   it("leaves count props alone", async () => {

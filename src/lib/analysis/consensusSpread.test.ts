@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { affineSpread, CURRENT_SPREAD, devigLadder, fitAffineSigma, ladderLoss, type Ladder } from "./consensusSpread";
+import { affineSpread, CV_PRIOR_SPREAD, devigLadder, FITTED_SPREAD, fitAffineSigma, ladderLoss, type Ladder } from "./consensusSpread";
 import { buildConsensus, consensusProbOver, LINE_SHIFT_TRUST, powerDevig, type RawQuote } from "./marketConsensus";
 
 /** A synthetic ladder priced from a known spread, to check the fit recovers it. */
@@ -14,12 +14,26 @@ function syntheticLadder(mainLine: number, spread: ReturnType<typeof affineSprea
 }
 
 describe("the spread is pluggable without changing the default", () => {
-  it("reproduces today's consensus exactly with the current spread", () => {
-    const q: RawQuote[] = [{ book: "fanduel", line: 30.5, over: -110, under: -110 }];
-    const a = buildConsensus("Receiving Yards", q).model!;
-    const b = buildConsensus("Receiving Yards", q, { spread: CURRENT_SPREAD }).model!;
-    expect(b.sigma).toBeCloseTo(a.sigma, 12);
-    expect(consensusProbOver(b, 40.5)).toBeCloseTo(consensusProbOver(a, 40.5), 12);
+  it("uses the fitted spread in production for receiving yards and the CV prior elsewhere", () => {
+    const rec: RawQuote[] = [{ book: "fanduel", line: 30.5, over: -110, under: -110 }];
+    const prodRec = buildConsensus("Receiving Yards", rec).model!;
+    const fitRec = buildConsensus("Receiving Yards", rec, { spread: FITTED_SPREAD }).model!;
+    expect(prodRec.sigma).toBeCloseTo(fitRec.sigma, 12);
+    expect(consensusProbOver(prodRec, 40.5)).toBeCloseTo(consensusProbOver(fitRec, 40.5), 12);
+    const rush: RawQuote[] = [{ book: "fanduel", line: 30.5, over: -110, under: -110 }];
+    const prodRush = buildConsensus("Rushing Yards", rush).model!;
+    const cvRush = buildConsensus("Rushing Yards", rush, { spread: CV_PRIOR_SPREAD }).model!;
+    expect(prodRush.sigma).toBeCloseTo(cvRush.sigma, 12);
+    expect(consensusProbOver(prodRush, 40.5)).toBeCloseTo(consensusProbOver(cvRush, 40.5), 12);
+  });
+
+  it("keeps the old receiving-yards reading available for comparison", () => {
+    const rec: RawQuote[] = [{ book: "fanduel", line: 3.5, over: -110, under: -110 }];
+    const old = buildConsensus("Receiving Yards", rec, { spread: CV_PRIOR_SPREAD }).model!;
+    const prod = buildConsensus("Receiving Yards", rec).model!;
+    // The 85% Under 14.5 off a 3.5 line was the old reading; the fitted spread is far less extreme.
+    expect(1 - consensusProbOver(old, 14.5)).toBeGreaterThan(0.84);
+    expect(1 - consensusProbOver(prod, 14.5)).toBeLessThan(0.8);
   });
 
   it("drops the line-shift damping for a fitted prop type only", () => {
@@ -59,7 +73,7 @@ describe("fitAffineSigma", () => {
   it("beats today's spread on ladders that are wider at low lines", () => {
     const truth = affineSpread({ "Receiving Yards": { a: 12, b: 0.35 } });
     const ladders = [4.5, 9.5, 14.5].map((l) => syntheticLadder(l, truth));
-    expect(fitAffineSigma("Receiving Yards", ladders).sse).toBeLessThan(ladderLoss(ladders, CURRENT_SPREAD).sse);
+    expect(fitAffineSigma("Receiving Yards", ladders).sse).toBeLessThan(ladderLoss(ladders, CV_PRIOR_SPREAD).sse);
   });
 
   it("uses only ladders of the prop type being fitted", () => {

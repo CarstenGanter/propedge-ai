@@ -18,7 +18,8 @@
 import { prisma } from "@/lib/db/client";
 import { parseSnapshot } from "@/lib/marketSnapshot";
 import { buildConsensus, consensusSideProb, pricedAt, type RawQuote } from "@/lib/analysis/marketConsensus";
-import { FITTED_SPREAD, FITTED_SPREAD_PARAMS } from "@/lib/analysis/consensusSpread";
+import { CV_PRIOR_SPREAD, FITTED_SPREAD } from "@/lib/analysis/consensusSpread";
+import { FITTED_SPREAD_PARAMS } from "@/lib/analysis/marketConsensus";
 import { clusterBootstrap } from "@/lib/analysis/marketSkill";
 import { calibrationSummary, excessByVenueGap, reliabilityTable, type BucketRow, type VenueItem } from "@/lib/analysis/venueCalibration";
 
@@ -84,7 +85,7 @@ async function main() {
     const snap = parseSnapshot(p.marketDataJson);
     if (!snap?.quotes?.length) continue;
     const quotes: RawQuote[] = snap.quotes.map((q) => ({ book: q.book, line: q.line, over: q.over, under: q.under, lastUpdate: q.lastUpdate }));
-    const mOld = buildConsensus(p.propType, quotes).model;
+    const mOld = buildConsensus(p.propType, quotes, { spread: CV_PRIOR_SPREAD }).model;
     const mFit = buildConsensus(p.propType, quotes, { spread: FITTED_SPREAD }).model;
     if (!mOld || !mFit) continue;
     const venues: [Pair["venue"], number | null | undefined][] = [

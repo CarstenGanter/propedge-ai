@@ -17,7 +17,7 @@ the default when nothing clears the books' price.
 | 1 | Market-relative scoring: log-loss skill vs consensus, game-bootstrap intervals, edge buckets, attribution | Done (`c8392f7`) |
 | 2 | Timestamped odds store; consensus as of any time; same-line CLV | Done (`93bc954`) |
 | 3 | Venue-gap and dispersion features in σ units, staleness flags | Done |
-| 3b | Consensus σ for reading the books at another line (inserted after 3) | Fitted; **outcome gate failed — production unchanged** (below) |
+| 3b | Consensus σ for reading the books at another line (inserted after 3) | **In production for receiving yards**: passes on prices; outcome gate underpowered (+0.0002, CI −0.0014 to +0.0020, n=361) |
 | 4 | Vacated-volume redistribution on injury-report changes | Kept — a news-timing edge, not a player-layer one |
 | 5 | Team volume model | Open |
 | 6 | Opportunity shares (EB-shrunk EWMA) | **Deferred** |
@@ -62,14 +62,19 @@ alternate-line reading.
 - **Gate** (`npm run research:sigma-validate`), stated before running: lower log-loss on graded
   outcomes at venue lines in held-out weeks, interval below zero, calibration no worse. Held-out
   (before 2026-10-15): 361 venue lines, 21 games; log-loss difference +0.0002 (−0.0014 to
-  +0.0020); calibration error 4.39 → 3.62 pts. **Failed** — no measurable difference on outcomes.
+  +0.0020); calibration error 4.39 → 3.62 pts. No measurable difference on outcomes either way.
 - **Why it can't tell yet:** almost every venue line sits on or within a point of the books' line,
   where σ barely matters; only 5 held-out props lie beyond the books' range. The ladder fit is a
-  strong price result; outcomes don't have the power to confirm it. Production keeps the current
-  spread, and the "~" guard keeps alternate lines from ever showing green.
+  strong price result; outcomes don't have the power to confirm it.
+- **Decision (2026-10-20): adopted for receiving yards** — "passes on prices; outcome gate
+  underpowered (+0.0002, CI −0.0014 to +0.0020, n=361)". The "~" guard stays. Horton's alternate
+  Under 14.5 off a 3.5 line now reads 73.2% (it read 84.9%). **Revert rule:** re-run
+  `npm run research:sigma-validate` as off-line props accumulate; revert if the log-loss
+  interval ends up clearly above zero.
 - **Next look:** a held-out price test runs automatically once the next slate's ladders are
   stored (receiving yards, ~13 credits a week, approved); the outcome gate is re-run as graded
-  off-line props accumulate. Other prop types need their own ladders, at ~13 credits a week each.
+  off-line props accumulate. Other prop types need their own ladders, at ~13 credits a week each:
+  none this month; revisit at the credit reset, rushing yards first.
 
 An observation, not a finding: at venue lines the Over finished 2–8 points below the books'
 probability in both periods; no interval excludes zero.
