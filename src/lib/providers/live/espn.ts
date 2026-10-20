@@ -340,6 +340,58 @@ export function extractFootballBoxStat(
   return appearsInBoxScore(groups, playerName) ? 0 : null;
 }
 
+/**
+ * Basketball box scores (NBA, WNBA, NCAAB) by machine key, like football. Two
+ * reasons not to use the display labels: a combo prop (Pts+Reb+Ast) sums
+ * several columns, which a label lookup can't, and a substring match on "REB"
+ * also hits "OREB". On 2026-07-28 Napheesa Collier's Pts+Reb+Ast (15/6/3 in a
+ * 100-93 Lynx win) was reported "not in the box score" because no combo was
+ * recognised.
+ */
+const BASKETBALL_BOX_KEYS: Record<string, { key: string; part?: "first" }[]> = {
+  points: [{ key: "points" }],
+  rebounds: [{ key: "rebounds" }],
+  assists: [{ key: "assists" }],
+  "3-pointers made": [{ key: "threePointFieldGoalsMade-threePointFieldGoalsAttempted", part: "first" }],
+  "pts+reb+ast": [{ key: "points" }, { key: "rebounds" }, { key: "assists" }],
+  "steals+blocks": [{ key: "steals" }, { key: "blocks" }],
+};
+
+/**
+ * Pure basketball box-score extractor (exported for tests). A player who
+ * dressed and did not play is listed with no stats: null, for manual
+ * settlement.
+ */
+export function extractBasketballBoxStat(groups: EspnStatGroup[], playerName: string, propType: string): number | null {
+  const spec = BASKETBALL_BOX_KEYS[propType.toLowerCase()];
+  if (!spec) return null;
+  for (const g of groups) {
+    const keys = g.keys ?? [];
+    if (!spec.every(({ key }) => keys.includes(key))) continue;
+    const ath = findAthleteRow(g, playerName);
+    if (!ath?.stats?.length) continue;
+    let total = 0;
+    for (const { key } of spec) {
+      const raw = ath.stats[keys.indexOf(key)];
+      const n = raw == null ? NaN : Number(String(raw).split("-")[0]);
+      if (Number.isNaN(n)) return null;
+      total += n;
+    }
+    return total;
+  }
+  return null;
+}
+
+/** Whether ESPN settlement can grade this prop type at all — otherwise a null is not "absent". */
+export function espnGradesProp(sport: string, propType: string, league?: string): boolean {
+  const path = pathFor(sport, league);
+  if (!path) return false;
+  const t = propType.toLowerCase();
+  if (path.sport === "football") return t in FOOTBALL_BOX_KEYS;
+  if (path.sport === "basketball") return t in BASKETBALL_BOX_KEYS;
+  return t in STAT_MATCHERS;
+}
+
 /** Pull a single completed-game stat for a player from the box score. */
 export async function fetchPlayerGameStat(
   sport: string,
@@ -358,6 +410,9 @@ export async function fetchPlayerGameStat(
   if (path.sport === "football") {
     const groups = teams.flatMap((t) => t.statistics ?? []);
     return extractFootballBoxStat(groups, playerName, propType);
+  }
+  if (path.sport === "basketball") {
+    return extractBasketballBoxStat(teams.flatMap((t) => t.statistics ?? []), playerName, propType);
   }
 
   const matchers = STAT_MATCHERS[propType.toLowerCase()];

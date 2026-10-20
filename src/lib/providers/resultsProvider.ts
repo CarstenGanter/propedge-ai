@@ -1,7 +1,7 @@
 import type { ScorablePropInput } from "@/types";
 import { demoActualResult } from "./demoData";
 import type { ProviderContext } from "./config";
-import { espnSupportsSport, fetchPlayerGameStat, findEvent } from "./live/espn";
+import { espnGradesProp, espnSupportsSport, fetchPlayerGameStat, findEvent } from "./live/espn";
 import { getMlbResult } from "./live/mlbStats";
 
 export interface ResultLookup {
@@ -64,6 +64,14 @@ export const liveResultsProvider: ResultsProvider = {
         source: "unavailable",
         resolved: false,
         note: "Sport not supported by the live provider — settle manually.",
+      };
+    }
+    if (!espnGradesProp(prop.sport, prop.propType, prop.league)) {
+      return {
+        actualResult: null,
+        source: "ESPN",
+        resolved: false,
+        note: `ESPN settlement can't grade ${prop.propType} for ${prop.sport} — settle manually.`,
       };
     }
     try {
