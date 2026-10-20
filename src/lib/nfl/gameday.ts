@@ -13,6 +13,8 @@ import { getCachedNflGameContext, type NflGameContext } from "./gameContext";
 import { getDefenseAggMeta } from "./defenseCache";
 import { nflSeasonForDate } from "./slate";
 import { marketsToDrop } from "@/lib/analysis/availability";
+import { rbOutAlerts } from "./rbOutAlertData";
+import type { RbOutAlert } from "./rbOutAlert";
 
 export interface NflGamedayGame {
   game: NflGame;
@@ -45,6 +47,8 @@ export interface NflGamedayData {
    */
   marketsToDrop: string[];
   contextsCached: number;
+  /** Running backs ruled out on this slate, with teammates' rushing lines (an alert, not an adjustment). */
+  rbOutAlerts: RbOutAlert[];
   credits: { remaining: number; at: string } | null;
   defense: { season: number; games: number; updatedAt: string } | null;
   settings: {
@@ -90,6 +94,12 @@ export async function getNflGamedayData(date: string, today: string): Promise<Nf
     return { game, started: Date.parse(game.kickoffISO) <= Date.now(), context: contexts[i], picks: gamePicks, teamPick };
   });
 
+  const alerts = await rbOutAlerts(
+    date,
+    slate.map((game, i) => ({ game, injuries: contexts[i]?.injuries ?? [] })).filter((g) => Date.parse(g.game.kickoffISO) > Date.now()),
+    { cacheOnly: true },
+  );
+
   const { season } = nflSeasonForDate(date);
   const [defenseMeta, availabilityRows] = await Promise.all([
     getDefenseAggMeta(season),
@@ -124,6 +134,7 @@ export async function getNflGamedayData(date: string, today: string): Promise<Nf
     pendingPropCount,
     marketsToDrop: droppable,
     contextsCached: contexts.filter(Boolean).length,
+    rbOutAlerts: alerts,
     credits: credits ? { remaining: credits.remaining, at: credits.at } : null,
     defense: defenseMeta ? { season, games: defenseMeta.games, updatedAt: defenseMeta.updatedAt } : null,
     settings: {

@@ -12,6 +12,7 @@ import { NflFetchButton } from "./NflFetchButton";
 import { NflGameCard } from "./NflGameCard";
 import { NflSlipsPanel } from "./NflSlipsPanel";
 import { UnderdogLineTable } from "./UnderdogLineTable";
+import { RbOutAlerts } from "./RbOutAlerts";
 import { CaptureClosingLinesButton } from "@/components/CaptureClosingLinesButton";
 import { generateNflPicksAction, refreshNflContextAction } from "@/server/actions/nfl";
 import { formatSlate } from "@/lib/utils/dates";
@@ -93,6 +94,8 @@ export function NflGamedayView({ data }: { data: NflGamedayData }) {
         <StatCard label={data.pendingPropCount === 1 ? "prop stored" : "props stored"} value={data.pendingPropCount} />
         <StatCard label="Odds API credits left" value={data.credits ? data.credits.remaining : "—"} />
       </section>
+
+      <RbOutAlerts alerts={data.rbOutAlerts} />
 
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-2">

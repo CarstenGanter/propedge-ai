@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db/client";
 import { releaseLock, tryAcquireLock } from "@/lib/providerCache";
 import { diffInjuryReports, parseInjuryReport, type EspnSummaryInjuries } from "./injuryReport";
 import { getNflSlate, type NflGame } from "./schedule";
+import { rbOutAlerts } from "./rbOutAlertData";
+import { formatRbOutAlert } from "./rbOutAlert";
 import { toNflSlateDate } from "./slate";
 
 /**
@@ -52,6 +54,7 @@ export async function runInjuryWatch(source: "launchd" | "app", now = new Date()
     if (games.length === 0) return log("skip — no games in the next 72 hours");
     let changes = 0;
     let toOut = 0;
+    const alertLines: string[] = [];
     for (const g of games) {
       const summary = await fetchSummary(g.eventId);
       if (!summary) continue;
@@ -69,8 +72,16 @@ export async function runInjuryWatch(source: "launchd" | "app", now = new Date()
       });
       changes += diff.length;
       toOut += diff.filter((c) => c.toStatus === "out").length;
+      // A running back newly out: alert with his teammates' rushing lines (not a probability change).
+      const rbOut = diff.filter((c) => c.toStatus === "out" && c.fromStatus != null && (c.position ?? "").toUpperCase() === "RB");
+      if (rbOut.length) {
+        const report = parseInjuryReport(summary).map((t) => ({ ...t, players: t.players.filter((p) => rbOut.some((c) => c.team === t.team && c.playerName === p.name)) }));
+        const alerts = await rbOutAlerts(toNflSlateDate(g.kickoffISO), [{ game: g, injuries: report }], { cacheOnly: false });
+        for (const a of alerts) alertLines.push(...formatRbOutAlert(a));
+      }
     }
-    return changes ? log(`${changes} status change(s) across ${games.length} game(s), ${toOut} to Out`) : log(`skip — no changes in ${games.length} game(s)`);
+    const summaryLine = changes ? log(`${changes} status change(s) across ${games.length} game(s), ${toOut} to Out`) : log(`skip — no changes in ${games.length} game(s)`);
+    return [summaryLine, ...alertLines.map((l) => log(l))].join("\n");
   } finally {
     await releaseLock(LOCK_KEY);
   }

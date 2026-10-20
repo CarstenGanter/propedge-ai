@@ -176,6 +176,17 @@ export async function getWeeklyStats(season: number): Promise<WeeklyStatRow[]> {
   return rows;
 }
 
+/** Cached weekly stats only, any age — for page renders that must not block on the network. */
+export async function getCachedWeeklyStats(season: number): Promise<WeeklyStatRow[] | null> {
+  return (await cacheGet<WeeklyStatRow[]>(WEEKLY_KEY(season)))?.value ?? null;
+}
+
+/** Cached ESPN → nflverse id map only, any age. */
+export async function getCachedIdMap(): Promise<Map<string, NflverseIds> | null> {
+  const hit = await cacheGet<NflverseIds[]>(IDMAP_KEY);
+  return hit ? new Map(hit.value.map((r) => [r.espnId, r])) : null;
+}
+
 export async function getSnapCounts(season: number): Promise<SnapRow[]> {
   const hit = await cacheGet<SnapRow[]>(SNAPS_KEY(season), STATS_TTL);
   if (hit) return hit.value;
