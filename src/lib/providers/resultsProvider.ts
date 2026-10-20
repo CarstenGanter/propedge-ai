@@ -10,6 +10,8 @@ export interface ResultLookup {
   /** True when a definitive final stat was found; false => manual settlement. */
   resolved: boolean;
   note?: string;
+  /** The game is final but the player is in no section of its box score. */
+  absentFromBoxScore?: boolean;
 }
 
 export interface ResultsProvider {
@@ -95,6 +97,7 @@ export const liveResultsProvider: ResultsProvider = {
           actualResult: null,
           source: "ESPN",
           resolved: false,
+          absentFromBoxScore: true,
           note:
             "Game is final but this player recorded nothing anywhere in the box score — " +
             "they were likely inactive or did not take the field. Settle manually.",

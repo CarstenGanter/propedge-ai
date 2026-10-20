@@ -1,10 +1,11 @@
 /**
- * nflverse season data for the research jobs: weekly stats, snap counts and
- * weekly rosters, assembled for grading (gradeProps.ts). Network only, free.
+ * nflverse season data: weekly stats, snap counts and weekly rosters,
+ * assembled for grading (gradeProps.ts) by the research jobs and settlement's
+ * snap-count fallback. Network only, free.
  */
 import zlib from "node:zlib";
 import { parseCsv } from "@/lib/utils/csv";
-import { parseGradingStats, parseWeeklyRoster, type Appearance, type SeasonData } from "@/lib/nfl/gradeProps";
+import { parseGradingStats, parseWeeklyRoster, type Appearance, type SeasonData, type StatRow } from "@/lib/nfl/gradeProps";
 
 export const BASE = "https://github.com/nflverse/nflverse-data/releases/download";
 
@@ -13,6 +14,17 @@ export async function fetchCsv(url: string): Promise<string> {
   if (!res.ok) throw new Error(`${res.status} ${url}`);
   const buf = Buffer.from(await res.arrayBuffer());
   return url.endsWith(".gz") ? zlib.gunzipSync(buf).toString("utf8") : buf.toString("utf8");
+}
+
+/** Weekly stats alone (~0.4 MB): enough to tell whether a game is posted yet. */
+export async function loadSeasonStats(season: number): Promise<StatRow[]> {
+  return parseGradingStats(await fetchCsv(`${BASE}/stats_player/stats_player_week_${season}.csv.gz`));
+}
+
+/** players.csv's PFR → gsis links, the backup for snap-count rows. */
+export async function loadPfrToGsis(): Promise<Map<string, string>> {
+  const players = parseCsv(await fetchCsv(`${BASE}/players/players.csv`)).rows;
+  return new Map(players.filter((p) => p.pfr_id && p.gsis_id).map((p) => [p.pfr_id, p.gsis_id]));
 }
 
 export async function loadSeason(season: number, playersPfrToGsis: Map<string, string>): Promise<SeasonData> {

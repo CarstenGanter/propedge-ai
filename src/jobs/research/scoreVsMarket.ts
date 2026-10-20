@@ -28,7 +28,7 @@ import { prisma } from "@/lib/db/client";
 import { parseCsv } from "@/lib/utils/csv";
 import { nflverseCode } from "@/lib/nfl/teamCodes";
 import { GRADABLE_PROPS, gradeProp, priorGames } from "@/lib/nfl/gradeProps";
-import { BASE, fetchCsv, loadSeason } from "./nflverseSeasons";
+import { BASE, fetchCsv, loadSeason } from "@/lib/nfl/nflverseSeasons";
 import { resolveEspnAthlete } from "@/lib/providers/live/espnPlayerStats";
 import { estimateProbability } from "@/lib/analysis/probabilityModel";
 import { consensusProbOver, consensusSideProb, pricedAt } from "@/lib/analysis/marketConsensus";

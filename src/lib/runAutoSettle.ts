@@ -7,10 +7,17 @@ import { settlePickById } from "@/lib/settle";
 import { cacheGet, cacheSet, releaseLock, tryAcquireLock } from "@/lib/providerCache";
 import { toNflSlateDate } from "@/lib/nfl/slate";
 import { dueForSettlement, settleRetryDue, staleForAutoSettle } from "./settleSchedule";
+import { nflSeasonForDate } from "@/lib/nfl/slate";
+import { nflverseCode } from "@/lib/nfl/teamCodes";
+import { weekForGame, type SeasonData, type StatRow } from "@/lib/nfl/gradeProps";
+import { loadPfrToGsis, loadSeason, loadSeasonStats } from "@/lib/nfl/nflverseSeasons";
+import { snapFallbackDecision, type SnapDecision } from "@/lib/nfl/snapFallback";
+import type { PlayerProp } from "@prisma/client";
 
 const LOCK_KEY = "lock:settle";
 const LOCK_TTL_MS = 10 * 60_000;
 const LAST_RUN_KEY = "settle:last";
+const manualKey = (pickId: string) => `settle:snaps-manual:${pickId}`;
 
 /**
  * One pass of automatic settlement, run by the same two schedulers as the
@@ -20,6 +27,11 @@ const LAST_RUN_KEY = "settle:last";
  * Settling used to depend on the daily job, which was never installed, or a
  * click on the Results page — so on 2026-09-28 Sunday's picks were still
  * pending the next day. Settling a pick also settles any slip it is in.
+ *
+ * An NFL player missing from a final game's box score is graded from nflverse
+ * snap counts instead (snapFallback.ts) once nflverse has posted the game;
+ * until then the pick waits, and after SETTLE_GIVE_UP_DAYS it is left for the
+ * Results page like everything else.
  */
 export async function runAutoSettle(source: "launchd" | "app", now = new Date()): Promise<string> {
   const stamp = now.toISOString();
@@ -46,7 +58,10 @@ export async function runAutoSettle(source: "launchd" | "app", now = new Date())
   try {
     await cacheSet(LAST_RUN_KEY, stamp);
     const settings = await getSettings();
+    const snaps = nflverseFallback();
     let settled = 0;
+    let fromSnaps = 0;
+    let waiting = 0;
     for (const pick of due) {
       // Re-read under the lock: the other scheduler may have just settled it.
       const fresh = await prisma.pick.findUnique({ where: { id: pick.id }, select: { status: true } });
@@ -60,14 +75,54 @@ export async function runAutoSettle(source: "launchd" | "app", now = new Date())
       if (r.resolved && r.actualResult != null) {
         await settlePickById(pick.id, { actualResult: r.actualResult });
         settled++;
+      } else if (r.absentFromBoxScore && pick.playerProp.sport === "NFL" && !(await cacheGet<string>(manualKey(pick.id)))) {
+        const d = await snaps.decide(pick.playerProp);
+        // nflverse can't settle it (name or source disagreement): don't re-download every pass.
+        if (d.kind === "manual") await cacheSet(manualKey(pick.id), d.reason);
+        if (d.kind === "settle") await settlePickById(pick.id, { actualResult: d.actualResult, note: d.note });
+        else if (d.kind === "void") await settlePickById(pick.id, { status: "void", actualResult: null, note: d.note });
+        if (d.kind === "settle" || d.kind === "void") {
+          settled++;
+          fromSnaps++;
+        } else if (d.kind === "wait") waiting++;
       }
     }
     return log(
       `settled ${settled} of ${due.length} due` +
-        (settled < due.length ? " (the rest not final yet — retried later)" : "") +
+        (fromSnaps ? ` (${fromSnaps} from nflverse snap counts)` : "") +
+        (waiting ? `; ${waiting} not in the box score, waiting for nflverse` : "") +
+        (settled + waiting < due.length ? " (the rest not final yet — retried later)" : "") +
         staleNote,
     );
   } finally {
     await releaseLock(LOCK_KEY);
   }
+}
+
+/**
+ * nflverse loaded at most once per pass and only as far as needed: the small
+ * stats file answers "is the game posted?"; snap counts and rosters (~13 MB)
+ * are fetched only for a game that is. A failed download means wait.
+ */
+function nflverseFallback() {
+  const stats = new Map<number, Promise<StatRow[]>>();
+  const seasons = new Map<number, Promise<SeasonData>>();
+  let pfr: Promise<Map<string, string>> | null = null;
+  return {
+    async decide(prop: PlayerProp): Promise<SnapDecision> {
+      const home = nflverseCode(prop.team);
+      const away = nflverseCode(prop.opponent);
+      if (!home || !away) return { kind: "manual", reason: "team name has no nflverse code" };
+      const { season } = nflSeasonForDate(prop.date);
+      try {
+        if (!stats.has(season)) stats.set(season, loadSeasonStats(season));
+        if (weekForGame(await stats.get(season)!, home, away) == null) return { kind: "wait", reason: "nflverse has not posted the game yet" };
+        pfr ??= loadPfrToGsis();
+        if (!seasons.has(season)) seasons.set(season, pfr.then((m) => loadSeason(season, m)));
+        return snapFallbackDecision({ playerName: prop.playerName, espnId: prop.espnAthleteId, propType: prop.propType, home, away }, await seasons.get(season)!);
+      } catch (e) {
+        return { kind: "wait", reason: `nflverse download failed: ${String(e)}` };
+      }
+    },
+  };
 }

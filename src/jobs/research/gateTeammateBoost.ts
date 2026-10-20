@@ -25,7 +25,7 @@ import { consensusProbOver } from "@/lib/analysis/marketConsensus";
 import { consensusOf, parseSnapshot } from "@/lib/marketSnapshot";
 import { overProb } from "@/lib/predictionLog";
 import { clusterBootstrap, skillScore, type SkillItem } from "@/lib/analysis/marketSkill";
-import { BASE, fetchCsv, loadSeason } from "./nflverseSeasons";
+import { BASE, fetchCsv, loadSeason } from "@/lib/nfl/nflverseSeasons";
 
 /** How often production's flag fired on stored receiving picks (evidence text), 2026-09-20 → 10-19. */
 const PRODUCTION_FIRE_RATE = 40 / 73;
