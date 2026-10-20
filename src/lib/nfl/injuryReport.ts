@@ -84,3 +84,39 @@ export function teammateAbsenceBoost(
     .map((p) => `${p.name} (${p.position}, ${p.rawStatus || p.status})`);
   return { boost: names.length > 0, names };
 }
+
+export interface InjuryChange {
+  team: string;
+  playerName: string;
+  position: string | null;
+  fromStatus: string | null;
+  toStatus: string;
+  rawStatus: string | null;
+}
+
+/**
+ * What changed between the last statuses we recorded for a game and its
+ * report now (pure). A new name is a change from null; a name that drops off
+ * the report is "cleared" — ESPN removes players once they're off the report.
+ * `previous` is keyed `${team}|${playerName}`.
+ */
+export function diffInjuryReports(previous: Map<string, string>, current: NflTeamInjuryReport[]): InjuryChange[] {
+  const out: InjuryChange[] = [];
+  const seen = new Set<string>();
+  for (const t of current) {
+    for (const p of t.players) {
+      const key = `${t.team}|${p.name}`;
+      seen.add(key);
+      const before = previous.get(key) ?? null;
+      if (before !== p.status) {
+        out.push({ team: t.team, playerName: p.name, position: p.position, fromStatus: before, toStatus: p.status, rawStatus: p.rawStatus || null });
+      }
+    }
+  }
+  for (const [key, status] of previous) {
+    if (seen.has(key) || status === "cleared") continue;
+    const [team, playerName] = key.split("|");
+    out.push({ team, playerName, position: null, fromStatus: status, toStatus: "cleared", rawStatus: null });
+  }
+  return out;
+}

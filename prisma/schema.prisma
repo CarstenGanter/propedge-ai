@@ -345,3 +345,22 @@ model OddsQuote {
   @@index([eventId, playerName, propType, fetchedAt])
   @@index([fetchedAt])
 }
+
+// Every change in a player's game injury-report status, with when we first saw
+// it (ESPN, free; polled by the 15-minute schedulers). The news-latency test
+// measures, from here, how long each venue takes to move teammates' lines.
+model InjuryStatusChange {
+  id          String   @id @default(cuid())
+  detectedAt  DateTime
+  eventId     String // ESPN event id
+  kickoff     DateTime
+  team        String
+  playerName  String
+  position    String?
+  fromStatus  String? // null the first time a player is seen on the report
+  toStatus    String // active | questionable | doubtful | out | gtd | cleared (dropped off the report)
+  rawStatus   String?
+
+  @@index([eventId, team, playerName, detectedAt])
+  @@index([toStatus, detectedAt])
+}

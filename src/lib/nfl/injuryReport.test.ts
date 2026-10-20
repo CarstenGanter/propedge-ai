@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseInjuryReport, teammateAbsenceBoost, type NflTeamInjuryReport } from "./injuryReport";
+import { diffInjuryReports, parseInjuryReport, teammateAbsenceBoost, type NflTeamInjuryReport } from "./injuryReport";
 
 // Verified ESPN summary `injuries` shape.
 const summary = {
@@ -60,5 +60,30 @@ describe("teammateAbsenceBoost", () => {
 
   it("handles a missing report", () => {
     expect(teammateAbsenceBoost("Receptions", "Anyone", undefined)).toEqual({ boost: false, names: [] });
+  });
+});
+
+describe("diffInjuryReports", () => {
+  const report = (players: { name: string; status: "out" | "questionable" | "doubtful" | "active" }[]) => [
+    { team: "Seattle Seahawks", players: players.map((p) => ({ name: p.name, position: "WR", status: p.status, rawStatus: p.status, detail: null, date: null, comment: null })) },
+  ];
+
+  it("records a first sighting and a status change", () => {
+    const prev = new Map([["Seattle Seahawks|Cooper Kupp", "questionable"]]);
+    const changes = diffInjuryReports(prev, report([{ name: "Cooper Kupp", status: "out" }, { name: "Tory Horton", status: "questionable" }]));
+    expect(changes).toEqual([
+      { team: "Seattle Seahawks", playerName: "Cooper Kupp", position: "WR", fromStatus: "questionable", toStatus: "out", rawStatus: "out" },
+      { team: "Seattle Seahawks", playerName: "Tory Horton", position: "WR", fromStatus: null, toStatus: "questionable", rawStatus: "questionable" },
+    ]);
+  });
+
+  it("records nothing when nothing changed", () => {
+    expect(diffInjuryReports(new Map([["Seattle Seahawks|Cooper Kupp", "out"]]), report([{ name: "Cooper Kupp", status: "out" }]))).toEqual([]);
+  });
+
+  it("marks a player who dropped off the report as cleared, once", () => {
+    const changes = diffInjuryReports(new Map([["Seattle Seahawks|Cooper Kupp", "questionable"]]), report([]));
+    expect(changes).toMatchObject([{ playerName: "Cooper Kupp", fromStatus: "questionable", toStatus: "cleared" }]);
+    expect(diffInjuryReports(new Map([["Seattle Seahawks|Cooper Kupp", "cleared"]]), report([]))).toEqual([]);
   });
 });

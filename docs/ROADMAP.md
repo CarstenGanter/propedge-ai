@@ -18,7 +18,7 @@ the default when nothing clears the books' price.
 | 2 | Timestamped odds store; consensus as of any time; same-line CLV | Done (`93bc954`) |
 | 3 | Venue-gap and dispersion features in σ units, staleness flags | Done |
 | 3b | Consensus σ for reading the books at another line (inserted after 3) | **In production for receiving yards**: passes on prices; outcome gate underpowered (+0.0002, CI −0.0014 to +0.0020, n=361) |
-| 4 | Vacated-volume redistribution on injury-report changes | Kept — a news-timing edge, not a player-layer one |
+| 4 | Vacated-volume redistribution on injury-report changes | Fitted and validated (below); news-latency test built, waiting on data |
 | 5 | Team volume model | Open |
 | 6 | Opportunity shares (EB-shrunk EWMA) | **Deferred** |
 | 7 | Opponent effect on per-opportunity efficiency | **Deferred** |
@@ -78,6 +78,34 @@ alternate-line reading.
 
 An observation, not a finding: at venue lines the Over finished 2–8 points below the books'
 probability in both periods; no interval excludes zero.
+
+## Task 4: vacated volume and the news edge (2026-10-20)
+
+**Redistribution** (`npm run research:redistribution`). nflverse 2022–25, regular season. "Out" =
+listed inactive or on reserve and played in the team's previous game (the first game missed);
+vacated share = his mean share over the team's previous four games he played (the production usage
+window). Non-negative least squares per destination group, fitted on 2022–24, scored untouched on
+2025 against the team's actual volume (MAE per teammate, game-bootstrap 95%):
+
+| | Team-games fitted | vs pro-rata | vs no redistribution |
+| --- | --- | --- | --- |
+| Carries | 444 | −0.155 (−0.230 to −0.081) | **−0.098 (−0.153 to −0.049)** |
+| Targets | 692 | −0.058 (−0.080 to −0.038) | +0.001 (−0.016 to +0.018) |
+
+Carries redistribute predictably (an RB out sends 82% of his share to the other RBs); targets don't
+beat leaving shares alone, and pro-rata — the usual assumption — is worse than doing nothing for
+both. Tables: `REDISTRIBUTION` in `src/lib/nfl/vacatedVolume.ts`. Not yet wired into scoring: that
+would change probabilities and needs task 1's gate (and only carries qualify).
+
+**The news-latency test** (`npm run research:latency`). Every injury-report status change is now
+logged with the time first seen (`InjuryStatusChange`, ESPN, free, every 15 minutes with the
+schedulers). From a change to Out, the test times when each venue — Underdog, PrizePicks, each
+sportsbook group — first moves a teammate's line in the odds store, censoring venues that hadn't
+moved by our last look. **No measurements yet:** it needs a change to Out between two stored fetches
+of that game, and today the store holds only the gameday fetch and the closing capture of games
+with picks. A news-triggered fetch would make it measurable: ~13 games a week have a newly-out
+pass-catcher; one fetch of the affected markets after Sunday inactives is ~20–60 credits a week.
+Not enabled — the cost needs approval.
 
 ## Results so far
 

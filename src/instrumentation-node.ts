@@ -1,5 +1,6 @@
 import { runAutoCapture } from "@/lib/nfl/runAutoCapture";
 import { runAutoSettle } from "@/lib/runAutoSettle";
+import { runInjuryWatch } from "@/lib/nfl/injuryWatch";
 
 /**
  * In-app closing-line capture and settlement: every 15 minutes while the
@@ -19,7 +20,7 @@ const g = globalThis as { __propedgeAutoCapture?: ReturnType<typeof setInterval>
 
 async function tick() {
   // Quiet unless something happened — a skip every 15 minutes is noise.
-  for (const [name, run] of [["capture", runAutoCapture], ["settle", runAutoSettle]] as const) {
+  for (const [name, run] of [["capture", runAutoCapture], ["settle", runAutoSettle], ["injury-watch", runInjuryWatch]] as const) {
     try {
       const line = await run("app");
       if (!line.includes(": skip") && !line.includes("skip —")) console.log(line);
