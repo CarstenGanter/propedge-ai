@@ -17,14 +17,14 @@ the default when nothing clears the books' price.
 | 1 | Market-relative scoring: log-loss skill vs consensus, game-bootstrap intervals, edge buckets, attribution | Done (`c8392f7`) |
 | 2 | Timestamped odds store; consensus as of any time; same-line CLV | Done (`93bc954`) |
 | 3 | Venue-gap and dispersion features in σ units, staleness flags | Done |
-| 3b | Consensus σ for reading the books at another line (inserted after 3) | Next — gated on task 1's metric |
+| 3b | Consensus σ for reading the books at another line (inserted after 3) | Fitted; **outcome gate failed — production unchanged** (below) |
 | 4 | Vacated-volume redistribution on injury-report changes | Kept — a news-timing edge, not a player-layer one |
 | 5 | Team volume model | Open |
 | 6 | Opportunity shares (EB-shrunk EWMA) | **Deferred** |
 | 7 | Opponent effect on per-opportunity efficiency | **Deferred** |
 | 8 | Game simulator | Kept, **scoped to leg correlation for slips** |
 | 9 | Learned market weight per prop type | Open |
-| 10 | Alt-ladder audit | Open (feeds 3b) |
+| 10 | Alt-ladder audit | Partly built for 3b: ladders stored and fitted |
 | 11 | Correlated staking | Open |
 | 12 | News-latency loop | Open |
 
@@ -48,6 +48,31 @@ model ever moves off zero.
 Only what slips need: joint outcomes of legs in the same game, replacing the pairwise
 QB-to-own-receiver adjustment for three or more legs. Not a replacement for the per-prop
 probability, which stays market-anchored.
+
+## Task 3b: the consensus σ (2026-10-20)
+
+Reading the books at an Underdog or PrizePicks line needs the consensus spread. Today it is the
+CV prior × the line, damped by a 0.7 trust factor — narrow at low lines, which produced the 85%
+alternate-line reading.
+
+- **Fit** (`npm run research:sigma-fit`): the books' own alternate ladders, each book's one-sided
+  prices de-vigged with its main-line power exponent. Receiving yards, 132 ladders, 6,286 rungs,
+  13 games: σ = 13.5 + 0.27 × line. Error against the ladders falls from 9.51 to 3.30 probability
+  points (11.64 → 3.02 more than 20 yards from the main line). Prices only, no outcomes.
+- **Gate** (`npm run research:sigma-validate`), stated before running: lower log-loss on graded
+  outcomes at venue lines in held-out weeks, interval below zero, calibration no worse. Held-out
+  (before 2026-10-15): 361 venue lines, 21 games; log-loss difference +0.0002 (−0.0014 to
+  +0.0020); calibration error 4.39 → 3.62 pts. **Failed** — no measurable difference on outcomes.
+- **Why it can't tell yet:** almost every venue line sits on or within a point of the books' line,
+  where σ barely matters; only 5 held-out props lie beyond the books' range. The ladder fit is a
+  strong price result; outcomes don't have the power to confirm it. Production keeps the current
+  spread, and the "~" guard keeps alternate lines from ever showing green.
+- **Next look:** a held-out price test runs automatically once the next slate's ladders are
+  stored (receiving yards, ~13 credits a week, approved); the outcome gate is re-run as graded
+  off-line props accumulate. Other prop types need their own ladders, at ~13 credits a week each.
+
+An observation, not a finding: at venue lines the Over finished 2–8 points below the books'
+probability in both periods; no interval excludes zero.
 
 ## Results so far
 

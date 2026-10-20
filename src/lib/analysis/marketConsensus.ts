@@ -1,6 +1,6 @@
 import type { Direction } from "@/types";
 import { profileFor } from "./bookProfiles";
-import { isCountProp, medianOf, probOver, probPush, solveMean, specFor, type DistSpec } from "./propDistribution";
+import { CONSENSUS_DF, isCountProp, medianOf, probOver, probPush, solveMean, specFor, type DistSpec } from "./propDistribution";
 
 /**
  * The market's price for a player prop, built correctly from several books
@@ -62,6 +62,25 @@ export interface ConsensusModel {
   /** Lowest and highest line the used books posted. Absent on older stored models. */
   minLine?: number;
   maxLine?: number;
+  /**
+   * How much of a line move to trust when reading the consensus off its own
+   * line. Undefined: LINE_SHIFT_TRUST for the prop type (the default spread).
+   * Null: trust the distribution fully.
+   */
+  lineShiftTrust?: number | null;
+}
+
+/**
+ * How wide the consensus distribution is, and how much of a line move to
+ * believe — what reading the books at another line depends on. The default
+ * reproduces the measured CV prior × the line with LINE_SHIFT_TRUST; a fitted
+ * spread replaces both (src/jobs/research/fitConsensusSigma.ts).
+ */
+export interface ConsensusSpread {
+  name: string;
+  sigma(propType: string, scale: number): number;
+  /** Undefined: the default table. Null: no damping. */
+  lineShiftTrust(propType: string): number | null | undefined;
 }
 
 /** Fewer independent pricing sources than this and the price is flagged as thin. */
@@ -87,6 +106,16 @@ export function americanToProb(price: number): number {
  * near-even prices most main-line props carry the two agree closely.
  */
 export function powerDevig(over: number, under: number): number | null {
+  const k = powerDevigExponent(over, under);
+  return k == null ? null : americanToProb(over) ** k;
+}
+
+/**
+ * The exponent k with po^k + pu^k = 1 — the book's margin, as the power method
+ * reads it. Applying a book's main-line k to its one-sided alternate prices is
+ * how those are de-vigged for the σ fit.
+ */
+export function powerDevigExponent(over: number, under: number): number | null {
   const po = americanToProb(over);
   const pu = americanToProb(under);
   if (!(po > 0 && po < 1 && pu > 0 && pu < 1)) return null;
@@ -99,7 +128,7 @@ export function powerDevig(over: number, under: number): number | null {
     if (f(lo) * f(mid) <= 0) hi = mid;
     else lo = mid;
   }
-  return po ** ((lo + hi) / 2);
+  return (lo + hi) / 2;
 }
 
 export function multiplicativeDevig(over: number, under: number): number {
@@ -160,6 +189,7 @@ export function selectMainLines(quotes: RawQuote[]): BookQuote[] {
 export function buildConsensus(
   propType: string,
   raw: RawQuote[],
+  opts: { spread?: ConsensusSpread } = {},
 ): { model: ConsensusModel | null; quotes: BookQuote[] } {
   const quotes = selectMainLines(raw);
   const live = () => quotes.filter((q) => q.status === "used");
@@ -178,7 +208,10 @@ export function buildConsensus(
   if (live().length === 0) return { model: null, quotes };
 
   // One dispersion for every book on this prop, so means are comparable.
-  const spec = specFor(propType, median(live().map((q) => q.line)));
+  const scale = median(live().map((q) => q.line));
+  const spec = opts.spread
+    ? { propType, sigma: Math.max(1e-6, opts.spread.sigma(propType, scale)), df: CONSENSUS_DF }
+    : specFor(propType, scale);
   for (const q of live()) q.impliedMean = solveMean(spec, q.line, q.pOver!);
 
   // Same line and prices within a group: one source posted twice.
@@ -233,6 +266,7 @@ export function buildConsensus(
       reliable: groups >= RELIABLE_MIN_GROUPS,
       minLine: Math.min(...used.map((q) => q.line)),
       maxLine: Math.max(...used.map((q) => q.line)),
+      ...(opts.spread ? { lineShiftTrust: opts.spread.lineShiftTrust(propType) } : {}),
     },
     quotes,
   };
@@ -284,7 +318,7 @@ export const LINE_SHIFT_TRUST: Record<string, number> = {
 export function consensusProbOver(m: ConsensusModel, line: number): number {
   const spec = specOf(m);
   const raw = probOver(spec, m.mean, line);
-  const trust = LINE_SHIFT_TRUST[m.propType];
+  const trust = m.lineShiftTrust !== undefined ? m.lineShiftTrust : LINE_SHIFT_TRUST[m.propType];
   if (trust == null || line === m.referenceLine) return raw;
   const atReference = probOver(spec, m.mean, m.referenceLine);
   return atReference + trust * (raw - atReference);

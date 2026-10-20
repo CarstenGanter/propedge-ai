@@ -16,6 +16,8 @@ export interface VenueItem {
   gap: number;
   /** False when the venue line is beyond what the books posted. */
   priced: boolean;
+  /** Which venue posted the line, when mixed. */
+  venue?: string;
 }
 
 export interface CalibrationSummary {

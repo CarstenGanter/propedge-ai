@@ -19,9 +19,10 @@
  * 4. Diagnostics, no probability changes:
  *    - player layer: the model with market weight 0 scored against the market,
  *      and outcome ~ logit(p_market) + logit(p_model) on the primary sample;
- *    - books at the venue line: reliability of the Books column's number (the
- *      consensus read at Underdog's line, current σ method) on every graded
- *      prop with an Underdog line — the baseline for the σ task.
+ *    - books at the venue line: reliability of the books' P(over) read at every
+ *      Underdog and PrizePicks line (current σ method) — the σ task's baseline.
+ *      Those P(over)s are stored too, as backfill rows with lineKind "venue"
+ *      (Underdog) and "prizepicks", never pooled with the reference-line result.
  */
 import zlib from "node:zlib";
 import { prisma } from "@/lib/db/client";
@@ -30,12 +31,11 @@ import { nflverseCode } from "@/lib/nfl/teamCodes";
 import { GRADABLE_PROPS, gradeProp, parseGradingStats, parseWeeklyRoster, priorGames, type Appearance, type SeasonData } from "@/lib/nfl/gradeProps";
 import { resolveEspnAthlete } from "@/lib/providers/live/espnPlayerStats";
 import { estimateProbability } from "@/lib/analysis/probabilityModel";
-import { consensusProbOver } from "@/lib/analysis/marketConsensus";
+import { consensusProbOver, consensusSideProb, pricedAt } from "@/lib/analysis/marketConsensus";
 import { consensusOf, parseSnapshot } from "@/lib/marketSnapshot";
 import { BASELINE_V0, marketMethodOf, overProb } from "@/lib/predictionLog";
 import { liveModelVersions, loadSkillItems, payoutRoi, skillSection, type SkillSection } from "@/lib/predictionReport";
 import { clusterBootstrap, skillBy, skillScore, stackingFit, type SkillBreakdown, type SkillItem } from "@/lib/analysis/marketSkill";
-import { readVenueLine } from "@/lib/analysis/venues";
 import { calibrationSummary, excessByVenueGap, reliabilityTable, type BucketRow, type VenueItem } from "@/lib/analysis/venueCalibration";
 
 import type { Prisma } from "@prisma/client";
@@ -140,10 +140,12 @@ function printBuckets(rows: BucketRow[]) {
 }
 
 function printVenueCalibration(items: VenueItem[], skippedOldMethod: number) {
-  console.log("\n=== DIAGNOSTIC — books at the Underdog line (current σ method): the σ-task baseline ===");
-  console.log(`  Every graded consensus-v2 prop with an Underdog line, for the side stored on the prop. (${skippedOldMethod} older-method props left out.)`);
+  console.log("\n=== DIAGNOSTIC — books' P(over) at the Underdog and PrizePicks lines (current σ method): the σ-task baseline ===");
+  console.log(`  Every graded consensus-v2 prop with a venue line, as P(over). (${skippedOldMethod} older-method venue lines left out.)`);
   for (const [label, xs] of [
     ["all", items],
+    ["Underdog lines", items.filter((i) => i.venue === "venue")],
+    ["PrizePicks lines", items.filter((i) => i.venue === "prizepicks")],
     ["priced (within a point of the books' lines)", items.filter((i) => i.priced)],
     ["beyond the books' lines", items.filter((i) => !i.priced)],
   ] as const) {
@@ -152,7 +154,7 @@ function printVenueCalibration(items: VenueItem[], skippedOldMethod: number) {
   }
   console.log("  reliability, 5-point bins of the books' probability");
   printBuckets(reliabilityTable(items));
-  console.log("  hits minus books-expected hits, by venue gap (stat units, + = easier for the side)");
+  console.log("  hits minus books-expected hits, by venue gap (stat units, + = easier Over)");
   printBuckets(excessByVenueGap(items));
 }
 
@@ -233,6 +235,7 @@ async function main() {
     const direction = marketOver >= 0.5 ? "OVER" : "UNDER";
     const est = estimateProbability({ line, direction, propType: p.propType, games, marketProbOver: marketOver, marketLine: line, adjustments: [] });
     if (!est) { tally.noGames++; continue; }
+    const fetched = snapshot?.fetchedAt ? new Date(snapshot.fetchedAt) : p.updatedAt;
     const cluster = `${p.date}|${p.team}|${p.opponent}`;
 
     if (method === "consensus-v2" && g.value !== line) {
@@ -241,23 +244,39 @@ async function main() {
       if (solo) playerLayer.push({ pModel: solo.rawProbability, pMarket: marketOver, over: g.value > line, cluster, propType: p.propType });
     }
 
-    // Books at the venue line: the Books column's number, current σ method.
-    if (p.underdogLine != null && g.value !== p.underdogLine) {
+    // Books at the venue lines, as P(over) for every prop — not just the side
+    // the books favour, which bunched the table at 50–55%. Current σ method.
+    const venueLines: [string, number | null | undefined][] = [
+      ["venue", p.underdogLine],
+      ["prizepicks", snapshot?.venues?.prizepicks],
+    ];
+    for (const [lineKind, vLine] of venueLines) {
+      if (vLine == null || g.value === vLine) continue;
       const m = method === "consensus-v2" ? consensusOf(snapshot) : null;
-      if (!m) venueSkippedOldMethod++;
-      else {
-        const dir = p.direction as "OVER" | "UNDER";
-        const read = readVenueLine(m, p.underdogLine, dir);
-        venue.push({
-          p: read.probAtVenue,
-          hit: dir === "OVER" ? g.value > p.underdogLine : g.value < p.underdogLine,
-          cluster,
-          gap: dir === "OVER" ? m.referenceLine - p.underdogLine : p.underdogLine - m.referenceLine,
-          priced: read.priced,
+      if (!m) {
+        venueSkippedOldMethod++;
+        continue;
+      }
+      const pOverVenue = consensusSideProb(m, vLine, "OVER");
+      venue.push({ p: pOverVenue, hit: g.value > vLine, cluster, gap: m.referenceLine - vLine, priced: pricedAt(m, vLine), venue: lineKind });
+      const vDir = pOverVenue >= 0.5 ? "OVER" : "UNDER";
+      const vEst = estimateProbability({ line: vLine, direction: vDir, propType: p.propType, games, marketProbOver: marketOver, marketLine: line, adjustments: [] });
+      if (vEst) {
+        forecasts.push({
+          playerPropId: p.id,
+          quotedAt: p.gameStartTime && fetched > p.gameStartTime ? p.gameStartTime : fetched,
+          line: vLine,
+          lineKind,
+          modelProbOver: overProb(vEst.probability, vDir),
+          modelRawProbOver: overProb(vEst.rawProbability, vDir),
+          marketProbOver: pOverVenue,
+          marketMethod: method,
+          modelVersion: BASELINE_V0,
+          source: "backfill",
+          edgeSource: "unknown",
         });
       }
     }
-    const fetched = snapshot?.fetchedAt ? new Date(snapshot.fetchedAt) : p.updatedAt;
     forecasts.push({
       playerPropId: p.id,
       quotedAt: p.gameStartTime && fetched > p.gameStartTime ? p.gameStartTime : fetched,

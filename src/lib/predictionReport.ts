@@ -13,9 +13,17 @@ export async function loadSkillItems(filter: {
   source: "live" | "backfill";
   marketMethod: MarketMethod;
   modelVersion?: string;
+  /** reference (the books' line), venue (Underdog's), prizepicks. Backfill defaults to reference. */
+  lineKind?: string;
 }): Promise<SkillItem[]> {
+  const lineKind = filter.lineKind ?? (filter.source === "backfill" ? "reference" : undefined);
   const rows = await prisma.propPrediction.findMany({
-    where: { source: filter.source, marketMethod: filter.marketMethod, ...(filter.modelVersion ? { modelVersion: filter.modelVersion } : {}) },
+    where: {
+      source: filter.source,
+      marketMethod: filter.marketMethod,
+      ...(filter.modelVersion ? { modelVersion: filter.modelVersion } : {}),
+      ...(lineKind ? { lineKind } : {}),
+    },
     orderBy: { createdAt: "desc" },
     include: {
       playerProp: { select: { actualResult: true, gameStartTime: true, date: true, team: true, opponent: true, propType: true } },

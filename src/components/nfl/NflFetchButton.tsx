@@ -43,6 +43,7 @@ export function NflFetchButton({ date, disabled }: { date: string; disabled?: bo
           : `Imported ${s.propsImported} prop(s), ${picks}.` +
               (s.error ? ` ${s.error}` : "") +
               (s.reason ? ` ${s.reason}` : "") +
+              (s.altQuotes ? ` ${s.altQuotes} alternate-ladder quotes stored.` : "") +
               (s.creditsRemaining != null ? ` ${s.creditsRemaining} credits left.` : ""),
       );
       setEstimate(null);
@@ -65,8 +66,10 @@ export function NflFetchButton({ date, disabled }: { date: string; disabled?: bo
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1">
               <p className="font-medium">
-                {estimate.gamesToFetch} game{estimate.gamesToFetch === 1 ? "" : "s"} × {estimate.markets.length} market
-                {estimate.markets.length === 1 ? "" : "s"} = <span className="text-primary">{estimate.credits} credits</span>
+                {estimate.gamesToFetch} game{estimate.gamesToFetch === 1 ? "" : "s"} × {estimate.markets.length + estimate.altMarkets.length} market
+                {estimate.markets.length + estimate.altMarkets.length === 1 ? "" : "s"}
+                {estimate.altMarkets.length > 0 ? ` (${estimate.altMarkets.length} alternate)` : ""} ={" "}
+                <span className="text-primary">{estimate.credits} credits</span>
               </p>
               <p className="text-xs text-muted-foreground">
                 {estimate.gamesOnSlate} game(s) on the ESPN slate, {estimate.gamesPriced} priced by The Odds API
@@ -76,6 +79,12 @@ export function NflFetchButton({ date, disabled }: { date: string; disabled?: bo
                   : " Credit balance unknown until the first paid call."}
               </p>
               <p className="text-xs text-muted-foreground">Markets: {estimate.markets.join(", ")}</p>
+              {estimate.altMarkets.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Includes alternate ladders for {estimate.altMarkets.join(", ")} (+{estimate.altCredits} credits) — stored for fitting the
+                  books&apos; spread, never shown as props.
+                </p>
+              )}
               {estimate.reason && <p className="text-xs text-warning">{estimate.reason}</p>}
             </div>
             <button onClick={() => setEstimate(null)} className="text-muted-foreground hover:text-foreground" aria-label="Dismiss">

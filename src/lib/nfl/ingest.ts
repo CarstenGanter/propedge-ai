@@ -1,7 +1,8 @@
 import "server-only";
 import { getSettings } from "@/lib/settings";
 import { hasKey } from "@/lib/providers/config";
-import { estimateCredits, filterEventsForSlate, listEvents, notStartedYet } from "@/lib/providers/live/theOddsApi";
+import { estimateCredits, fetchPlayerProps, filterEventsForSlate, listEvents, notStartedYet } from "@/lib/providers/live/theOddsApi";
+import { saveQuotes } from "@/lib/oddsStore";
 import { getOddsCredits, recordOddsCredits } from "@/lib/providerCache";
 import { ingestOddsPropsForSport } from "@/lib/oddsIngest";
 import { generatePicksForDate, type GenerationSummary } from "@/lib/generate";
@@ -18,12 +19,22 @@ import { nflSeasonForDate, toNflSlateDate } from "./slate";
  * aggregates (new box scores only) → ranked picks.
  */
 
+/**
+ * Alternate-line ladders bought with each slate fetch, for fitting the
+ * consensus spread. ~1 credit per game each (about 13 a Sunday); approved for
+ * receiving yards on 2026-10-20. Other prop types need approval first.
+ */
+export const ALT_LADDER_PROP_TYPES = ["Receiving Yards"];
+
 export interface NflFetchEstimate {
   date: string;
   gamesOnSlate: number; // per ESPN
   gamesPriced: number; // per The Odds API events list (what would be charged)
   gamesToFetch: number; // after the max-games cap
   markets: string[];
+  /** Alternate ladders bought alongside, and their share of `credits`. */
+  altMarkets: string[];
+  altCredits: number;
   credits: number;
   creditsKnownRemaining: number | null;
   creditsAfter: number | null;
@@ -43,6 +54,8 @@ export async function estimateNflFetch(date: string): Promise<NflFetchEstimate> 
     gamesPriced: 0,
     gamesToFetch: 0,
     markets,
+    altMarkets: ALT_LADDER_PROP_TYPES,
+    altCredits: 0,
     credits: 0,
     creditsKnownRemaining: (await getOddsCredits())?.remaining ?? null,
     creditsAfter: null,
@@ -65,12 +78,14 @@ export async function estimateNflFetch(date: string): Promise<NflFetchEstimate> 
     ),
   );
   const gamesToFetch = Math.min(priced.length, settings.nflMaxGames);
-  const credits = estimateCredits(gamesToFetch, markets.length);
+  const altCredits = estimateCredits(gamesToFetch, ALT_LADDER_PROP_TYPES.length);
+  const credits = estimateCredits(gamesToFetch, markets.length) + altCredits;
   const creditsAfter = remaining != null ? remaining - credits : null;
   const est: NflFetchEstimate = {
     ...base,
     gamesPriced: priced.length,
     gamesToFetch,
+    altCredits,
     credits,
     creditsKnownRemaining: remaining,
     creditsAfter,
@@ -121,6 +136,8 @@ export interface NflIngestSummary {
   teamPicks: TeamGenerationSummary | null;
   /** See OddsIngestResult.underdogPricesReal. */
   underdogPricesReal?: boolean | null;
+  /** Alternate-ladder quotes stored for the σ fit. */
+  altQuotes?: number;
   error?: string;
 }
 
@@ -162,6 +179,19 @@ export async function ingestNflSlate(
       summary.creditsRemaining = r.creditsRemaining ?? summary.creditsRemaining;
       summary.underdogPricesReal = r.underdogPricesReal;
       if (!r.ok) summary.error = r.error;
+      // Alternate ladders: quotes for the odds store only, priced into the estimate above.
+      if (r.ok && ALT_LADDER_PROP_TYPES.length > 0) {
+        const alt = await fetchPlayerProps(process.env.ODDS_API_KEY!, "NFL", {
+          maxEvents: settings.nflMaxGames,
+          slateDate: date,
+          toSlate: toNflSlateDate,
+          propTypes: ALT_LADDER_PROP_TYPES,
+          alternates: true,
+        });
+        await recordOddsCredits(alt.status.remaining, alt.status.used);
+        summary.altQuotes = await saveQuotes(alt.quotes, new Date(), "alt");
+        if (alt.status.remaining != null) summary.creditsRemaining = alt.status.remaining;
+      }
     } else {
       summary.reason = estimate.reason;
     }

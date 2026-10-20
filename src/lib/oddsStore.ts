@@ -5,11 +5,13 @@ import { consensusAsOf, type StoredOddsQuote } from "@/lib/analysis/quoteHistory
 import type { ConsensusModel } from "@/lib/analysis/marketConsensus";
 
 /**
- * The odds store: every fetched quote, appended with its fetch time. Costs no
- * credits — it keeps what the slate fetch and the closing capture already buy.
+ * The odds store: every fetched quote, appended with its fetch time. The slate
+ * and closing quotes cost nothing extra — they keep what those fetches already
+ * buy. Alternate ladders ("alt") are a paid addition: one credit per game per
+ * alternate market, shown in the fetch estimate.
  */
 
-export type FetchKind = "slate" | "closing";
+export type FetchKind = "slate" | "closing" | "alt";
 
 function toDate(iso: string | undefined): Date | null {
   if (!iso) return null;

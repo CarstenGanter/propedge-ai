@@ -97,9 +97,23 @@ function sportFamily(sportKey: string): string {
 }
 
 /** propType label for a given Odds API market key (reverse lookup). */
+/**
+ * Alternate-line ladders: several lines per player, Over only at most books.
+ * Stored for fitting the consensus spread (the σ task), never turned into
+ * props. One credit per game per market; only the key verified against the
+ * live feed (2026-10-17) is listed — add others once their cost is approved.
+ */
+export const ALT_MARKET_KEYS: Record<string, Record<string, string>> = {
+  americanfootball: {
+    "Receiving Yards": "player_reception_yds_alternate",
+  },
+};
+
 function propTypeForMarket(sportKey: string, marketKey: string): string | null {
-  const fam = MARKET_KEYS[sportFamily(sportKey)] ?? {};
-  for (const [label, key] of Object.entries(fam)) if (key === marketKey) return label;
+  for (const table of [MARKET_KEYS, ALT_MARKET_KEYS]) {
+    const fam = table[sportFamily(sportKey)] ?? {};
+    for (const [label, key] of Object.entries(fam)) if (key === marketKey) return label;
+  }
   return null;
 }
 
@@ -486,6 +500,8 @@ export interface FetchPropsOptions {
   toSlate?: (iso: string) => string;
   /** Restrict to these prop types (labels from PROP_TYPES); default = every market for the sport. */
   propTypes?: string[];
+  /** Fetch the alternate-line markets instead: quotes only, no props. */
+  alternates?: boolean;
   /**
    * Keep only events that pass this test. Applied before any paid request, so
    * an event it rejects costs nothing — the event list is free.
@@ -530,7 +546,7 @@ export async function fetchPlayerProps(
   let totalEvents = 0;
 
   for (const comp of comps) {
-    const fam = MARKET_KEYS[sportFamily(comp.sportKey)] ?? {};
+    const fam = (options.alternates ? ALT_MARKET_KEYS : MARKET_KEYS)[sportFamily(comp.sportKey)] ?? {};
     const marketKeys = options.propTypes
       ? options.propTypes.map((p) => fam[p]).filter((k): k is string => Boolean(k))
       : Object.values(fam);
@@ -554,7 +570,7 @@ export async function fetchPlayerProps(
       if (r.used != null) used = r.used;
       if (r.error) lastError = r.error;
       if (r.data) {
-        all.push(...normalizeEvent(r.data, comp.sportKey, comp.label));
+        if (!options.alternates) all.push(...normalizeEvent(r.data, comp.sportKey, comp.label));
         quotes.push(...flattenEventQuotes(r.data, comp.sportKey, ev.id));
         priced.push({ home: ev.home_team, away: ev.away_team });
       }
