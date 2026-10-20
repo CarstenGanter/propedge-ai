@@ -251,7 +251,10 @@
       "Bash(node --conditions=react-server --env-file=.env --import tsx src/jobs/research/validateConsensusSigma.ts)",
       "Bash(node --conditions=react-server --env-file=.env --import tsx src/jobs/research/fitConsensusSigma.ts)",
       "Bash(sqlite3 prisma/dev.db \"select lineKind, marketMethod, count\\(*\\) from PropPrediction where source='backfill' group by 1,2\")",
-      "Bash(time node --conditions=react-server --env-file=.env --import tsx src/jobs/research/fitRedistribution.ts)"
+      "Bash(time node --conditions=react-server --env-file=.env --import tsx src/jobs/research/fitRedistribution.ts)",
+      "Bash(node --conditions=react-server --env-file=.env --import tsx src/jobs/research/gateTeammateBoost.ts)",
+      "Bash(sqlite3 prisma/dev.db \"select pp.propType, count\\(*\\) total, sum\\(p.evidenceJson like '%eammate%' or p.reasonsForJson like '%eammate%' or p.scoreBreakdownJson like '%eammate%'\\) teammate from Pick p join PlayerProp pp on pp.id=p.playerPropId where pp.sport='NFL' and p.isDemo=0 and p.date>='2026-09-20' group by pp.propType\")",
+      "Bash(sqlite3 prisma/dev.db \"select substr\\(evidenceJson, instr\\(evidenceJson,'eammate'\\)-120, 260\\) from Pick where evidenceJson like '%eammate%' and isDemo=0 limit 2\")"
     ],
     "additionalDirectories": [
       "/Users/carstenganter/Code/propedge-ai/src/lib/nfl",
