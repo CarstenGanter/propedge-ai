@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { ingestOddsPropsForSport, type OddsIngestResult } from "@/lib/oddsIngest";
 import type { Sport } from "@/types";
+import { withCreditKind } from "@/lib/creditLedger";
 
 /**
  * Fetch today's player props for a sport from The Odds API, de-vig them, and
@@ -12,7 +13,7 @@ export async function fetchPropsFromOddsApi(
   sport: Sport,
   maxEvents = 10,
 ): Promise<OddsIngestResult> {
-  const result = await ingestOddsPropsForSport(sport, maxEvents);
+  const result = await withCreditKind("manual", () => ingestOddsPropsForSport(sport, maxEvents));
   if (result.ok) {
     for (const p of ["/", "/picks", "/research", "/results"]) revalidatePath(p);
   }

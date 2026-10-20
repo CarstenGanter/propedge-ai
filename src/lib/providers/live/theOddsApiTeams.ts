@@ -1,6 +1,7 @@
 import type { MoneylineOdds } from "@/types";
 import { LEAGUE_CONFIG, type League } from "@/lib/teamLeagues";
 import { americanToProb } from "./theOddsApi";
+import { reportOddsApiCall } from "./oddsApiLedger";
 
 /**
  * The Odds API — moneyline (h2h) for game-winner picks. Uses the cheap bulk
@@ -23,6 +24,8 @@ async function fetchJson<T>(url: string, timeoutMs = 9000): Promise<FetchResult<
   try {
     const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
     const remaining = Number(res.headers.get("x-requests-remaining"));
+    const last = res.headers.get("x-requests-last");
+    await reportOddsApiCall({ url, credits: last == null ? null : Number(last) || null, remaining: Number.isFinite(remaining) ? remaining : null, status: res.status });
     if (!res.ok) {
       return { data: null, remaining: Number.isFinite(remaining) ? remaining : null, status: res.status, error: (await res.text()).slice(0, 200) };
     }

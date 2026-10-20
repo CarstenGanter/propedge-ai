@@ -12,6 +12,7 @@ import { getGameResult } from "@/lib/providers/live/espnTeams";
 import { isLeague, type League } from "@/lib/teamLeagues";
 import { hasKey } from "@/lib/providers/config";
 import { getOddsCredits } from "@/lib/providerCache";
+import { withCreditKind } from "@/lib/creditLedger";
 import { todaySlate } from "@/lib/utils/dates";
 import { ingestNflSlate } from "@/lib/nfl/ingest";
 import { todayNflSlate } from "@/lib/nfl/slate";
@@ -87,7 +88,7 @@ export async function runDailyRefresh(opts?: {
       });
       continue; // picks for the NFL slate were generated inside ingestNflSlate
     }
-    const r = await ingestOddsPropsForSport(sport, { maxEvents });
+    const r = await withCreditKind("daily", () => ingestOddsPropsForSport(sport, { maxEvents }));
     if (r.creditsRemaining != null) creditsRemaining = r.creditsRemaining;
     sportsOut.push({ sport, imported: r.imported, events: r.events, error: r.error });
     for (const d of r.dates) dates.add(d);

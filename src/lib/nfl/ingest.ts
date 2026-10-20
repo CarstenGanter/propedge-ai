@@ -4,6 +4,7 @@ import { hasKey } from "@/lib/providers/config";
 import { estimateCredits, fetchPlayerProps, filterEventsForSlate, listEvents, notStartedYet } from "@/lib/providers/live/theOddsApi";
 import { saveQuotes } from "@/lib/oddsStore";
 import { getOddsCredits, recordOddsCredits } from "@/lib/providerCache";
+import { withCreditKind } from "@/lib/creditLedger";
 import { ingestOddsPropsForSport } from "@/lib/oddsIngest";
 import { generatePicksForDate, type GenerationSummary } from "@/lib/generate";
 import { generateTeamPicksForDate, type TeamGenerationSummary } from "@/lib/generateTeams";
@@ -168,26 +169,30 @@ export async function ingestNflSlate(
     summary.creditsRemaining = estimate.creditsKnownRemaining;
     if (estimate.allowed) {
       const settings = await getSettings();
-      const r = await ingestOddsPropsForSport("NFL", {
-        maxEvents: settings.nflMaxGames,
-        slateDate: date,
-        toSlate: toNflSlateDate,
-        propTypes: settings.nflMarkets,
-        gameIdResolver: (home, away) => findNflGame(slate, home, away)?.eventId ?? null,
-      });
+      const r = await withCreditKind("slate", () =>
+        ingestOddsPropsForSport("NFL", {
+          maxEvents: settings.nflMaxGames,
+          slateDate: date,
+          toSlate: toNflSlateDate,
+          propTypes: settings.nflMarkets,
+          gameIdResolver: (home, away) => findNflGame(slate, home, away)?.eventId ?? null,
+        }),
+      );
       summary.propsImported = r.imported;
       summary.creditsRemaining = r.creditsRemaining ?? summary.creditsRemaining;
       summary.underdogPricesReal = r.underdogPricesReal;
       if (!r.ok) summary.error = r.error;
       // Alternate ladders: quotes for the odds store only, priced into the estimate above.
       if (r.ok && ALT_LADDER_PROP_TYPES.length > 0) {
-        const alt = await fetchPlayerProps(process.env.ODDS_API_KEY!, "NFL", {
-          maxEvents: settings.nflMaxGames,
-          slateDate: date,
-          toSlate: toNflSlateDate,
-          propTypes: ALT_LADDER_PROP_TYPES,
-          alternates: true,
-        });
+        const alt = await withCreditKind("alt", () =>
+          fetchPlayerProps(process.env.ODDS_API_KEY!, "NFL", {
+            maxEvents: settings.nflMaxGames,
+            slateDate: date,
+            toSlate: toNflSlateDate,
+            propTypes: ALT_LADDER_PROP_TYPES,
+            alternates: true,
+          }),
+        );
         await recordOddsCredits(alt.status.remaining, alt.status.used);
         summary.altQuotes = await saveQuotes(alt.quotes, new Date(), "alt");
         if (alt.status.remaining != null) summary.creditsRemaining = alt.status.remaining;

@@ -391,3 +391,19 @@ model NewsFetch {
 
   @@index([status, dueAt])
 }
+
+// Every Odds API request that cost credits: its exact cost (x-requests-last),
+// the balance after it, and what kind of fetch made it. Written where every
+// request passes through, so nothing can spend without a line here; a call
+// site that forgets to say what it is logs as "untagged".
+model CreditSpend {
+  id        String   @id @default(cuid())
+  at        DateTime
+  kind      String // slate | alt | closing | closing-moneyline | news | team-picks | manual | daily | untagged
+  credits   Int
+  remaining Int?
+  endpoint  String // the request path and markets, API key removed
+  status    Int
+
+  @@index([at])
+}

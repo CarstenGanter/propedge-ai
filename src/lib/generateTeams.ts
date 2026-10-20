@@ -13,6 +13,7 @@ import {
 } from "@/lib/providers/live/mlbStats";
 import { hasKey } from "@/lib/providers/config";
 import { recordOddsCredits } from "@/lib/providerCache";
+import { withCreditKind } from "@/lib/creditLedger";
 import { toSlateDate } from "@/lib/utils/dates";
 import { teamsMatch, lookupTeam } from "@/lib/utils/teamName";
 import { LEAGUE_CONFIG, isLeague, type League } from "@/lib/teamLeagues";
@@ -121,7 +122,7 @@ export async function generateTeamPicksForDate(date: string): Promise<TeamGenera
         continue;
       }
     }
-    const ml = await fetchMoneylines(league, process.env.ODDS_API_KEY!);
+    const ml = await withCreditKind("team-picks", () => fetchMoneylines(league, process.env.ODDS_API_KEY!));
     if (ml.creditsRemaining != null) creditsRemaining = ml.creditsRemaining;
     await recordOddsCredits(ml.creditsRemaining, null);
     if (!ml.ok || ml.games.length === 0) {

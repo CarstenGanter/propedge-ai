@@ -5,6 +5,7 @@ import { getSettings } from "@/lib/settings";
 import { hasKey } from "@/lib/providers/config";
 import { fetchPlayerProps } from "@/lib/providers/live/theOddsApi";
 import { saveQuotes } from "@/lib/oddsStore";
+import { withCreditKind } from "@/lib/creditLedger";
 import { teamsMatch } from "@/lib/utils/teamName";
 import { canReserve, classifyWindow, NEWS_TRIAL, planFetches, shouldExecute } from "./newsFetchTrial";
 import type { NflGame } from "./schedule";
@@ -94,11 +95,13 @@ export async function runNewsFetches(source: "launchd" | "app", now = new Date()
         done.push(`${f.playerName} #${f.seq} skipped (${note})`);
         continue;
       }
-      const res = await fetchPlayerProps(process.env.ODDS_API_KEY!, "NFL", {
-        maxEvents: 1,
-        propTypes: [...NEWS_TRIAL.propTypes],
-        eventFilter: (e) => teamsMatch(e.home_team, f.homeTeam) && teamsMatch(e.away_team, f.awayTeam),
-      });
+      const res = await withCreditKind("news", () =>
+        fetchPlayerProps(process.env.ODDS_API_KEY!, "NFL", {
+          maxEvents: 1,
+          propTypes: [...NEWS_TRIAL.propTypes],
+          eventFilter: (e) => teamsMatch(e.home_team, f.homeTeam) && teamsMatch(e.away_team, f.awayTeam),
+        }),
+      );
       await recordOddsCredits(res.status.remaining, res.status.used);
       const fetchedAt = new Date();
       const stored = await saveQuotes(res.quotes, fetchedAt, "news");

@@ -1,6 +1,7 @@
 import type { Direction, Sport } from "@/types";
 import { buildConsensus, favouredSide, type BookQuote, type ConsensusModel, type RawQuote } from "@/lib/analysis/marketConsensus";
 import { NFL_PROP_BOOKMAKERS, oddsTargetQuery, type OddsTarget } from "./oddsBooks";
+import { reportOddsApiCall } from "./oddsApiLedger";
 
 /**
  * The Odds API (v4) client for player props.
@@ -197,6 +198,7 @@ async function fetchJson<T>(url: string, timeoutMs = 9000): Promise<FetchResult<
     const remaining = numHeader(res.headers.get("x-requests-remaining"));
     const used = numHeader(res.headers.get("x-requests-used"));
     const last = numHeader(res.headers.get("x-requests-last"));
+    await reportOddsApiCall({ url, credits: last, remaining, status: res.status });
     if (!res.ok) {
       return { data: null, remaining, used, last, status: res.status, error: await safeText(res) };
     }
