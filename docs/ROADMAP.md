@@ -68,9 +68,14 @@ alternate-line reading.
   strong price result; outcomes don't have the power to confirm it.
 - **Decision (2026-10-20): adopted for receiving yards** — "passes on prices; outcome gate
   underpowered (+0.0002, CI −0.0014 to +0.0020, n=361)". The "~" guard stays. Horton's alternate
-  Under 14.5 off a 3.5 line now reads 73.2% (it read 84.9%). **Revert rule:** re-run
-  `npm run research:sigma-validate` as off-line props accumulate; revert if the log-loss
-  interval ends up clearly above zero.
+  Under 14.5 off a 3.5 line now reads 73.2% (it read 84.9%).
+- **Revert rule (decided 2026-10-20):** one pooled sample — the original held-out weeks (before
+  2026-10-15) plus every week after the fit week (2026-10-20 on), never the fit week itself, whose
+  prices the fit used. Revert only if that pooled log-loss interval (fitted − current, 95%
+  game-bootstrap) sits clearly above zero, i.e. its lower bound is above zero. The held-out,
+  fit-week and after-fit samples are still shown separately, for information; they trigger
+  nothing. `npm run research:sigma-validate` prints the pooled sample last; `npm run
+  research:weekly` prints the keep/REVERT verdict from it.
 - **Next look:** a held-out price test runs automatically once the next slate's ladders are
   stored (receiving yards, ~13 credits a week, approved); the outcome gate is re-run as graded
   off-line props accumulate. Other prop types need their own ladders, at ~13 credits a week each:

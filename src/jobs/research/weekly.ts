@@ -122,6 +122,7 @@ async function main() {
     }
     const v = sigmaVerdict(sigma.samples);
     out(`  verdict: ${v.verdict} — ${v.reason}`);
+    out("  (the revert rule reads the pooled sample only; the others are for information)");
   }
 
   out("\nRB-OUT LATENCY (minutes from a change to Out until each venue moved teammates' lines)");

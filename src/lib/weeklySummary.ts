@@ -8,7 +8,7 @@ import type { Interval } from "@/lib/analysis/marketSkill";
 
 /** One sample of the σ validation (validateConsensusSigma.ts). */
 export interface SigmaSample {
-  sample: "held-out" | "fit-week" | "after-fit";
+  sample: "held-out" | "fit-week" | "after-fit" | "pooled";
   n: number;
   games: number;
   /** Mean log-loss, fitted − current spread; negative favours fitted. */
@@ -21,17 +21,20 @@ export interface SigmaSample {
 }
 
 /**
- * The fitted σ was adopted on prices with an underpowered outcome gate; the
- * standing rule is to revert if the log-loss interval ends up clearly above
- * zero — fitted reading outcomes worse than the current spread. Any sample
- * whose outcomes the fit never saw counts.
+ * The fitted σ was adopted on prices with an underpowered outcome gate. The
+ * revert rule (decided 2026-10-20) reads one sample only: the original
+ * held-out weeks pooled with every week after the fit week — never the fit
+ * week, whose prices the fit used. Revert only if that pooled log-loss
+ * interval sits clearly above zero (its 95% lower bound above zero): fitted σ
+ * reading outcomes worse than the current spread. The separate samples are
+ * shown for information and trigger nothing.
  */
 export function sigmaVerdict(samples: SigmaSample[]): { verdict: "keep" | "REVERT"; reason: string } {
-  const worse = samples.filter((s) => s.interval && s.interval.lo > 0);
-  if (worse.length) {
-    return { verdict: "REVERT", reason: `log-loss interval above zero on ${worse.map((s) => s.sample).join(", ")}: fitted σ reads outcomes worse` };
-  }
-  return { verdict: "keep", reason: "no interval sits above zero" };
+  const pooled = samples.find((s) => s.sample === "pooled");
+  if (!pooled?.interval) return { verdict: "keep", reason: "no pooled interval yet" };
+  const iv = `[${pooled.interval.lo.toFixed(4)}, ${pooled.interval.hi.toFixed(4)}]`;
+  if (pooled.interval.lo > 0) return { verdict: "REVERT", reason: `pooled log-loss interval ${iv} sits above zero: fitted σ reads outcomes worse` };
+  return { verdict: "keep", reason: `pooled log-loss interval ${iv} is not above zero` };
 }
 
 const ET = "America/New_York";

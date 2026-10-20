@@ -13,6 +13,11 @@
  * Weeks after it (2026-10-20 on) are reported apart again: neither their
  * prices nor their outcomes were seen by the fit.
  *
+ * Revert rule (decided 2026-10-20): one pooled sample — the held-out weeks
+ * plus the weeks after the fit week, never the fit week itself. Revert only if
+ * its log-loss interval sits clearly above zero. The separate samples are for
+ * information and trigger nothing.
+ *
  * Gate (stated before running): the fitted spread ships only if its held-out
  * log-loss is lower with the 95% game-bootstrap interval of the difference
  * below zero, and its calibration error is no worse.
@@ -130,6 +135,12 @@ async function main() {
     report("held-out", `PRIMARY — held-out weeks (before ${FIT_WEEK_START})`, pairs.filter((p) => p.date < FIT_WEEK_START), true),
     report("fit-week", `SECONDARY — the fit week (its prices fitted σ; its outcomes did not)`, pairs.filter((p) => p.date >= FIT_WEEK_START && p.date < FIT_WEEK_END), false),
     report("after-fit", `AFTER — weeks from ${FIT_WEEK_END} (prices and outcomes both unseen by the fit)`, pairs.filter((p) => p.date >= FIT_WEEK_END), false),
+    report(
+      "pooled",
+      `POOLED — held-out + after-fit weeks, never the fit week (the revert rule's sample: revert only if this interval sits above zero)`,
+      pairs.filter((p) => p.date < FIT_WEEK_START || p.date >= FIT_WEEK_END),
+      false,
+    ),
   ];
   emitSummary("sigma", { types, samples });
   await prisma.$disconnect();

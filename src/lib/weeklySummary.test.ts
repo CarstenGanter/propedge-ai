@@ -6,18 +6,25 @@ const sample = (s: SigmaSample["sample"], lo: number, hi: number): SigmaSample =
 });
 
 describe("sigmaVerdict", () => {
-  it("keeps the fitted σ while every interval includes or sits below zero", () => {
-    expect(sigmaVerdict([sample("held-out", -0.0014, 0.002), sample("fit-week", -0.003, -0.001)]).verdict).toBe("keep");
+  it("keeps the fitted σ while the pooled interval includes or sits below zero", () => {
+    expect(sigmaVerdict([sample("held-out", -0.0014, 0.002), sample("pooled", -0.0012, 0.0018)]).verdict).toBe("keep");
+    expect(sigmaVerdict([sample("pooled", -0.003, -0.001)]).verdict).toBe("keep");
   });
 
-  it("says REVERT when any unseen-outcome sample's interval sits above zero", () => {
-    const v = sigmaVerdict([sample("held-out", -0.0014, 0.002), sample("after-fit", 0.0003, 0.004)]);
+  it("says REVERT only when the pooled interval sits above zero", () => {
+    const v = sigmaVerdict([sample("held-out", -0.0014, 0.002), sample("pooled", 0.0003, 0.004)]);
     expect(v.verdict).toBe("REVERT");
-    expect(v.reason).toContain("after-fit");
+    expect(v.reason).toContain("pooled");
   });
 
-  it("ignores empty samples", () => {
-    expect(sigmaVerdict([{ ...sample("after-fit", 0, 0), n: 0, interval: null, diff: null }]).verdict).toBe("keep");
+  it("lets no separate sample trigger anything — not after-fit, not the fit week", () => {
+    const v = sigmaVerdict([sample("fit-week", 0.001, 0.005), sample("after-fit", 0.0003, 0.004), sample("held-out", 0.0001, 0.002), sample("pooled", -0.0002, 0.003)]);
+    expect(v.verdict).toBe("keep");
+  });
+
+  it("keeps when there is no pooled interval", () => {
+    expect(sigmaVerdict([{ ...sample("pooled", 0, 0), n: 0, interval: null, diff: null }]).verdict).toBe("keep");
+    expect(sigmaVerdict([sample("after-fit", 0.001, 0.004)]).verdict).toBe("keep");
   });
 });
 
