@@ -315,6 +315,12 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
       await prisma.playerProp.update({ where: { id: prop.id }, data: { playerTeamId: resolvedTeamId } });
       prop.playerTeamId = resolvedTeamId;
     }
+    // And who the player is, by id, so grading never rests on a spelling.
+    const resolvedAthleteId = prop.sport === "NFL" ? bundle.playerStats?.espnAthleteId : undefined;
+    if (resolvedAthleteId && resolvedAthleteId !== prop.espnAthleteId) {
+      await prisma.playerProp.update({ where: { id: prop.id }, data: { espnAthleteId: resolvedAthleteId } });
+      prop.espnAthleteId = resolvedAthleteId;
+    }
 
     // Entry line for CLV: no-vig probability of the chosen side at pick time.
     const entryProb = clvEntryProb(bundle.market?.probOverAtLine ?? bundle.market?.noVigProbOver, prop.direction as Direction);

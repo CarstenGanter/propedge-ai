@@ -10,6 +10,12 @@ import { nameMatch, normName } from "@/lib/utils/playerName";
  * told apart from one who sat out — that left Humphrey's Lower 14.5 on
  * 2026-10-15 ungraded for days. Snap counts settle it: a player with an
  * offensive snap and no stat line finished at 0; one with neither is void.
+ *
+ * Players are matched by id: the prop's ESPN athlete id, found in that week's
+ * nflverse roster, gives the gsis id every stat and snap row is keyed by — and
+ * the team he was on that week, so a mid-season trade grades against the
+ * right game. A name match against that week's rosters is the fallback for a
+ * prop with no ESPN id.
  */
 
 export interface StatRow {
@@ -47,13 +53,40 @@ export interface SeasonData {
    * than reported as unmatched.
    */
   specialTeamsOnly?: Appearance[];
-  /**
-   * The league's players with their team (nflverse players.csv). A prop whose
-   * player is on one of the two teams but has no snap and no stat that week did
-   * not play: void. `team` is the player's latest team, so a mid-season move
-   * can still leave a prop unmatched rather than wrongly voided.
-   */
-  roster?: { gsisId: string; name: string; team: string }[];
+  /** nflverse weekly rosters: who was on which team, with which status, each week. */
+  roster?: RosterEntry[];
+}
+
+export interface RosterEntry {
+  gsisId: string;
+  espnId: string | null;
+  week: number;
+  team: string;
+  /** ACT, INA (inactive), RES (reserve/injured), … */
+  status: string;
+  name: string;
+  /** "football name" + last name, e.g. "D.J. Moore" for full name "Denniston Moore". */
+  altName?: string;
+}
+
+/** nflverse roster_weekly CSV → entries. */
+export function parseWeeklyRoster(csv: string): RosterEntry[] {
+  const { rows } = parseCsv(csv);
+  const out: RosterEntry[] = [];
+  for (const r of rows) {
+    const week = Number(r.week);
+    if (!r.gsis_id || !Number.isFinite(week)) continue;
+    out.push({
+      gsisId: r.gsis_id,
+      espnId: r.espn_id || null,
+      week,
+      team: r.team ?? "",
+      status: r.status ?? "",
+      name: r.full_name ?? "",
+      altName: r.football_name && r.last_name ? `${r.football_name} ${r.last_name}` : undefined,
+    });
+  }
+  return out;
 }
 
 const n0 = (v: string | undefined): number => {
@@ -138,10 +171,12 @@ export function weekForGame(rows: StatRow[], home: string, away: string): number
 }
 
 export type Grade =
-  | { kind: "graded"; value: number; gsisId: string; week: number; fromSnapsOnly: boolean }
-  | { kind: "void"; gsisId: string; week: number; reason: "special teams only" | "did not play" }
-  | { kind: "unmatched"; week: number }
+  | { kind: "graded"; value: number; gsisId: string; week: number; fromSnapsOnly: boolean; matchedBy: MatchedBy }
+  | { kind: "void"; gsisId: string; week: number; reason: string; matchedBy: MatchedBy }
+  | { kind: "unmatched"; week: number; reason: string }
   | { kind: "pending" };
+
+export type MatchedBy = "id" | "name";
 
 interface Candidate {
   gsisId: string;
@@ -157,22 +192,33 @@ export function baseName(name: string): string {
   return normName(name).replace(/\s+(jr|sr|ii|iii|iv|v)$/, "");
 }
 
-function matchPlayer(playerName: string, candidates: Candidate[]): string | null {
+/**
+ * Two players of one name in the same game (on 2026-10-18 the Eagles' DeVonta
+ * Smith and a Panthers practice-squad Devonta Smith) resolve to the one who
+ * played that week; if both or neither played, the match stays ambiguous.
+ */
+function pick(ids: string[], played: Set<string>): string | null {
+  if (ids.length === 1) return ids[0];
+  const active = ids.filter((id) => played.has(id));
+  return active.length === 1 ? active[0] : null;
+}
+
+function matchPlayer(playerName: string, candidates: Candidate[], played: Set<string> = new Set()): string | null {
   const target = baseName(playerName);
   const exact = [...new Set(candidates.filter((c) => baseName(c.name) === target).map((c) => c.gsisId))];
-  if (exact.length === 1) return exact[0];
-  if (exact.length > 1) return null;
+  if (exact.length > 0) return pick(exact, played);
   const loose = [...new Set(candidates.filter((c) => nameMatch(baseName(c.name), target)).map((c) => c.gsisId))];
-  return loose.length === 1 ? loose[0] : null;
+  return loose.length > 0 ? pick(loose, played) : null;
 }
 
 /**
- * Grade one prop. The player is matched by name among the two teams' players
- * that week only, so a common surname elsewhere in the league cannot collide.
- * Pending means the game is not in the data yet.
+ * Grade one prop. By ESPN id when the prop has one and that week's roster
+ * knows it; otherwise by name among the two teams' players that week, so a
+ * common surname elsewhere in the league cannot collide. Pending means the
+ * game is not in the data yet.
  */
 export function gradeProp(
-  prop: { playerName: string; propType: string; home: string; away: string },
+  prop: { playerName: string; espnId?: string | null; propType: string; home: string; away: string },
   season: SeasonData,
 ): Grade {
   const week = weekForGame(season.rows, prop.home, prop.away);
@@ -181,18 +227,38 @@ export function gradeProp(
   const rows = season.rows.filter((r) => r.week === week && teams.has(r.team));
   const apps = season.appearances.filter((a) => a.week === week && teams.has(a.team));
   const stOnly = (season.specialTeamsOnly ?? []).filter((a) => a.week === week && teams.has(a.team));
-  const gsisId = matchPlayer(prop.playerName, [...rows, ...apps, ...stOnly]);
-  if (!gsisId) {
-    const rostered = matchPlayer(prop.playerName, (season.roster ?? []).filter((r) => teams.has(r.team)));
-    return rostered ? { kind: "void", gsisId: rostered, week, reason: "did not play" } : { kind: "unmatched", week };
+  const weekRoster = (season.roster ?? []).filter((r) => r.week === week);
+
+  let gsisId: string | null = null;
+  let matchedBy: MatchedBy = "name";
+  if (prop.espnId) {
+    const entry = weekRoster.find((r) => r.espnId === prop.espnId);
+    if (entry && !teams.has(entry.team)) return { kind: "unmatched", week, reason: `id is on ${entry.team} that week` };
+    if (entry) {
+      gsisId = entry.gsisId;
+      matchedBy = "id";
+    }
   }
+  if (!gsisId) {
+    const rosterNames = weekRoster
+      .filter((r) => teams.has(r.team))
+      .flatMap((r) => [{ gsisId: r.gsisId, name: r.name }, ...(r.altName ? [{ gsisId: r.gsisId, name: r.altName }] : [])]);
+    const played = new Set([...rows.map((r) => r.gsisId), ...apps.map((a) => a.gsisId)]);
+    gsisId = matchPlayer(prop.playerName, [...rows, ...apps, ...stOnly, ...rosterNames], played);
+  }
+  if (!gsisId) return { kind: "unmatched", week, reason: "no player of that name on either team that week" };
+
   const row = rows.find((r) => r.gsisId === gsisId);
   if (row) {
     const value = statValue(row, prop.propType);
-    return value == null ? { kind: "unmatched", week } : { kind: "graded", value, gsisId, week, fromSnapsOnly: false };
+    return value == null
+      ? { kind: "unmatched", week, reason: `nflverse cannot grade ${prop.propType}` }
+      : { kind: "graded", value, gsisId, week, fromSnapsOnly: false, matchedBy };
   }
-  if (apps.some((a) => a.gsisId === gsisId)) return { kind: "graded", value: 0, gsisId, week, fromSnapsOnly: true };
-  return { kind: "void", gsisId, week, reason: "special teams only" };
+  if (apps.some((a) => a.gsisId === gsisId)) return { kind: "graded", value: 0, gsisId, week, fromSnapsOnly: true, matchedBy };
+  if (stOnly.some((a) => a.gsisId === gsisId)) return { kind: "void", gsisId, week, reason: "special teams only", matchedBy };
+  const status = weekRoster.find((r) => r.gsisId === gsisId)?.status;
+  return { kind: "void", gsisId, week, reason: `did not play${status ? ` (roster status ${status})` : ""}`, matchedBy };
 }
 
 /** Games a player appeared in during a season, most recent first, with the stat (0 for a snap with no stat line). */

@@ -240,6 +240,8 @@ export interface PlayerStatsContext {
   currentSeasonGames?: number;
   /** The player's own team, as the provider's canonical id (ESPN team id for NFL). */
   playerTeamId?: string;
+  /** The provider's athlete id (ESPN athlete id). */
+  espnAthleteId?: string;
   /** Factual disclosure about the sample, e.g. "Includes 2025 season games (1 of 2026 played)." */
   note?: string;
   source: string;

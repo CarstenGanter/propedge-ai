@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gradeProp, parseGradingStats, priorGames, statValue, weekForGame, type SeasonData, type StatRow } from "./gradeProps";
+import { gradeProp, parseGradingStats, parseWeeklyRoster, priorGames, statValue, weekForGame, type RosterEntry, type SeasonData, type StatRow } from "./gradeProps";
 
 const row = (o: Partial<StatRow>): StatRow => ({
   gsisId: "x",
@@ -44,6 +44,17 @@ describe("parseGradingStats", () => {
   });
 });
 
+describe("parseWeeklyRoster", () => {
+  it("reads ids, team, status and the football name", () => {
+    const csv =
+      "season,team,status,full_name,football_name,last_name,gsis_id,espn_id,week\n" +
+      "2026,BUF,INA,Denniston Moore,D.J.,Moore,00-0034827,3915416,6\n";
+    expect(parseWeeklyRoster(csv)).toEqual([
+      { gsisId: "00-0034827", espnId: "3915416", week: 6, team: "BUF", status: "INA", name: "Denniston Moore", altName: "D.J. Moore" },
+    ]);
+  });
+});
+
 describe("statValue", () => {
   it("adds rushing and receiving for Rush+Rec", () => {
     expect(statValue(row({ rushingYards: 30, receivingYards: 12 }), "Rush+Rec Yards")).toBe(42);
@@ -67,6 +78,7 @@ describe("gradeProp", () => {
       gsisId: "horton",
       week: 6,
       fromSnapsOnly: false,
+      matchedBy: "name",
     });
   });
 
@@ -92,6 +104,7 @@ describe("gradeProp", () => {
       gsisId: "gunner",
       week: 6,
       reason: "special teams only",
+      matchedBy: "name",
     });
   });
 
@@ -106,13 +119,73 @@ describe("gradeProp", () => {
     });
   });
 
+  const entry = (o: Partial<RosterEntry>): RosterEntry => ({ gsisId: "g", espnId: null, week: 6, team: "SEA", status: "ACT", name: "N", ...o });
+
   it("voids a rostered player with no snap and no stat — he did not play", () => {
-    const withRoster: SeasonData = { ...season, roster: [{ gsisId: "inactive", name: "Jordan Addison", team: "SEA" }] };
+    const withRoster: SeasonData = { ...season, roster: [entry({ gsisId: "inactive", name: "Jordan Addison", status: "INA" })] };
     expect(gradeProp({ playerName: "Jordan Addison", propType: "Receptions", home: "DEN", away: "SEA" }, withRoster)).toEqual({
       kind: "void",
       gsisId: "inactive",
       week: 6,
-      reason: "did not play",
+      reason: "did not play (roster status INA)",
+      matchedBy: "name",
+    });
+  });
+
+  it("matches by ESPN id whatever the spelling — the Ogletree case", () => {
+    const s: SeasonData = {
+      rows: [...season.rows, row({ gsisId: "ogletree", name: "Andrew Ogletree", week: 6, team: "DEN", opponent: "SEA", receptions: 3 })],
+      appearances: season.appearances,
+      roster: [entry({ gsisId: "ogletree", espnId: "4722908", team: "DEN", name: "Andrew Ogletree" })],
+    };
+    expect(gradeProp({ playerName: "Drew Ogletree", espnId: "4722908", propType: "Receptions", home: "DEN", away: "SEA" }, s)).toMatchObject({
+      kind: "graded",
+      value: 3,
+      matchedBy: "id",
+    });
+    // Without the id, the spelling difference leaves it unmatched.
+    expect(gradeProp({ playerName: "Drew Ogletree", propType: "Receptions", home: "DEN", away: "SEA" }, s).kind).toBe("unmatched");
+  });
+
+  it("resolves two players of one name to the one who played — the DeVonta Smith case", () => {
+    const s: SeasonData = {
+      rows: [...season.rows, row({ gsisId: "phi-smith", name: "DeVonta Smith", week: 6, team: "DEN", opponent: "SEA", receptions: 6 })],
+      appearances: season.appearances,
+      roster: [
+        entry({ gsisId: "phi-smith", team: "DEN", name: "DeVonta Smith" }),
+        entry({ gsisId: "ps-smith", team: "SEA", name: "Devonta Smith", status: "DEV" }),
+      ],
+    };
+    expect(gradeProp({ playerName: "DeVonta Smith", propType: "Receptions", home: "DEN", away: "SEA" }, s)).toMatchObject({
+      kind: "graded",
+      gsisId: "phi-smith",
+      value: 6,
+    });
+  });
+
+  it("grades a traded player against the team he was on that week", () => {
+    const s: SeasonData = {
+      rows: [
+        ...season.rows,
+        row({ gsisId: "mover", name: "Moved Guy", week: 5, team: "NYG", opponent: "PHI", receivingYards: 10 }),
+        row({ gsisId: "mover", name: "Moved Guy", week: 6, team: "DEN", opponent: "SEA", receivingYards: 55 }),
+        row({ gsisId: "x2", name: "Giants Player", week: 6, team: "NYG", opponent: "DAL" }),
+      ],
+      appearances: [],
+      roster: [
+        entry({ gsisId: "mover", espnId: "e1", week: 5, team: "NYG", name: "Moved Guy" }),
+        entry({ gsisId: "mover", espnId: "e1", week: 6, team: "DEN", name: "Moved Guy" }),
+      ],
+    };
+    expect(gradeProp({ playerName: "Moved Guy", espnId: "e1", propType: "Receiving Yards", home: "DEN", away: "SEA" }, s)).toMatchObject({
+      kind: "graded",
+      value: 55,
+    });
+    // A week-6 prop that put him with the Giants contradicts the roster.
+    expect(gradeProp({ playerName: "Moved Guy", espnId: "e1", propType: "Receiving Yards", home: "NYG", away: "DAL" }, s)).toEqual({
+      kind: "unmatched",
+      week: 6,
+      reason: "id is on DEN that week",
     });
   });
 

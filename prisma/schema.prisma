@@ -24,6 +24,10 @@ model PlayerProp {
   // cannot serve this purpose, so this is what tells us two players are
   // team-mates — which pick'em entries are not allowed to contain.
   playerTeamId    String?
+  // ESPN athlete id, resolved from ESPN team rosters when the prop is scored
+  // (or by research:skill). Grading joins it to nflverse ids (espn_id ->
+  // gsis_id), so a feed spelling never decides which player a prop belongs to.
+  espnAthleteId   String?
   gameId          String?
   gameStartTime   DateTime?
   propType        String

@@ -27,7 +27,8 @@ import zlib from "node:zlib";
 import { prisma } from "@/lib/db/client";
 import { parseCsv } from "@/lib/utils/csv";
 import { nflverseCode } from "@/lib/nfl/teamCodes";
-import { baseName, GRADABLE_PROPS, gradeProp, parseGradingStats, priorGames, type Appearance, type SeasonData } from "@/lib/nfl/gradeProps";
+import { GRADABLE_PROPS, gradeProp, parseGradingStats, parseWeeklyRoster, priorGames, type Appearance, type SeasonData } from "@/lib/nfl/gradeProps";
+import { resolveEspnAthlete } from "@/lib/providers/live/espnPlayerStats";
 import { estimateProbability } from "@/lib/analysis/probabilityModel";
 import { consensusProbOver } from "@/lib/analysis/marketConsensus";
 import { consensusOf, parseSnapshot } from "@/lib/marketSnapshot";
@@ -49,12 +50,17 @@ async function fetchCsv(url: string): Promise<string> {
   return url.endsWith(".gz") ? zlib.gunzipSync(buf).toString("utf8") : buf.toString("utf8");
 }
 
-async function loadSeason(season: number, pfrToGsis: Map<string, string>): Promise<SeasonData> {
-  const [weekly, snaps] = await Promise.all([
+async function loadSeason(season: number, playersPfrToGsis: Map<string, string>): Promise<SeasonData> {
+  const [weekly, snaps, rosterCsv] = await Promise.all([
     fetchCsv(`${BASE}/stats_player/stats_player_week_${season}.csv.gz`),
     fetchCsv(`${BASE}/snap_counts/snap_counts_${season}.csv.gz`),
+    fetchCsv(`${BASE}/weekly_rosters/roster_weekly_${season}.csv`),
   ]);
   const rows = parseGradingStats(weekly);
+  const roster = parseWeeklyRoster(rosterCsv);
+  // Snap counts are keyed by PFR id: the weekly roster links it to gsis, players.csv backs it up.
+  const pfrToGsis = new Map(playersPfrToGsis);
+  for (const r of parseCsv(rosterCsv).rows) if (r.pfr_id && r.gsis_id) pfrToGsis.set(r.pfr_id, r.gsis_id);
   // A snap-count player without a players.csv link is tied to a stat row by name and team.
   const byNameTeam = new Map(rows.map((r) => [`${r.name}|${r.team}`, r.gsisId]));
   const appearances: Appearance[] = [];
@@ -67,7 +73,7 @@ async function loadSeason(season: number, pfrToGsis: Map<string, string>): Promi
     if (Number(r.offense_snaps) > 0) appearances.push(a);
     else if (Number(r.st_snaps) > 0) specialTeamsOnly.push(a);
   }
-  return { rows, appearances, specialTeamsOnly };
+  return { rows, appearances, specialTeamsOnly, roster };
 }
 
 function pct(x: number | undefined | null, d = 1) {
@@ -155,20 +161,27 @@ async function main() {
   const players = parseCsv(await fetchCsv(`${BASE}/players/players.csv`)).rows;
   const pfrToGsis = new Map(players.filter((p) => p.pfr_id && p.gsis_id).map((p) => [p.pfr_id, p.gsis_id]));
   const [current, prior] = await Promise.all([loadSeason(SEASON, pfrToGsis), loadSeason(SEASON - 1, pfrToGsis)]);
-  current.roster = players
-    .filter((pl) => pl.gsis_id && pl.latest_team)
-    .map((pl) => ({ gsisId: pl.gsis_id, name: pl.display_name ?? "", team: pl.latest_team }));
 
   const now = Date.now();
   const props = await prisma.playerProp.findMany({
     where: { sport: "NFL", isDemo: false, propType: { in: [...GRADABLE_PROPS] }, gameStartTime: { lt: new Date(now) } },
   });
 
-  const tally = { graded: 0, snapsOnly: 0, void: 0, unmatched: 0, pending: 0, filled: 0, noGames: 0, noMarket: 0 };
+  // Props scored before ESPN ids were stored get one now, from ESPN team rosters (free, cached).
+  let idsResolved = 0;
+  for (const p of props) {
+    if (p.espnAthleteId) continue;
+    const ref = await resolveEspnAthlete("NFL", p.playerName, p.team, p.opponent);
+    if (!ref) continue;
+    await prisma.playerProp.update({ where: { id: p.id }, data: { espnAthleteId: ref.athleteId } });
+    p.espnAthleteId = ref.athleteId;
+    idsResolved++;
+  }
+
+  const tally = { graded: 0, byId: 0, byName: 0, snapsOnly: 0, void: 0, unmatched: 0, pending: 0, filled: 0, noGames: 0, noMarket: 0 };
   const mismatches: string[] = [];
   const unmatched: { label: string; reason: string }[] = [];
   const voided: string[] = [];
-  const knownPlayers = new Map<string, string>(players.map((pl) => [baseName(pl.display_name ?? ""), pl.latest_team ?? ""]));
   const playerLayer: SkillItem[] = [];
   const venue: VenueItem[] = [];
   let venueSkippedOldMethod = 0;
@@ -184,24 +197,17 @@ async function main() {
       unmatched.push({ label, reason: "team name has no nflverse code" });
       continue;
     }
-    const g = gradeProp({ playerName: p.playerName, propType: p.propType, home, away }, current);
+    const g = gradeProp({ playerName: p.playerName, espnId: p.espnAthleteId, propType: p.propType, home, away }, current);
     if (g.kind === "pending") { tally.pending++; continue; }
     if (g.kind === "unmatched") {
       tally.unmatched++;
-      const team = knownPlayers.get(baseName(p.playerName));
-      unmatched.push({
-        label,
-        reason:
-          team === undefined
-            ? "name not in nflverse players"
-            : team === home || team === away
-              ? `on ${team}'s roster, no snaps or stats that week (did not play)`
-              : `nflverse lists him on ${team || "no team"}`,
-      });
+      unmatched.push({ label, reason: g.reason });
       continue;
     }
-    if (g.kind === "void") { tally.void++; voided.push(`${label}: ${g.reason}`); continue; }
+    if (g.kind === "void") { tally.void++; voided.push(`${label}: ${g.reason} [by ${g.matchedBy}]`); continue; }
     tally.graded++;
+    if (g.matchedBy === "id") tally.byId++;
+    else tally.byName++;
     if (g.fromSnapsOnly) tally.snapsOnly++;
     if (p.actualResult == null) fills.push({ id: p.id, value: g.value });
     else if (Math.abs(p.actualResult - g.value) > 1e-9) mismatches.push(`${p.date} ${p.playerName} ${p.propType}: stored ${p.actualResult}, nflverse ${g.value}`);
@@ -272,7 +278,8 @@ async function main() {
   await prisma.propPrediction.deleteMany({ where: { source: "backfill", modelVersion: BASELINE_V0 } });
   await prisma.propPrediction.createMany({ data: forecasts });
 
-  console.log(`\nGrading: ${JSON.stringify(tally)}`);
+  console.log(`\nESPN ids resolved for props that had none: ${idsResolved}`);
+  console.log(`Grading: ${JSON.stringify(tally)}`);
   console.log(`Results filled where empty: ${tally.filled}. Disagreements with stored results: ${mismatches.length}`);
   for (const m of mismatches.slice(0, 15)) console.log(`  ${m}`);
   console.log(`baseline-v0 forecasts written: ${forecasts.length}`);
@@ -280,12 +287,7 @@ async function main() {
   for (const v of voided) console.log(`  ${v}`);
   console.log(`\nUnmatched props: ${unmatched.length}`);
   for (const u of unmatched) console.log(`  ${u.label}: ${u.reason}`);
-  const reasons = new Map<string, number>();
-  for (const u of unmatched) {
-    const key = u.reason.startsWith("on ") ? "on the roster, did not play" : u.reason.startsWith("nflverse lists him") ? "nflverse lists another team" : u.reason;
-    reasons.set(key, (reasons.get(key) ?? 0) + 1);
-  }
-  console.log(`  by reason: ${JSON.stringify(Object.fromEntries(reasons))}`);
+
 
   const primary = await skillSection(
     `PRIMARY — ${BASELINE_V0}, consensus-v2 market (2026-10-01 on)`,
