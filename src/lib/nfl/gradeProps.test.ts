@@ -47,10 +47,10 @@ describe("parseGradingStats", () => {
 describe("parseWeeklyRoster", () => {
   it("reads ids, team, status and the football name", () => {
     const csv =
-      "season,team,status,full_name,football_name,last_name,gsis_id,espn_id,week\n" +
-      "2026,BUF,INA,Denniston Moore,D.J.,Moore,00-0034827,3915416,6\n";
+      "season,team,position,status,full_name,football_name,last_name,gsis_id,espn_id,week\n" +
+      "2026,BUF,WR,INA,Denniston Moore,D.J.,Moore,00-0034827,3915416,6\n";
     expect(parseWeeklyRoster(csv)).toEqual([
-      { gsisId: "00-0034827", espnId: "3915416", week: 6, team: "BUF", status: "INA", name: "Denniston Moore", altName: "D.J. Moore" },
+      { gsisId: "00-0034827", espnId: "3915416", week: 6, team: "BUF", status: "INA", position: "WR", name: "Denniston Moore", altName: "D.J. Moore" },
     ]);
   });
 });

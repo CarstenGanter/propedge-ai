@@ -107,6 +107,23 @@ with picks. A news-triggered fetch would make it measurable: ~13 games a week ha
 pass-catcher; one fetch of the affected markets after Sunday inactives is ~20–60 credits a week.
 Not enabled — the cost needs approval.
 
+## Removing the teammate-out +6% from receiving props (2026-10-20)
+
+Decision: the flat +6% projection boost when a WR/TE teammate is out no longer applies to Receiving
+Yards and Receptions (task 4 found redistributed targets no better than leaving shares alone).
+Rushing and Rush+Rec keep it. Task 1's gate, run anyway (`gateTeammateBoost.ts`): ESPN's report was
+never stored for old props, so "teammate out" is reconstructed from nflverse weekly rosters, picking
+the definition whose firing rate is closest to production's (40 of 73 stored receiving picks, 55%):
+
+| Reconstruction | Fires on | Skill vs market with → without | Log-loss without − with, affected props |
+| --- | --- | --- | --- |
+| **inactive only (used)** | 70% | 0.033% → 0.033% | 0.00000 (−0.00046 to +0.00045), n=568 |
+| inactive or reserve, played in last 4 | 79% | 0.032% → 0.033% | −0.00001 (−0.00045 to +0.00048), n=640 |
+| inactive or reserve | 100% | 0.023% → 0.033% | −0.00006 (−0.00045 to +0.00031), n=808 |
+
+**No change** on 808 primary-sample receiving props (33 games) — expected, since the boost moves only
+the model's small share of a market-dominated blend. Removed on the evidence from task 4, not this gate.
+
 ## Results so far
 
 - **Baseline-v0** (model run walk-forward from nflverse game logs, no context): skill vs market

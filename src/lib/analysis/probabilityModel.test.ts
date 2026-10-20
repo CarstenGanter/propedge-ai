@@ -150,6 +150,14 @@ describe("adjustmentsFrom", () => {
     expect(over).toBeCloseTo(under, 9);
   });
 
+  it("gives no teammate-absence boost to receiving props, and keeps it for rushing", () => {
+    const out: ResearchBundle = { news: { teammateAbsencesBoost: true, source: "s" } };
+    expect(adjustmentsFrom({ ...prop, propType: "Receiving Yards" }, out)).toEqual([]);
+    expect(adjustmentsFrom({ ...prop, propType: "Receptions" }, out)).toEqual([]);
+    expect(adjustmentsFrom({ ...prop, propType: "Rushing Yards" }, out)).toEqual([0.06]);
+    expect(adjustmentsFrom({ ...prop, propType: "Rush+Rec Yards" }, out)).toEqual([0.06]);
+  });
+
   it("docks a doubtful player and a part-time role", () => {
     expect(adjustmentsFrom(prop, { news: { playerStatus: "doubtful", source: "s" } })[0]).toBeLessThan(0);
     const partTime: ResearchBundle = {

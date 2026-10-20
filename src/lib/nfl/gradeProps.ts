@@ -64,6 +64,8 @@ export interface RosterEntry {
   team: string;
   /** ACT, INA (inactive), RES (reserve/injured), … */
   status: string;
+  /** WR, TE, RB (FB folded in), QB, … */
+  position?: string;
   name: string;
   /** "football name" + last name, e.g. "D.J. Moore" for full name "Denniston Moore". */
   altName?: string;
@@ -82,6 +84,7 @@ export function parseWeeklyRoster(csv: string): RosterEntry[] {
       week,
       team: r.team ?? "",
       status: r.status ?? "",
+      position: r.position === "FB" ? "RB" : r.position || undefined,
       name: r.full_name ?? "",
       altName: r.football_name && r.last_name ? `${r.football_name} ${r.last_name}` : undefined,
     });

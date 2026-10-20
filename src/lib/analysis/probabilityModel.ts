@@ -260,6 +260,9 @@ export function estimateProbability(input: ProbabilityInputs): ProbabilityEstima
   return { probability, rawProbability: raw, projection, sigma, games: n, usedMarket, clipped, marketProbability, note };
 }
 
+/** Prop types whose projection no longer takes the flat teammate-absence boost (2026-10-20). */
+export const NO_TEAMMATE_BOOST = new Set(["Receiving Yards", "Receptions"]);
+
 /** Context signals expressed as bounded nudges to the projection. */
 export function adjustmentsFrom(prop: ScorablePropInput, bundle: ResearchBundle): number[] {
   const out: number[] = [];
@@ -279,7 +282,11 @@ export function adjustmentsFrom(prop: ScorablePropInput, bundle: ResearchBundle)
   if (ps?.usageTrend === "up") out.push(0.04);
   if (ps?.usageTrend === "down") out.push(-0.04);
   if (ps?.snapPct != null && ps.snapPct < 0.5) out.push(-0.06);
-  if (bundle.news?.teammateAbsencesBoost) out.push(0.06);
+  // Not for receiving props: on nflverse 2025, redistributing a teammate's
+  // vacated targets did no better than leaving shares alone (task 4), so a
+  // flat +6% had no measured basis there. Carries do redistribute; rushing and
+  // rush+rec keep it. Gate result in docs/ROADMAP.md.
+  if (bundle.news?.teammateAbsencesBoost && !NO_TEAMMATE_BOOST.has(prop.propType)) out.push(0.06);
   if (bundle.historical?.weatherConcern) out.push(-0.05);
   const status = bundle.news?.playerStatus;
   if (status === "doubtful") out.push(-0.12);

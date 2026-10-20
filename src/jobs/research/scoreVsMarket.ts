@@ -24,11 +24,11 @@
  *      Those P(over)s are stored too, as backfill rows with lineKind "venue"
  *      (Underdog) and "prizepicks", never pooled with the reference-line result.
  */
-import zlib from "node:zlib";
 import { prisma } from "@/lib/db/client";
 import { parseCsv } from "@/lib/utils/csv";
 import { nflverseCode } from "@/lib/nfl/teamCodes";
-import { GRADABLE_PROPS, gradeProp, parseGradingStats, parseWeeklyRoster, priorGames, type Appearance, type SeasonData } from "@/lib/nfl/gradeProps";
+import { GRADABLE_PROPS, gradeProp, priorGames } from "@/lib/nfl/gradeProps";
+import { BASE, fetchCsv, loadSeason } from "./nflverseSeasons";
 import { resolveEspnAthlete } from "@/lib/providers/live/espnPlayerStats";
 import { estimateProbability } from "@/lib/analysis/probabilityModel";
 import { consensusProbOver, consensusSideProb, pricedAt } from "@/lib/analysis/marketConsensus";
@@ -40,41 +40,8 @@ import { calibrationSummary, excessByVenueGap, reliabilityTable, type BucketRow,
 
 import type { Prisma } from "@prisma/client";
 
-const BASE = "https://github.com/nflverse/nflverse-data/releases/download";
 const SEASON = 2026;
 
-async function fetchCsv(url: string): Promise<string> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${res.status} ${url}`);
-  const buf = Buffer.from(await res.arrayBuffer());
-  return url.endsWith(".gz") ? zlib.gunzipSync(buf).toString("utf8") : buf.toString("utf8");
-}
-
-async function loadSeason(season: number, playersPfrToGsis: Map<string, string>): Promise<SeasonData> {
-  const [weekly, snaps, rosterCsv] = await Promise.all([
-    fetchCsv(`${BASE}/stats_player/stats_player_week_${season}.csv.gz`),
-    fetchCsv(`${BASE}/snap_counts/snap_counts_${season}.csv.gz`),
-    fetchCsv(`${BASE}/weekly_rosters/roster_weekly_${season}.csv`),
-  ]);
-  const rows = parseGradingStats(weekly);
-  const roster = parseWeeklyRoster(rosterCsv);
-  // Snap counts are keyed by PFR id: the weekly roster links it to gsis, players.csv backs it up.
-  const pfrToGsis = new Map(playersPfrToGsis);
-  for (const r of parseCsv(rosterCsv).rows) if (r.pfr_id && r.gsis_id) pfrToGsis.set(r.pfr_id, r.gsis_id);
-  // A snap-count player without a players.csv link is tied to a stat row by name and team.
-  const byNameTeam = new Map(rows.map((r) => [`${r.name}|${r.team}`, r.gsisId]));
-  const appearances: Appearance[] = [];
-  const specialTeamsOnly: Appearance[] = [];
-  for (const r of parseCsv(snaps).rows) {
-    if (r.game_type && r.game_type !== "REG" && r.game_type !== "POST") continue;
-    const gsisId = pfrToGsis.get(r.pfr_player_id) ?? byNameTeam.get(`${r.player}|${r.team}`) ?? `pfr:${r.pfr_player_id}`;
-    const a = { gsisId, name: r.player, week: Number(r.week), team: r.team };
-    // Offensive snaps only: a special-teams snap is no chance at an offensive stat.
-    if (Number(r.offense_snaps) > 0) appearances.push(a);
-    else if (Number(r.st_snaps) > 0) specialTeamsOnly.push(a);
-  }
-  return { rows, appearances, specialTeamsOnly, roster };
-}
 
 function pct(x: number | undefined | null, d = 1) {
   return x == null || !Number.isFinite(x) ? "  —  " : `${(x * 100).toFixed(d)}%`;
