@@ -119,7 +119,14 @@ function Section({ s }: { s: SkillSection }) {
  * de-vigged consensus does not? Scored on every settled prop with a market,
  * intervals from resampling whole games.
  */
+/** A row whose interval sits wholly on one side of zero. */
+function excludesZero(r: OverGapRow): boolean {
+  const iv = r.gap?.interval;
+  return !!iv && (iv.hi < 0 || iv.lo > 0);
+}
+
 function OverGapCard({ rows }: { rows: OverGapRow[] }) {
+  const findings = rows.filter(excludesZero);
   return (
     <Card>
       <CardHeader>
@@ -130,7 +137,17 @@ function OverGapCard({ rows }: { rows: OverGapRow[] }) {
           it only means something once its interval excludes zero.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-3">
+        {findings.length > 0 && (
+          <div role="status" className="rounded-sm border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+            <span className="font-semibold">Interval excludes zero: </span>
+            {findings
+              .map((r) => `${r.label} (${r.gap!.gapPts >= 0 ? "+" : ""}${r.gap!.gapPts.toFixed(1)} pts, ${r.gap!.interval!.lo.toFixed(1)} to ${r.gap!.interval!.hi.toFixed(1)})`)
+              .join("; ")}
+            . The Over is finishing {findings.every((r) => r.gap!.gapPts < 0) ? "below" : "away from"} the books&apos; probability there by more than chance
+            explains — worth a look, not yet a strategy.
+          </div>
+        )}
         <Table>
           <TableHeader>
             <TableRow>
@@ -147,7 +164,7 @@ function OverGapCard({ rows }: { rows: OverGapRow[] }) {
                 <TableCell>{r.label}</TableCell>
                 <TableCell className="text-right font-mono">{r.gap?.n ?? 0}</TableCell>
                 <TableCell className="text-right font-mono">{r.gap?.games ?? 0}</TableCell>
-                <TableCell className={cn("text-right font-mono", r.gap?.interval && (r.gap.interval.hi < 0 || r.gap.interval.lo > 0) ? "font-semibold" : "")}>
+                <TableCell className={cn("text-right font-mono", excludesZero(r) ? "font-semibold" : "")}>
                   {r.gap ? `${r.gap.gapPts >= 0 ? "+" : ""}${r.gap.gapPts.toFixed(1)}` : "—"}
                 </TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">
