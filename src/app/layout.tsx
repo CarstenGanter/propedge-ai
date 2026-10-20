@@ -3,6 +3,7 @@ import { IBM_Plex_Mono, Instrument_Sans, Newsreader } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
 import { THEME_INIT_SCRIPT } from "@/components/themeScript";
+import { InlineScript } from "@/components/InlineScript";
 
 const newsreader = Newsreader({
   variable: "--font-newsreader",
@@ -29,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <head>
         {/* Applies a saved theme before first paint, so the night edition never flashes paper. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <InlineScript html={THEME_INIT_SCRIPT} />
       </head>
       <body>
         <AppShell>{children}</AppShell>
