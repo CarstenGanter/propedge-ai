@@ -272,13 +272,61 @@
       "Bash(sed -i '' 's#from \"./nflverseSeasons\"#from \"@/lib/nfl/nflverseSeasons\"#' src/jobs/research/scoreVsMarket.ts src/jobs/research/gateTeammateBoost.ts)",
       "Bash(sqlite3 -separator ' | ' prisma/dev.db \"select p.id, pp.playerName, pp.propType, coalesce\\(p.userNote,'<none>'\\), \\(select count\\(*\\) from ParlayLeg l where l.pickId=p.id\\), \\(select count\\(*\\) from BankrollEntry b where b.pickId=p.id\\) from Pick p join PlayerProp pp on pp.id=p.playerPropId where p.status='pending' and p.isDemo=0;\")",
       "Bash(curl -s https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard?dates=20260728 -o /private/tmp/claude-501/-Users-carstenganter-Code-propedge-ai/d8b86edd-06ba-4325-b921-effb6ef4dc54/scratchpad/wnba-sb.json)",
-      "Bash(curl -s https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/summary?event=401857093 -o /private/tmp/claude-501/-Users-carstenganter-Code-propedge-ai/d8b86edd-06ba-4325-b921-effb6ef4dc54/scratchpad/wnba-box.json)"
+      "Bash(curl -s https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/summary?event=401857093 -o /private/tmp/claude-501/-Users-carstenganter-Code-propedge-ai/d8b86edd-06ba-4325-b921-effb6ef4dc54/scratchpad/wnba-box.json)",
+      "Bash(ps -axo pid,lstart,command)",
+      "Bash(grep -iE 'key|token|secret|apikey|=[A-Za-z0-9]{20,}')",
+      "Bash(sqlite3 prisma/dev.db \"pragma journal_mode; select count\\(*\\) from OddsQuote; select fetchKind, count\\(*\\) from OddsQuote group by 1;\")",
+      "Bash(grep -rn 'deleteMany\\\\|$executeRaw\\\\|migrate reset\\\\|db push\\\\|force-reset' src package.json)",
+      "Bash(cd /Users/carstenganter/Code/propedge-ai/src/lib && cat -n providerCache.ts creditLedger.ts providers/live/oddsApiLedger.ts closingPlan.ts nfl/autoCapture.ts nfl/runAutoCapture.ts; grep -n \"model CreditSpend\\\\|model ProviderCache\\\\|model .*Cache\" -A14 ../../prisma/schema.prisma | head -60)",
+      "Read(//Users/carstenganter/prisma/**)",
+      "Bash(awk 'NR>=60 && NR<=100' prisma/schema.prisma)",
+      "Bash(awk -F: '$1<100')",
+      "Bash(node -e \"const {DatabaseSync}=require\\('node:sqlite'\\); console.log\\('node:sqlite ok'\\)\")",
+      "Bash(cd /Users/carstenganter/Code/propedge-ai/src/lib && cat -n analysis/quoteHistory.ts; cat -n ingestMerge.ts | head -120; grep -rn \"quoteHistory\\\\|storedConsensusAsOf\\\\|oddsQuote\\\\.\" --include=*.ts --include=*.tsx .. | grep -v test | grep -v \"^../lib/oddsStore.ts\")",
+      "Read(//Users/carstenganter/Code/**)",
+      "Bash(sqlite3 -version)",
+      "Bash(sqlite3 prisma/dev.db \"select key, typeof\\(updatedAt\\), updatedAt from ProviderCache limit 8\")",
+      "Bash(sqlite3 prisma/dev.db \"select json, datetime\\(updatedAt/1000,'unixepoch'\\) from ProviderCache where key='odds:credits'; select count\\(*\\), max\\(datetime\\(fetchedAt/1000,'unixepoch'\\)\\) from OddsQuote; select fetchKind,count\\(*\\),max\\(datetime\\(fetchedAt/1000,'unixepoch'\\)\\) from OddsQuote group by 1;\")",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Bash(sqlite3 prisma/dev.db \"select datetime\\(detectedAt/1000,'unixepoch'\\), team, playerName, fromStatus, toStatus, position from InjuryStatusChange order by detectedAt desc limit 25\")",
+      "Bash(DATABASE_URL=file:./does-not-exist.db CLAUDE_PROJECT_DIR=__TRACKED_VAR__ .claude/hooks/backup-before-migrate.sh)",
+      "Bash(echo \"exit $?\")",
+      "Bash(CLAUDE_PROJECT_DIR=__TRACKED_VAR__ .claude/hooks/backup-before-migrate.sh)",
+      "Bash(sqlite3 prisma/dev.db \"select demoMode, enableWebResearch, oddsCreditFloor from Settings\")",
+      "Bash(sqlite3 prisma/dev.db \"select fromStatus,toStatus,count\\(*\\) from InjuryStatusChange group by 1,2 order by 3 desc; select count\\(*\\) from NewsFetch; select playerName,fromStatus,toStatus,datetime\\(detectedAt/1000,'unixepoch'\\) from InjuryStatusChange where toStatus='out' and fromStatus is not null;\")",
+      "Bash(node -e 'console.log\\(Number\\(\"-3\".split\\(\"-\"\\)[0]\\), Number\\(\"--\".split\\(\"-\"\\)[0]\\), Number\\(\"12/20\".split\\(\"/\"\\)[0].split\\(\"-\"\\)[0]\\)\\)')",
+      "Bash(awk -F: '{print $1\": \"$2}')",
+      "Bash(sqlite3 prisma/dev.db \".tables\")",
+      "Bash(sqlite3 prisma/dev.db \"select demoMode, enableWebResearch from AppSettings\")",
+      "Read(//Users/carstenganter/.claude/**)",
+      "Bash(awk '/^async function main/,/^}/' src/jobs/research/measureNewsLatency.ts)",
+      "Bash(awk '/^async function main/,/^}/' src/jobs/research/scoreVsMarket.ts)",
+      "Bash(grep -n \"weekForGame\\(await\\\\|settlePickById\\(pick.id, { actualResult: d\\\\|settled + waiting\\\\|loadSeason\\(season, m\\)\" src/lib/runAutoSettle.ts)",
+      "Bash(sqlite3 prisma/dev.db \"select demoMode from AppSettings;\")",
+      "Bash(sqlite3 prisma/dev.db \"select toStatus, count\\(*\\) from InjuryStatusChange group by 1; select playerName, fromStatus, toStatus, detectedAt from InjuryStatusChange where playerName like 'A.J. Brown%' order by detectedAt limit 6;\")",
+      "Bash(node -p \"require\\('@types/node/package.json'\\).version\")"
     ],
     "additionalDirectories": [
       "/Users/carstenganter/Code/propedge-ai/src/lib/nfl",
       "/Users/carstenganter/Code/propedge-ai/src/lib",
       "/Users/carstenganter/Code/propedge-ai/src/lib/analysis",
       "/Users/carstenganter/Code/propedge-ai/src/app/picks/[id]"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/backup-before-migrate.sh",
+            "timeout": 120,
+            "statusMessage": "Backing up the database before a Prisma migration…"
+          }
+        ]
+      }
     ]
   }
 }
