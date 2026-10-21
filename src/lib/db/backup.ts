@@ -89,3 +89,31 @@ export function copyOffsite(backup: string, dir: string, env: Record<string, str
   copyFileSync(backup, dest);
   return { copied: dest };
 }
+
+export interface ConfiguredBackup {
+  backup: BackupResult;
+  /** Where the off-machine copy went, or why it didn't (null: no DB_BACKUP_COPY_DIR set). */
+  offsite: { copied: string } | { refused: string } | { failed: string } | null;
+}
+
+/**
+ * Back up the database DATABASE_URL points at into prisma/backups (relative
+ * to `cwd`, the project root), then copy it off the machine when
+ * DB_BACKUP_COPY_DIR is set. Throws if the local backup fails; an off-machine
+ * failure is reported, not thrown.
+ */
+export function backupConfiguredDatabase(env: Record<string, string | undefined> = process.env, cwd: string = process.cwd()): ConfiguredBackup {
+  const url = env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL is not set");
+  const schemaDir = path.resolve(cwd, "prisma");
+  const backup = backupDatabase(resolveDbPath(url, schemaDir), path.join(schemaDir, "backups"));
+  let offsite: ConfiguredBackup["offsite"] = null;
+  if (env.DB_BACKUP_COPY_DIR) {
+    try {
+      offsite = copyOffsite(backup.path, env.DB_BACKUP_COPY_DIR, env);
+    } catch (e) {
+      offsite = { failed: e instanceof Error ? e.message : String(e) };
+    }
+  }
+  return { backup, offsite };
+}

@@ -11,26 +11,16 @@
  * local backup already exists.
  */
 import path from "node:path";
-import { backupDatabase, copyOffsite, resolveDbPath } from "../lib/db/backup";
-
-const SCHEMA_DIR = path.resolve("prisma");
+import { backupConfiguredDatabase } from "../lib/db/backup";
 
 function main() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not set");
-  const db = resolveDbPath(url, SCHEMA_DIR);
-  const r = backupDatabase(db, path.join(SCHEMA_DIR, "backups"));
+  const { backup: r, offsite } = backupConfiguredDatabase();
   const key = ["OddsQuote", "PlayerProp", "PropPrediction", "Pick", "CreditSpend"].filter((t) => t in r.rows);
   console.log(`db:backup: ${path.relative(process.cwd(), r.path)} (${(r.bytes / 1e6).toFixed(1)} MB, integrity ok; ${key.map((t) => `${t} ${r.rows[t]}`).join(", ")})`);
-  const offsite = process.env.DB_BACKUP_COPY_DIR;
-  if (offsite) {
-    try {
-      const c = copyOffsite(r.path, offsite, process.env);
-      console.log("copied" in c ? `db:backup: copied off-machine to ${c.copied}` : `db:backup: NOT copied off-machine — ${c.refused}`);
-    } catch (e) {
-      console.error(`db:backup: off-machine copy FAILED (local backup is fine): ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
+  if (!offsite) return;
+  if ("copied" in offsite) console.log(`db:backup: copied off-machine to ${offsite.copied}`);
+  else if ("refused" in offsite) console.log(`db:backup: NOT copied off-machine — ${offsite.refused}`);
+  else console.error(`db:backup: off-machine copy FAILED (local backup is fine): ${offsite.failed}`);
 }
 
 try {

@@ -327,13 +327,16 @@ export function SettingsForm({
             <Button
               variant="ghost"
               onClick={() => {
-                if (confirm("Delete ALL props, picks, parlays and bankroll history? This cannot be undone.")) {
-                  runData("clearall", clearAllDataAction);
+                if (confirm("Delete all picks, slips, bankroll history and the avoid list? The database is backed up first; props, forecasts and odds history are kept.")) {
+                  runData("clearall", async () => {
+                    const r = await clearAllDataAction();
+                    alert(r.message);
+                  });
                 }
               }}
               disabled={pending}
             >
-              <Trash2 className="h-4 w-4" /> Clear all data
+              <Trash2 className="h-4 w-4" /> Clear picks &amp; bankroll
             </Button>
           </div>
           <div className="flex flex-wrap gap-2">

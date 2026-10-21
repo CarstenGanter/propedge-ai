@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/client";
+import { backupConfiguredDatabase } from "@/lib/db/backup";
 import { saveSettings, type AppSettingsData } from "@/lib/settings";
 import { seedDemoData, clearDemoDataPublic } from "@/lib/demoSeed";
 
@@ -35,14 +36,25 @@ export async function clearDemoDataAction(): Promise<{ ok: boolean }> {
   return { ok: true };
 }
 
-export async function clearAllDataAction(): Promise<{ ok: boolean }> {
+/**
+ * Clear picks, slips, bankroll history and the avoid list — after a database
+ * backup, and never the research record: props (their market snapshots and
+ * grades), logged forecasts and the odds store can't be downloaded again, so
+ * they stay. No backup, no delete.
+ */
+export async function clearAllDataAction(): Promise<{ ok: boolean; message: string }> {
+  let backupPath: string;
+  try {
+    backupPath = backupConfiguredDatabase().backup.path;
+  } catch (e) {
+    return { ok: false, message: `Nothing deleted: the database backup failed (${e instanceof Error ? e.message : String(e)}).` };
+  }
   await prisma.bankrollEntry.deleteMany({});
   await prisma.parlay.deleteMany({});
   await prisma.pick.deleteMany({});
-  await prisma.playerProp.deleteMany({});
   await prisma.avoidListItem.deleteMany({});
   revalidateAll();
-  return { ok: true };
+  return { ok: true, message: `Cleared picks, slips, bankroll history and the avoid list. Props, forecasts and odds history kept. Backup: ${backupPath}` };
 }
 
 // ---- Avoid list (extra feature) ----

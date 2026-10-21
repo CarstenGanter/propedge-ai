@@ -1,9 +1,9 @@
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { backupDatabase, backupFileName, copyOffsite, resolveDbPath, secretValues } from "./backup";
+import { backupConfiguredDatabase, backupDatabase, backupFileName, copyOffsite, resolveDbPath, secretValues } from "./backup";
 
 describe("resolveDbPath", () => {
   it("resolves a relative SQLite URL against the schema folder, as Prisma does", () => {
@@ -79,5 +79,23 @@ describe("copyOffsite", () => {
 
   it("only treats credential-looking variables as secrets", () => {
     expect(secretValues({ ODDS_API_KEY: "abcdef1234567890", NEWS_API_KEY: "", DATABASE_URL: "file:./dev.db", MAX_DAILY_PICKS: "10" }).map((s) => s.name)).toEqual(["ODDS_API_KEY"]);
+  });
+});
+
+describe("backupConfiguredDatabase", () => {
+  it("backs up the database DATABASE_URL names into prisma/backups, and copies it off-machine when configured", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "project-"));
+    mkdirSync(path.join(root, "prisma"));
+    const d = new DatabaseSync(path.join(root, "prisma", "dev.db"));
+    d.exec(`CREATE TABLE "OddsQuote" (id TEXT); INSERT INTO "OddsQuote" VALUES ('q1')`);
+    d.close();
+    const r = backupConfiguredDatabase({ DATABASE_URL: "file:./dev.db", DB_BACKUP_COPY_DIR: path.join(root, "icloud") }, root);
+    expect(path.dirname(r.backup.path)).toBe(path.join(root, "prisma", "backups"));
+    expect(r.backup.rows).toEqual({ OddsQuote: 1 });
+    expect(r.offsite).toEqual({ copied: path.join(root, "icloud", path.basename(r.backup.path)) });
+  });
+
+  it("throws without DATABASE_URL", () => {
+    expect(() => backupConfiguredDatabase({}, "/nowhere")).toThrow(/DATABASE_URL/);
   });
 });
