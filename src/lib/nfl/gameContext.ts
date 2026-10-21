@@ -1,4 +1,5 @@
 import "server-only";
+import { CONTEXT_TTL } from "./contextFreshness";
 import { cacheGet, cacheSet } from "@/lib/providerCache";
 import { parseInjuryReport, type EspnSummaryInjuries, type NflTeamInjuryReport } from "./injuryReport";
 import {
@@ -62,7 +63,7 @@ async function fetchJson<T>(url: string, timeoutMs = 9000): Promise<T | null> {
   }
 }
 
-const CONTEXT_TTL = 30 * 60 * 1000;
+
 const contextKey = (eventId: string) => `nfl:context:${eventId}`;
 
 /** Cached context only (any age) — for page renders that must not block on network. */

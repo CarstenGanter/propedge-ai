@@ -3,6 +3,7 @@ import { nameMatches } from "./espn";
 import { resolveEspnAthlete } from "./espnPlayerStats";
 import { teammateAbsenceBoost } from "@/lib/nfl/injuryReport";
 import { getNflGameContextForProp } from "@/lib/nfl/gameContext";
+import { isFreshContext } from "@/lib/nfl/contextFreshness";
 import { teamsMatch } from "@/lib/utils/teamName";
 
 /**
@@ -73,11 +74,20 @@ export async function getNflNews(prop: ScorablePropInput): Promise<NewsContext |
         sourceName: "ESPN game injury report",
         sourceUrl: context.sourceUrl,
       });
+    } else if (report && report.players.length > 0 && !isFreshContext(context.fetchedAt)) {
+      // Stale report (the fetch failed and an old one was reused): absence from
+      // it says nothing about today, so the status stays unknown.
+      anySource = true;
+      notes.push({
+        summary: `Injury status unknown: not on ${ref.teamName}'s ESPN game injury report, but that report is from ${fmtDate(context.fetchedAt) || "an earlier fetch"} and couldn't be refreshed.`,
+        sourceName: "ESPN game injury report",
+        sourceUrl: context.sourceUrl,
+      });
     } else if (report && report.players.length > 0) {
       // The NFL requires clubs to list every player carrying an injury
       // designation, so absence from a *published* report for this player's own
       // team means no designation — unlike other leagues, that is real
-      // information rather than merely missing data.
+      // information rather than merely missing data. Only from a fresh report.
       anySource = true;
       playerStatus = "active";
       notes.push({
