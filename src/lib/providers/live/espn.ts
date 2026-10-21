@@ -293,17 +293,43 @@ export function parseBoxNumber(raw: string | null | undefined, part?: "first" | 
 /**
  * Find a player's row in one stat group, preferring an exact full-name match.
  * A box score spans both teams, so a fuzzy-only hit may be a namesake on the
- * other sideline; we take a fuzzy match only when it is unambiguous.
+ * other sideline; we take a fuzzy match only when it is unambiguous, and say
+ * so when it isn't.
  */
-function findAthleteRow(group: EspnStatGroup, playerName: string): EspnBoxAthlete | null {
+function matchAthlete(group: EspnStatGroup, playerName: string): { row: EspnBoxAthlete } | { ambiguous: true } | null {
   const rows = (group.athletes ?? []).filter((a) => a.athlete?.displayName);
   const wanted = nameParts(playerName).join(" ");
   const exact = rows.filter((a) => nameParts(a.athlete!.displayName!).join(" ") === wanted);
-  if (exact.length === 1) return exact[0];
-  if (exact.length > 1) return null;
+  if (exact.length === 1) return { row: exact[0] };
+  if (exact.length > 1) return { ambiguous: true };
   const fuzzy = rows.filter((a) => nameMatches(a.athlete!.displayName!, playerName));
-  return fuzzy.length === 1 ? fuzzy[0] : null;
+  if (fuzzy.length > 1) return { ambiguous: true };
+  return fuzzy.length === 1 ? { row: fuzzy[0] } : null;
 }
+
+function findAthleteRow(group: EspnStatGroup, playerName: string): EspnBoxAthlete | null {
+  const m = matchAthlete(group, playerName);
+  return m && "row" in m ? m.row : null;
+}
+
+/**
+ * What a box score says about one player's stat. Each case is kept apart: a
+ * single null used to mean all of them, and every one was reported as "player
+ * absent", sending a fetch failure or a name collision to the nflverse
+ * fallback (and once, every combo prop to manual).
+ */
+export type BoxStat =
+  | { kind: "stat"; value: number }
+  /** The final box score lists the player nowhere: likely inactive or never on the field. */
+  | { kind: "absent" }
+  /** The player is there but the stat can't be read (key renamed, placeholder cell). */
+  | { kind: "unreadable"; reason: string }
+  /** More than one player in the box score matches the name. */
+  | { kind: "ambiguous" }
+  /** The box score couldn't be fetched, or has no player stats yet. */
+  | { kind: "unavailable"; reason: string };
+
+const valueOf = (b: BoxStat): number | null => (b.kind === "stat" ? b.value : null);
 
 /** Did this player record a stat in any group of the final box score? */
 export function appearsInBoxScore(groups: EspnStatGroup[], playerName: string): boolean {
@@ -311,41 +337,46 @@ export function appearsInBoxScore(groups: EspnStatGroup[], playerName: string): 
 }
 
 /**
- * Pure football box-score extractor (exported for tests). For summed props, a
+ * Pure football box-score reader (exported for tests). For summed props, a
  * player present in one group but not the other counts 0 there.
  *
  * ESPN lists a player in a group only when they recorded something in it, so a
  * receiver with no catches is simply absent. That is a genuine zero, not missing
  * data — provided the player shows up elsewhere in the box score, which proves
- * they played. If they appear nowhere they may have been inactive, so we return
- * null and let settlement fall back to manual.
+ * they played. If they appear nowhere, they're "absent" (maybe inactive): the
+ * caller decides what that means.
  */
-export function extractFootballBoxStat(
-  groups: EspnStatGroup[],
-  playerName: string,
-  propType: string,
-): number | null {
+export function footballBoxStat(groups: EspnStatGroup[], playerName: string, propType: string): BoxStat {
   const spec = FOOTBALL_BOX_KEYS[propType.toLowerCase()];
-  if (!spec) return null;
+  if (!spec) return { kind: "unreadable", reason: `no box-score key for ${propType}` };
   let total = 0;
   let found = false;
   for (const { group, key, part } of spec) {
     for (const g of groups) {
       if ((g.name ?? "").toLowerCase() !== group) continue;
-      const ath = findAthleteRow(g, playerName);
-      if (!ath) continue;
+      const m = matchAthlete(g, playerName);
+      if (m && "ambiguous" in m) return { kind: "ambiguous" };
+      if (!m) continue;
       // The player is in this group but the stat can't be read (ESPN renamed
       // the key, or the cell is a placeholder): unknown, not a confident 0.
       const idx = (g.keys ?? []).indexOf(key);
-      if (idx < 0) return null;
-      const n = parseBoxNumber(ath.stats?.[idx], part);
-      if (n == null) return null;
+      if (idx < 0) return { kind: "unreadable", reason: `ESPN's ${group} stats no longer list "${key}"` };
+      const raw = m.row.stats?.[idx];
+      const n = parseBoxNumber(raw, part);
+      if (n == null) return { kind: "unreadable", reason: `${group} "${key}" reads "${raw ?? ""}"` };
       total += n;
       found = true;
     }
   }
-  if (found) return total;
-  return appearsInBoxScore(groups, playerName) ? 0 : null;
+  if (found) return { kind: "stat", value: total };
+  const matches = groups.map((g) => matchAthlete(g, playerName));
+  if (matches.some((m) => m && "ambiguous" in m)) return { kind: "ambiguous" };
+  return matches.some((m) => m && "row" in m) ? { kind: "stat", value: 0 } : { kind: "absent" };
+}
+
+/** footballBoxStat as a number, null for anything but a stat. */
+export function extractFootballBoxStat(groups: EspnStatGroup[], playerName: string, propType: string): number | null {
+  return valueOf(footballBoxStat(groups, playerName, propType));
 }
 
 /**
@@ -366,27 +397,35 @@ const BASKETBALL_BOX_KEYS: Record<string, { key: string; part?: "first" }[]> = {
 };
 
 /**
- * Pure basketball box-score extractor (exported for tests). A player who
- * dressed and did not play is listed with no stats: null, for manual
- * settlement.
+ * Pure basketball box-score reader (exported for tests). A player who dressed
+ * and did not play is listed with no stats or with "--" cells: absent.
  */
-export function extractBasketballBoxStat(groups: EspnStatGroup[], playerName: string, propType: string): number | null {
+export function basketballBoxStat(groups: EspnStatGroup[], playerName: string, propType: string): BoxStat {
   const spec = BASKETBALL_BOX_KEYS[propType.toLowerCase()];
-  if (!spec) return null;
+  if (!spec) return { kind: "unreadable", reason: `no box-score key for ${propType}` };
   for (const g of groups) {
     const keys = g.keys ?? [];
     if (!spec.every(({ key }) => keys.includes(key))) continue;
-    const ath = findAthleteRow(g, playerName);
-    if (!ath?.stats?.length) continue;
+    const m = matchAthlete(g, playerName);
+    if (m && "ambiguous" in m) return { kind: "ambiguous" };
+    if (!m) continue;
+    const stats = m.row.stats ?? [];
+    if (stats.length === 0 || stats.every((c) => c.trim() === "--" || c.trim() === "")) return { kind: "absent" };
     let total = 0;
     for (const { key } of spec) {
-      const n = parseBoxNumber(ath.stats[keys.indexOf(key)]);
-      if (n == null) return null; // "--" (did not play) or an unreadable cell
+      const raw = stats[keys.indexOf(key)];
+      const n = parseBoxNumber(raw);
+      if (n == null) return { kind: "unreadable", reason: `"${key}" reads "${raw ?? ""}"` };
       total += n;
     }
-    return total;
+    return { kind: "stat", value: total };
   }
-  return null;
+  return { kind: "absent" };
+}
+
+/** basketballBoxStat as a number, null for anything but a stat. */
+export function extractBasketballBoxStat(groups: EspnStatGroup[], playerName: string, propType: string): number | null {
+  return valueOf(basketballBoxStat(groups, playerName, propType));
 }
 
 /** Whether ESPN settlement can grade this prop type at all — otherwise a null is not "absent". */
@@ -399,31 +438,27 @@ export function espnGradesProp(sport: string, propType: string, league?: string)
   return t in STAT_MATCHERS;
 }
 
-/** Pull a single completed-game stat for a player from the box score. */
+/** Read a single completed-game stat for a player from the box score. */
 export async function fetchPlayerGameStat(
   sport: string,
   eventId: string,
   playerName: string,
   propType: string,
   league?: string,
-): Promise<number | null> {
+): Promise<BoxStat> {
   const path = pathFor(sport, league);
-  if (!path) return null;
+  if (!path) return { kind: "unavailable", reason: `no ESPN path for ${sport}` };
   const url = `https://site.api.espn.com/apis/site/v2/sports/${path.sport}/${path.league}/summary?event=${eventId}`;
   const data = await fetchJson<EspnSummary>(url);
-  const teams = data?.boxscore?.players;
-  if (!teams) return null;
+  if (!data) return { kind: "unavailable", reason: "the ESPN box score couldn't be fetched" };
+  const teams = data.boxscore?.players;
+  if (!teams) return { kind: "unavailable", reason: "the ESPN box score has no player stats yet" };
 
-  if (path.sport === "football") {
-    const groups = teams.flatMap((t) => t.statistics ?? []);
-    return extractFootballBoxStat(groups, playerName, propType);
-  }
-  if (path.sport === "basketball") {
-    return extractBasketballBoxStat(teams.flatMap((t) => t.statistics ?? []), playerName, propType);
-  }
+  if (path.sport === "football") return footballBoxStat(teams.flatMap((t) => t.statistics ?? []), playerName, propType);
+  if (path.sport === "basketball") return basketballBoxStat(teams.flatMap((t) => t.statistics ?? []), playerName, propType);
 
   const matchers = STAT_MATCHERS[propType.toLowerCase()];
-  if (!matchers) return null;
+  if (!matchers) return { kind: "unreadable", reason: `no box-score column for ${propType}` };
 
   for (const team of teams) {
     for (const group of team.statistics ?? []) {
@@ -437,10 +472,10 @@ export async function fetchPlayerGameStat(
           const raw = ath.stats?.[statIdx];
           if (raw == null) continue;
           const num = parseBoxNumber(raw);
-          if (num != null) return num;
+          if (num != null) return { kind: "stat", value: num };
         }
       }
     }
   }
-  return null;
+  return { kind: "absent" };
 }

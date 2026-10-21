@@ -1,7 +1,7 @@
 import type { ScorablePropInput } from "@/types";
 import { demoActualResult } from "./demoData";
 import type { ProviderContext } from "./config";
-import { espnGradesProp, espnSupportsSport, fetchPlayerGameStat, findEvent } from "./live/espn";
+import { espnGradesProp, espnSupportsSport, fetchPlayerGameStat, findEvent, type BoxStat } from "./live/espn";
 import { getMlbResult } from "./live/mlbStats";
 
 export interface ResultLookup {
@@ -96,25 +96,7 @@ export const liveResultsProvider: ResultsProvider = {
           note: "Game not final yet — settle after it completes.",
         };
       }
-      const stat = await fetchPlayerGameStat(
-        prop.sport,
-        event.eventId,
-        prop.playerName,
-        prop.propType,
-        prop.league,
-      );
-      if (stat == null) {
-        return {
-          actualResult: null,
-          source: "ESPN",
-          resolved: false,
-          absentFromBoxScore: true,
-          note:
-            "Game is final but this player recorded nothing anywhere in the box score — " +
-            "they were likely inactive or did not take the field. Settle manually.",
-        };
-      }
-      return { actualResult: stat, source: "ESPN box score", resolved: true };
+      return lookupFromBoxStat(await fetchPlayerGameStat(prop.sport, event.eventId, prop.playerName, prop.propType, prop.league));
     } catch {
       return {
         actualResult: null,
@@ -128,4 +110,31 @@ export const liveResultsProvider: ResultsProvider = {
 
 export function getResultsProvider(ctx: ProviderContext): ResultsProvider {
   return ctx.demo ? demoResultsProvider : liveResultsProvider;
+}
+
+/**
+ * A box-score reading as a settlement lookup (pure). Only a player the final
+ * box score lists nowhere is "absent" — the one case the NFL snap-count
+ * fallback may settle. A failed fetch, a name two players share, or a stat
+ * that can't be read each say so and go to manual settlement.
+ */
+export function lookupFromBoxStat(b: BoxStat): ResultLookup {
+  switch (b.kind) {
+    case "stat":
+      return { actualResult: b.value, source: "ESPN box score", resolved: true };
+    case "absent":
+      return {
+        actualResult: null,
+        source: "ESPN",
+        resolved: false,
+        absentFromBoxScore: true,
+        note: "Game is final but this player recorded nothing anywhere in the box score — they were likely inactive or did not take the field. Settle manually.",
+      };
+    case "ambiguous":
+      return { actualResult: null, source: "ESPN", resolved: false, note: "More than one player in the ESPN box score matches this name — settle manually." };
+    case "unreadable":
+      return { actualResult: null, source: "ESPN", resolved: false, note: `The ESPN box score lists the player but the stat can't be read (${b.reason}) — settle manually.` };
+    case "unavailable":
+      return { actualResult: null, source: "ESPN", resolved: false, note: `${b.reason[0].toUpperCase()}${b.reason.slice(1)} — retried later, or settle manually.` };
+  }
 }
