@@ -30,9 +30,10 @@ describe("buildLivePrediction", () => {
     expect(row).toMatchObject({ line: 30.5, lineKind: "reference", source: "live", marketMethod: "consensus-v2", edgeSource: "model" });
   });
 
-  it("is as of the quotes' fetch time, falling back to the prop's last update", () => {
+  it("is as of the quotes' fetch time, or unknown — never the prop's last update", () => {
     expect(buildLivePrediction(base)!.quotedAt).toEqual(new Date("2026-10-18T14:00:00.000Z"));
-    expect(buildLivePrediction({ ...base, snapshot: { v: 2 } })!.quotedAt).toEqual(prop.updatedAt);
+    // updatedAt moves with any write (a settlement, an edit), so it's no quote time.
+    expect(buildLivePrediction({ ...base, snapshot: { v: 2 } })!.quotedAt).toBeNull();
   });
 
   it("scores at Underdog's line once known, and calls a soft line a venue edge", () => {

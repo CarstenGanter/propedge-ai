@@ -24,6 +24,8 @@ export interface SkillItem {
   edgeSource?: string;
   /** Slate date, for a by-week view. */
   date?: string;
+  /** The market's quote time wasn't recorded (snapshots before 2026-10-20): the no-lookahead rule can't be checked for it. */
+  quoteTimeUnknown?: boolean;
 }
 
 const EPS = 1e-6;

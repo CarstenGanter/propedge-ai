@@ -203,7 +203,10 @@ async function main() {
     const direction = marketOver >= 0.5 ? "OVER" : "UNDER";
     const est = estimateProbability({ line, direction, propType: p.propType, games, marketProbOver: marketOver, marketLine: line, adjustments: [] });
     if (!est) { tally.noGames++; continue; }
-    const fetched = snapshot?.fetchedAt ? new Date(snapshot.fetchedAt) : p.updatedAt;
+    // The quote time as recorded, or null: snapshots stored before 2026-10-20
+    // carry no fetch time, and these rows are labelled "quote time unknown"
+    // rather than clamped to kickoff (which only pretended to check them).
+    const quotedAt = snapshot?.fetchedAt ? new Date(snapshot.fetchedAt) : null;
     const cluster = `${p.date}|${p.team}|${p.opponent}`;
 
     if (method === "consensus-v2" && g.value !== line) {
@@ -232,7 +235,7 @@ async function main() {
       if (vEst) {
         forecasts.push({
           playerPropId: p.id,
-          quotedAt: p.gameStartTime && fetched > p.gameStartTime ? p.gameStartTime : fetched,
+          quotedAt,
           line: vLine,
           lineKind,
           modelProbOver: overProb(vEst.probability, vDir),
@@ -247,7 +250,7 @@ async function main() {
     }
     forecasts.push({
       playerPropId: p.id,
-      quotedAt: p.gameStartTime && fetched > p.gameStartTime ? p.gameStartTime : fetched,
+      quotedAt,
       line,
       lineKind: "reference",
       modelProbOver: overProb(est.probability, direction),
@@ -283,7 +286,10 @@ async function main() {
     { source: "backfill", marketMethod: "consensus-v2", modelVersion: BASELINE_V0 },
   );
   printSection(primary);
-  const byDate = skillBy(await loadSkillItems({ source: "backfill", marketMethod: "consensus-v2", modelVersion: BASELINE_V0 }), (i) => i.date ?? null);
+  const primaryItems = await loadSkillItems({ source: "backfill", marketMethod: "consensus-v2", modelVersion: BASELINE_V0 });
+  const unknownQuoteTime = primaryItems.filter((i) => i.quoteTimeUnknown).length;
+  if (unknownQuoteTime) console.log(`  quote time unknown for ${unknownQuoteTime} of ${primaryItems.length}: their snapshots (stored before 2026-10-20) carry no fetch time, so no-lookahead can't be checked for them. Live rows are the clean measure.`);
+  const byDate = skillBy(primaryItems, (i) => i.date ?? null);
   printBreakdown("by slate (each slate held out: nothing is fitted)", byDate.sort((a, b) => a.key.localeCompare(b.key)));
 
   printSection(

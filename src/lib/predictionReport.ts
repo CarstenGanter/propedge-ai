@@ -34,8 +34,11 @@ export async function loadSkillItems(filter: {
   for (const r of rows) {
     const p = r.playerProp;
     if (seen.has(r.playerPropId)) continue;
+    // A forecast made, or quoted, after kickoff is not a forecast. A backfill row
+    // with no recorded quote time (stored before 2026-10-20) is kept and
+    // labelled: it can't be checked either way.
     const madeAt = filter.source === "live" ? r.createdAt : r.quotedAt;
-    if (p.gameStartTime && madeAt > p.gameStartTime) continue;
+    if (p.gameStartTime && madeAt && madeAt > p.gameStartTime) continue;
     seen.add(r.playerPropId);
     if (p.actualResult == null || p.actualResult === r.line) continue;
     items.push({
@@ -46,6 +49,7 @@ export async function loadSkillItems(filter: {
       propType: p.propType,
       edgeSource: r.edgeSource,
       date: p.date,
+      ...(madeAt ? {} : { quoteTimeUnknown: true }),
     });
   }
   return items;

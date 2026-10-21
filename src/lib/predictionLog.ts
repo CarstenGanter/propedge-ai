@@ -50,7 +50,8 @@ export function buildLivePrediction(input: {
   const venueFlag = prop.underdogLine != null ? readVenueLine(consensus, prop.underdogLine, direction).flag : null;
   return {
     playerPropId: prop.id,
-    quotedAt: input.snapshot?.fetchedAt ? new Date(input.snapshot.fetchedAt) : prop.updatedAt,
+    // Null when the snapshot has no fetch time: updatedAt moves with any write, so it is no quote time.
+    quotedAt: input.snapshot?.fetchedAt ? new Date(input.snapshot.fetchedAt) : null,
     line,
     lineKind: prop.underdogLine != null ? "venue" : "reference",
     modelProbOver: overProb(input.modelProbability, direction),

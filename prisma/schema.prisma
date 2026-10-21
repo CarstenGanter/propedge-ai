@@ -78,7 +78,7 @@ model PropPrediction {
   playerPropId   String
   playerProp     PlayerProp @relation(fields: [playerPropId], references: [id], onDelete: Cascade)
   createdAt      DateTime   @default(now())
-  quotedAt       DateTime // when the market data behind the row was fetched
+  quotedAt       DateTime? // when the market data behind the row was fetched; null = unknown (snapshots stored before 2026-10-20 carry no fetch time)
   line           Float
   lineKind       String // reference (the books' own line) | venue (the line played)
   modelProbOver  Float // model P(over), after the production clip on the side it favours

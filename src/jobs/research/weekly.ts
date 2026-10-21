@@ -89,12 +89,16 @@ async function main() {
   }
 
   out("\nSKILL VS MARKET (log-loss; + = model beats the de-vigged consensus; 95% game-bootstrap)");
+  out("  [exploratory, not corrected] marks secondary intervals: several are looked at every week with no multiple-comparison correction, so one excluding zero is a lead, not a finding.");
   const primary = await skillSection("primary", "", { source: "backfill", marketMethod: "consensus-v2", modelVersion: BASELINE_V0 });
   skillLine("PRIMARY baseline-v0, consensus-v2 market", primary);
-  const weekItems = (await loadSkillItems({ source: "backfill", marketMethod: "consensus-v2", modelVersion: BASELINE_V0 })).filter(
-    (i) => (i.date ?? "") >= weekStart.toISOString().slice(0, 10),
-  );
-  skillLine("  of which this week's slates", { items: weekItems.length, score: skillScore(weekItems), interval: clusterBootstrap(weekItems, (x) => skillScore(x)?.skill ?? null) });
+  const primaryItems = await loadSkillItems({ source: "backfill", marketMethod: "consensus-v2", modelVersion: BASELINE_V0 });
+  const unknownQuoteTime = primaryItems.filter((i) => i.quoteTimeUnknown).length;
+  if (unknownQuoteTime) {
+    out(`    quote time unknown for ${unknownQuoteTime} of ${primaryItems.length} (snapshots stored before 2026-10-20 carry no fetch time; no-lookahead can't be checked for them — live rows are the clean measure)`);
+  }
+  const weekItems = primaryItems.filter((i) => (i.date ?? "") >= weekStart.toISOString().slice(0, 10));
+  skillLine("  of which this week's slates [exploratory, not corrected]", { items: weekItems.length, score: skillScore(weekItems), interval: clusterBootstrap(weekItems, (x) => skillScore(x)?.skill ?? null) });
   const versions = await liveModelVersions();
   for (const v of versions) skillLine(`LIVE model ${v}`, await skillSection(v, "", { source: "live", marketMethod: "consensus-v2", modelVersion: v }));
   if (versions.length === 0) out("  LIVE: none yet — logged at scoring time since 2026-10-20; the first section appears once a slate generated since then is graded");
@@ -119,7 +123,8 @@ async function main() {
       }
       out(
         `  ${s.sample.padEnd(10)} n=${String(s.n).padStart(4)} games=${String(s.games).padStart(3)}  ${fmtInterval(s.diff, s.interval, 4)}` +
-          `  ECE ${s.eceFitted?.toFixed(2)} vs ${s.eceCurrent?.toFixed(2)} pts${s.gate ? `  gate ${s.gate}` : ""}`,
+          `  ECE ${s.eceFitted?.toFixed(2)} vs ${s.eceCurrent?.toFixed(2)} pts${s.gate ? `  gate ${s.gate}` : ""}` +
+          (s.sample === "pooled" ? "" : "  [exploratory, not corrected]"),
       );
     }
     const v = sigmaVerdict(sigma.samples);
