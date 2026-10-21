@@ -193,21 +193,24 @@ interface FetchResult<T> {
 async function fetchJson<T>(url: string, timeoutMs = 9000): Promise<FetchResult<T>> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let result: FetchResult<T>;
   try {
     const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
     const remaining = numHeader(res.headers.get("x-requests-remaining"));
     const used = numHeader(res.headers.get("x-requests-used"));
     const last = numHeader(res.headers.get("x-requests-last"));
-    await reportOddsApiCall({ url, credits: last, remaining, status: res.status });
-    if (!res.ok) {
-      return { data: null, remaining, used, last, status: res.status, error: await safeText(res) };
-    }
-    return { data: (await res.json()) as T, remaining, used, last, status: res.status };
+    result = res.ok
+      ? { data: (await res.json()) as T, remaining, used, last, status: res.status }
+      : { data: null, remaining, used, last, status: res.status, error: await safeText(res) };
   } catch (e) {
-    return { data: null, remaining: null, used: null, last: null, status: 0, error: String(e) };
+    result = { data: null, remaining: null, used: null, last: null, status: 0, error: String(e) };
   } finally {
     clearTimeout(timer);
   }
+  // Log the spend only once the body is in hand and the abort timer is off: a
+  // slow ledger write inside the window could abort a request already paid for.
+  if (result.status !== 0) await reportOddsApiCall({ url, credits: result.last, remaining: result.remaining, status: result.status });
+  return result;
 }
 
 function numHeader(v: string | null): number | null {

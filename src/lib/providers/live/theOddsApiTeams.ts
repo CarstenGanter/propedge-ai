@@ -21,20 +21,24 @@ interface FetchResult<T> {
 async function fetchJson<T>(url: string, timeoutMs = 9000): Promise<FetchResult<T>> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let result: FetchResult<T>;
+  let credits: number | null = null;
   try {
     const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
     const remaining = Number(res.headers.get("x-requests-remaining"));
     const last = res.headers.get("x-requests-last");
-    await reportOddsApiCall({ url, credits: last == null ? null : Number(last) || null, remaining: Number.isFinite(remaining) ? remaining : null, status: res.status });
-    if (!res.ok) {
-      return { data: null, remaining: Number.isFinite(remaining) ? remaining : null, status: res.status, error: (await res.text()).slice(0, 200) };
-    }
-    return { data: (await res.json()) as T, remaining: Number.isFinite(remaining) ? remaining : null, status: res.status };
+    credits = last == null ? null : Number(last) || null;
+    result = res.ok
+      ? { data: (await res.json()) as T, remaining: Number.isFinite(remaining) ? remaining : null, status: res.status }
+      : { data: null, remaining: Number.isFinite(remaining) ? remaining : null, status: res.status, error: (await res.text()).slice(0, 200) };
   } catch (e) {
-    return { data: null, remaining: null, status: 0, error: String(e) };
+    result = { data: null, remaining: null, status: 0, error: String(e) };
   } finally {
     clearTimeout(timer);
   }
+  // Log only after the body is read and the abort timer is off (see theOddsApi.ts).
+  if (result.status !== 0) await reportOddsApiCall({ url, credits, remaining: result.remaining, status: result.status });
+  return result;
 }
 
 interface OddsGame {
