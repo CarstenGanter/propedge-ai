@@ -20,7 +20,7 @@ import { parseSummaries } from "@/lib/jobSummary";
 import { liveModelVersions, loadSkillItems, overGapRows, skillSection, type SkillSection } from "@/lib/predictionReport";
 import { BASELINE_V0 } from "@/lib/predictionLog";
 import { clusterBootstrap, OVER_CONFIRM_WEEKS, skillScore } from "@/lib/analysis/marketSkill";
-import type { GroupLatency } from "@/lib/analysis/newsLatency";
+import { PRICE_MOVE_PTS, type GroupLatency, type VenueChange } from "@/lib/analysis/newsLatency";
 import { NEWS_TRIAL } from "@/lib/nfl/newsFetchTrial";
 import { todayNflSlate } from "@/lib/nfl/slate";
 import { fmtInterval, nflWeekStart, overStatusLine, sigmaVerdict, unaccountedCredits, type SigmaSample } from "@/lib/weeklySummary";
@@ -132,9 +132,14 @@ async function main() {
     out("  (the revert rule reads the pooled sample only; the others are for information)");
   }
 
-  out("\nRB-OUT LATENCY (minutes from a change to Out until each venue moved teammates' lines)");
+  out("\nRB-OUT NEWS TRIAL (each venue's change between the +10 and +40 minute fetches: teammates vs the other team)");
+  out(`  news time = our poll's first sighting (~15-min resolution), not the report's own time; a move = a line change or ≥ ${PRICE_MOVE_PTS} pts on a book's no-vig Over`);
   const lat = results.get("latency")!.summaries.get("latency") as
-    | { changes: number; trial: { done: number; skipped: number; credits: number }; windows: { window: string; events: number; pre: GroupLatency[]; between: GroupLatency[] }[] }
+    | {
+        changes: number;
+        trial: { done: number; skipped: number; credits: number };
+        windows: { window: string; events: number; treated: VenueChange[]; control: VenueChange[]; pre: GroupLatency[] }[];
+      }
     | undefined;
   if (failed("latency") || !lat) out("  research:latency failed — see latency.log");
   else {
@@ -144,15 +149,17 @@ async function main() {
       const b = lat.windows.find((x) => x.window === w);
       if (!b) continue;
       out(`  ${names[w]} — ${b.events} event(s)`);
+      const groups = [...new Set([...b.treated, ...b.control].map((g) => g.group))].sort();
+      const fmtChange = (g: VenueChange | undefined) =>
+        g ? `${g.moved}/${g.props} moved, mean line ${g.meanLineChange == null ? "—" : `${g.meanLineChange >= 0 ? "+" : ""}${g.meanLineChange.toFixed(2)}`}` : "—";
+      for (const group of groups) {
+        out(`    ${group.padEnd(12)} teammates ${fmtChange(b.treated.find((g) => g.group === group)).padEnd(32)} other team ${fmtChange(b.control.find((g) => g.group === group))}`);
+      }
       if (b.pre.length) {
-        out("    from the last quote before the news:");
+        out("    secondary — from the last stored quote before the news [exploratory, not corrected]:");
         b.pre.forEach((x) => latencyLine(x, "      "));
       }
-      if (b.between.length) {
-        out("    still moving between the trial's fetches:");
-        b.between.forEach((x) => latencyLine(x, "      "));
-      }
-      if (!b.pre.length && !b.between.length) out("    nothing measurable yet");
+      if (!groups.length && !b.pre.length) out("    nothing measurable yet");
     }
     if (lat.windows.length === 0) out("  nothing measurable yet");
   }

@@ -1,4 +1,5 @@
 import { profileFor } from "./bookProfiles";
+import { americanToProb } from "./marketConsensus";
 
 /**
  * How long each venue takes to move a line after news (pure, tested) — the
@@ -35,7 +36,32 @@ export interface BookMove {
   observedMinutes: number;
 }
 
-const same = (a: TimedQuote, b: TimedQuote) => a.line === b.line && a.over === b.over && a.under === b.under;
+/**
+ * A price-only change counts as a move when the book's no-vig Over
+ * probability shifts by at least this many points. Books re-price in 5-cent
+ * ticks: a one-tick re-price (-110/-110 to -115/-105) moves the no-vig Over
+ * about 1.1 points, routine rather than a reaction; two ticks (-120/+100)
+ * about 2.2; three ticks (-125/+105) about 3.2.
+ * Set by judgment, not fitted: there is no history of quote-to-quote changes
+ * to fit it on yet; revisit once the trial's +10/+40 pairs give a
+ * distribution. A line change always counts.
+ */
+export const PRICE_MOVE_PTS = 3;
+
+function noVigOver(q: Pick<TimedQuote, "over" | "under">): number | null {
+  if (q.over == null || q.under == null) return null;
+  const o = americanToProb(q.over);
+  const u = americanToProb(q.under);
+  return o + u > 0 ? o / (o + u) : null;
+}
+
+/** A line change, or a price change of at least PRICE_MOVE_PTS on the no-vig Over (pure). */
+export function isMove(before: Pick<TimedQuote, "line" | "over" | "under">, after: Pick<TimedQuote, "line" | "over" | "under">): boolean {
+  if (before.line !== after.line) return true;
+  const a = noVigOver(before);
+  const b = noVigOver(after);
+  return a != null && b != null && Math.abs(b - a) * 100 >= PRICE_MOVE_PTS;
+}
 
 /**
  * Main-line quotes only: one quote per book, player prop and fetch. A book
@@ -58,7 +84,7 @@ export function bookMoves(quotes: TimedQuote[], newsAt: Date): BookMove[] {
     const before = ordered.filter((q) => q.fetchedAt.getTime() <= t0).pop();
     const after = ordered.filter((q) => q.fetchedAt.getTime() > t0);
     if (!before || after.length === 0) continue;
-    const moved = after.find((q) => !same(q, before));
+    const moved = after.find((q) => isMove(before, q));
     const { book, key } = before;
     const group = profileFor(book).group;
     if (moved) {
@@ -142,4 +168,57 @@ export function venueGapsAtFetch(
     const venue = (b: string) => qs.find((q) => q.book === b)?.line ?? null;
     return { key, books: books.length ? consensusLine(propType, books) : null, underdog: venue("underdog"), prizepicks: venue("prizepicks") };
   });
+}
+
+export interface PropChange {
+  book: string;
+  group: string;
+  key: string;
+  moved: boolean;
+  /** Second fetch's line minus the first's. */
+  lineChange: number;
+}
+
+/**
+ * How each book's quote of each prop changed between two fetches — the
+ * trial's +10 and +40 minute fetches (pure). A book quoting several lines for
+ * a prop in either fetch (alternates) is left out.
+ */
+export function propChangesBetween(first: TimedQuote[], second: TimedQuote[]): PropChange[] {
+  const single = (qs: TimedQuote[]) => {
+    const by = new Map<string, TimedQuote[]>();
+    for (const q of qs) (by.get(`${q.book}§${q.key}`) ?? by.set(`${q.book}§${q.key}`, []).get(`${q.book}§${q.key}`)!).push(q);
+    return new Map([...by].filter(([, v]) => v.length === 1).map(([k, v]) => [k, v[0]]));
+  };
+  const a = single(first);
+  const b = single(second);
+  const out: PropChange[] = [];
+  for (const [k, q1] of a) {
+    const q2 = b.get(k);
+    if (!q2) continue;
+    out.push({ book: q1.book, group: profileFor(q1.book).group, key: q1.key, moved: isMove(q1, q2), lineChange: q2.line - q1.line });
+  }
+  return out;
+}
+
+export interface VenueChange {
+  group: string;
+  props: number;
+  moved: number;
+  /** Mean line change across the group's props (moved or not); null with none. */
+  meanLineChange: number | null;
+}
+
+/** Per venue group: how many props moved between the two fetches, and the mean line change. */
+export function summarizeChanges(rows: PropChange[]): VenueChange[] {
+  const groups = new Map<string, PropChange[]>();
+  for (const r of rows) (groups.get(r.group) ?? groups.set(r.group, []).get(r.group)!).push(r);
+  return [...groups.entries()]
+    .map(([group, rs]) => ({
+      group,
+      props: rs.length,
+      moved: rs.filter((r) => r.moved).length,
+      meanLineChange: rs.length ? rs.reduce((s, r) => s + r.lineChange, 0) / rs.length : null,
+    }))
+    .sort((a, b) => a.group.localeCompare(b.group));
 }

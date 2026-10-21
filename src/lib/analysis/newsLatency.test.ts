@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookMoves, latencyByGroup, venueGapsAtFetch, type TimedQuote } from "./newsLatency";
+import { bookMoves, isMove, latencyByGroup, propChangesBetween, summarizeChanges, venueGapsAtFetch, type TimedQuote } from "./newsLatency";
 
 const at = (min: number) => new Date(Date.UTC(2026, 9, 25, 15, 0) + min * 60_000);
 const q = (book: string, line: number, fetchMin: number, o: Partial<TimedQuote> = {}): TimedQuote => ({
@@ -63,5 +63,37 @@ describe("venueGapsAtFetch", () => {
     const quotes = [q("fanduel", 49.5, 10), q("draftkings", 49.5, 10), q("underdog", 44.5, 10), q("prizepicks", 46.5, 10)];
     const rows = venueGapsAtFetch(quotes, (_t, books) => books[0].line);
     expect(rows).toEqual([{ key: "Teammate|Receiving Yards", books: 49.5, underdog: 44.5, prizepicks: 46.5 }]);
+  });
+});
+
+describe("isMove", () => {
+  const base = { line: 44.5, over: -110, under: -110 };
+  it("counts any line change", () => {
+    expect(isMove(base, { ...base, line: 45.5 })).toBe(true);
+  });
+  it("ignores routine price ticks, counts a real re-price", () => {
+    expect(isMove(base, { ...base, over: -115, under: -105 })).toBe(false); // one tick: ~1.1 pts
+    expect(isMove(base, { ...base, over: -120, under: 100 })).toBe(false); // two ticks: ~2.2 pts
+    expect(isMove(base, { ...base, over: -125, under: 105 })).toBe(true); // three ticks: ~3.2 pts
+  });
+  it("counts only line changes where prices are placeholders (venues)", () => {
+    expect(isMove({ line: 44.5, over: null, under: null }, { line: 44.5, over: null, under: null })).toBe(false);
+    expect(isMove({ line: 44.5, over: null, under: null }, { line: 41.5, over: null, under: null })).toBe(true);
+  });
+});
+
+describe("propChangesBetween + summarizeChanges", () => {
+  it("compares each book's quote of each prop between the +10 and +40 fetches, per venue", () => {
+    const f1 = [q("underdog", 44.5, 10, { over: null, under: null }), q("fanduel", 47.5, 10), q("draftkings", 47.5, 10)];
+    const f2 = [q("underdog", 49.5, 40, { over: null, under: null }), q("fanduel", 49.5, 40), q("draftkings", 47.5, 40, { over: -112, under: -108 })];
+    const rows = propChangesBetween(f1, f2);
+    expect(rows).toHaveLength(3);
+    const s = summarizeChanges(rows);
+    expect(s.find((g) => g.group === "underdog")).toEqual({ group: "underdog", props: 1, moved: 1, meanLineChange: 5 });
+    expect(s.find((g) => g.group === "fanduel")).toMatchObject({ moved: 1, meanLineChange: 2 });
+    expect(s.find((g) => g.group === "draftkings")).toMatchObject({ moved: 0, meanLineChange: 0 });
+  });
+  it("leaves out a book quoting several lines (alternates) in either fetch", () => {
+    expect(propChangesBetween([q("fanduel", 44.5, 10), q("fanduel", 54.5, 10)], [q("fanduel", 49.5, 40)])).toEqual([]);
   });
 });

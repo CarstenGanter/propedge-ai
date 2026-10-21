@@ -138,6 +138,19 @@ venue moves since the last pre-news quote, venues still moving between the two f
 venue's gap to the books' line at each. The injury watch now looks 96 hours ahead so Friday reaches
 Monday night.
 
+**Measurement (decided 2026-10-21; the trial keeps running as approved).**
+- **Main output:** each venue's change between the trial's +10 and +40 minute fetches — moved props
+  and mean line change per venue group — for the out player's teammates, beside the other team's
+  props from the same two fetches as a comparison group (no extra credits). The move since the last
+  stored pre-news quote, which may be hours old, is secondary and marked exploratory.
+- **A move** is a line change, or a price change of at least 3 points on a book's no-vig Over
+  (`PRICE_MOVE_PTS`; a one-tick re-price is ~1.1 points, three ticks ~3.2). Set by judgment, not
+  fitted — there was no quote-to-quote history to fit it on; revisit once the trial's fetch pairs
+  give a distribution. Venue prices are placeholders, so only venue lines count.
+- **News time is our poll time:** when the injury watch first saw the change (~15-minute
+  resolution), not the report's own timestamp. A first sighting and "cleared → out" (a flapping
+  report) never count as news.
+
 ### Carries alert
 
 A running back newly out (with recent carries) raises an alert on the gameday page and in the
