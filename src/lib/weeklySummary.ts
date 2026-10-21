@@ -66,7 +66,8 @@ export function nflWeekStart(now: Date): Date {
 
 export interface LedgerRow {
   at: Date;
-  credits: number;
+  /** Null: timed out or failed, cost unknown (such a row has no balance either). */
+  credits: number | null;
   remaining: number | null;
 }
 
@@ -85,8 +86,10 @@ export function unaccountedCredits(rows: LedgerRow[]): number {
   for (let i = 1; i < trail.length; i++) {
     const prev = trail[i - 1];
     const cur = trail[i];
-    if (cur.remaining! > prev.remaining! + prev.credits + cur.credits) continue; // reset
-    gap += prev.remaining! - cur.remaining! - cur.credits;
+    const prevCost = prev.credits ?? 0;
+    const curCost = cur.credits ?? 0;
+    if (cur.remaining! > prev.remaining! + prevCost + curCost) continue; // reset
+    gap += prev.remaining! - cur.remaining! - curCost;
   }
   return gap;
 }

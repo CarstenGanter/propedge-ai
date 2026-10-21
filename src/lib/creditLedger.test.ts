@@ -17,6 +17,11 @@ describe("credit ledger", () => {
     expect(created[0]).toMatchObject({ kind: "closing", credits: 3, remaining: 196, status: 200, endpoint: "/sports/americanfootball_nfl/odds?regions=us&markets=h2h" });
   });
 
+  it("stores an unknown cost as null, not 0", async () => {
+    await withCreditKind("closing", () => logOddsApiCall({ ...call, credits: null, remaining: null, status: 0 }));
+    expect(created[0]).toMatchObject({ kind: "closing", credits: null, status: 0 });
+  });
+
   it("logs a call no caller tagged as untagged, so nothing spends unseen", async () => {
     await logOddsApiCall(call);
     expect(created[0]).toMatchObject({ kind: "untagged" });

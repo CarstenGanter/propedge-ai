@@ -209,7 +209,7 @@ async function fetchJson<T>(url: string, timeoutMs = 9000): Promise<FetchResult<
   }
   // Log the spend only once the body is in hand and the abort timer is off: a
   // slow ledger write inside the window could abort a request already paid for.
-  if (result.status !== 0) await reportOddsApiCall({ url, credits: result.last, remaining: result.remaining, status: result.status });
+  await reportOddsApiCall({ url, credits: result.last, remaining: result.remaining, status: result.status });
   return result;
 }
 

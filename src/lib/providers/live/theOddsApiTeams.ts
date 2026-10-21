@@ -37,7 +37,7 @@ async function fetchJson<T>(url: string, timeoutMs = 9000): Promise<FetchResult<
     clearTimeout(timer);
   }
   // Log only after the body is read and the abort timer is off (see theOddsApi.ts).
-  if (result.status !== 0) await reportOddsApiCall({ url, credits, remaining: result.remaining, status: result.status });
+  await reportOddsApiCall({ url, credits, remaining: result.remaining, status: result.status });
   return result;
 }
 

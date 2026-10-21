@@ -19,7 +19,7 @@ export async function logOddsApiCall(call: OddsApiCall): Promise<void> {
     data: {
       at: new Date(),
       kind: kind.getStore() ?? "untagged",
-      credits: call.credits ?? 0,
+      credits: call.credits,
       remaining: call.remaining,
       endpoint: call.url.replace(/^https:\/\/api\.the-odds-api\.com\/v4/, ""),
       status: call.status,
@@ -27,8 +27,15 @@ export async function logOddsApiCall(call: OddsApiCall): Promise<void> {
   });
 }
 
-/** Credits spent since `since`, by kind. */
-export async function creditsByKind(since: Date): Promise<{ kind: string; credits: number; calls: number }[]> {
-  const rows = await prisma.creditSpend.groupBy({ by: ["kind"], where: { at: { gte: since } }, _sum: { credits: true }, _count: true });
-  return rows.map((r) => ({ kind: r.kind, credits: r._sum.credits ?? 0, calls: r._count })).sort((a, b) => b.credits - a.credits);
+/** Credits spent since `since`, by kind; `unknownCost` counts timed-out or failed calls that may have been charged. */
+export async function creditsByKind(since: Date): Promise<{ kind: string; credits: number; calls: number; unknownCost: number }[]> {
+  const rows = await prisma.creditSpend.findMany({ where: { at: { gte: since } }, select: { kind: true, credits: true } });
+  const byKind = new Map<string, { kind: string; credits: number; calls: number; unknownCost: number }>();
+  for (const r of rows) {
+    const k = byKind.get(r.kind) ?? byKind.set(r.kind, { kind: r.kind, credits: 0, calls: 0, unknownCost: 0 }).get(r.kind)!;
+    k.calls++;
+    if (r.credits == null) k.unknownCost++;
+    else k.credits += r.credits;
+  }
+  return [...byKind.values()].sort((a, b) => b.credits - a.credits);
 }

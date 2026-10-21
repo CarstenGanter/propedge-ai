@@ -156,7 +156,12 @@ async function main() {
   const byKind = await creditsByKind(weekStart);
   const rows = await prisma.creditSpend.findMany({ where: { at: { gte: weekStart } }, orderBy: { at: "asc" }, select: { at: true, credits: true, remaining: true } });
   const first = await prisma.creditSpend.findFirst({ orderBy: { at: "asc" }, select: { at: true } });
-  for (const k of byKind) out(`  ${k.kind.padEnd(18)} ${String(k.credits).padStart(4)} credits in ${k.calls} call${k.calls === 1 ? "" : "s"}`);
+  for (const k of byKind) {
+    out(
+      `  ${k.kind.padEnd(18)} ${String(k.credits).padStart(4)} credits in ${k.calls} call${k.calls === 1 ? "" : "s"}` +
+        (k.unknownCost ? ` (+ ${k.unknownCost} timed out or failed — cost unknown, may have been charged)` : ""),
+    );
+  }
   const total = byKind.reduce((s, k) => s + k.credits, 0);
   out(`  ${"total".padEnd(18)} ${String(total).padStart(4)}${rows.length ? `; balance after the last call ${rows[rows.length - 1].remaining ?? "—"}` : ""}`);
   if (rows.length > 1) out(`  spent between logged calls by something unlogged: ${unaccountedCredits(rows)}`);

@@ -400,7 +400,7 @@ model CreditSpend {
   id        String   @id @default(cuid())
   at        DateTime
   kind      String // slate | alt | closing | closing-moneyline | news | team-picks | manual | daily | untagged
-  credits   Int
+  credits   Int? // null: the request timed out or failed, so its cost is unknown (it may still have been charged)
   remaining Int?
   endpoint  String // the request path and markets, API key removed
   status    Int

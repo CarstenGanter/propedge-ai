@@ -60,6 +60,14 @@ describe("unaccountedCredits", () => {
   });
 });
 
+describe("unaccountedCredits with a timed-out call", () => {
+  const at = (m: number) => new Date(Date.UTC(2026, 9, 25, 12, m));
+  it("shows a timed-out call that was charged as unaccounted — its cost was never known", () => {
+    // 3 credits charged for a request that timed out (no balance header came back).
+    expect(unaccountedCredits([{ at: at(0), credits: 6, remaining: 190 }, { at: at(1), credits: null, remaining: null }, { at: at(2), credits: 1, remaining: 186 }])).toBe(3);
+  });
+});
+
 describe("fmtInterval", () => {
   it("marks an interval that excludes zero", () => {
     expect(fmtInterval(1.23, { lo: 0.2, hi: 2.4 }, 1, " pts")).toBe("+1.2 pts [+0.2, +2.4]  ◀ excludes zero");
