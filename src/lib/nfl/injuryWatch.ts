@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { releaseLock, tryAcquireLock } from "@/lib/providerCache";
-import { diffInjuryReports, parseInjuryReport, type EspnSummaryInjuries } from "./injuryReport";
+import { cacheGet, cacheSet, releaseLock, tryAcquireLock } from "@/lib/providerCache";
+import { diffInjuryReports, isNewsworthyOut, missingFromReport, parseInjuryReport, type EspnSummaryInjuries } from "./injuryReport";
 import { getNflSlate, type NflGame } from "./schedule";
 import { rbOutAlerts } from "./rbOutAlertData";
 import { formatRbOutAlert } from "./rbOutAlert";
@@ -21,6 +21,8 @@ const SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summ
 const LOOKAHEAD_MS = 96 * 3_600_000;
 const LOCK_KEY = "lock:nfl:injury-watch";
 const LOCK_TTL_MS = 10 * 60_000;
+/** Players missing from a game's report at the last check: a second miss in a row clears them. */
+const absentKey = (eventId: string) => `injury:absent:${eventId}`;
 
 async function fetchSummary(eventId: string): Promise<EspnSummaryInjuries | null> {
   const controller = new AbortController();
@@ -59,7 +61,8 @@ export async function runInjuryWatch(source: "launchd" | "app", now = new Date()
     const alertLines: string[] = [];
     for (const g of games) {
       const summary = await fetchSummary(g.eventId);
-      if (!summary) continue;
+      // No injuries array at all is a bad response, not "everyone dropped off the report".
+      if (!summary || !Array.isArray(summary.injuries)) continue;
       const rows = await prisma.injuryStatusChange.findMany({
         where: { eventId: g.eventId },
         orderBy: { detectedAt: "asc" },
@@ -67,7 +70,10 @@ export async function runInjuryWatch(source: "launchd" | "app", now = new Date()
       });
       const previous = new Map<string, string>();
       for (const r of rows) previous.set(`${r.team}|${r.playerName}`, r.toStatus);
-      const diff = diffInjuryReports(previous, parseInjuryReport(summary));
+      const report = parseInjuryReport(summary);
+      const absentLastCheck = new Set((await cacheGet<string[]>(absentKey(g.eventId)))?.value ?? []);
+      const diff = diffInjuryReports(previous, report, absentLastCheck);
+      await cacheSet(absentKey(g.eventId), [...missingFromReport(previous, report)]);
       if (diff.length === 0) continue;
       await prisma.injuryStatusChange.createMany({
         data: diff.map((c) => ({ ...c, detectedAt: now, eventId: g.eventId, kickoff: new Date(g.kickoffISO) })),
@@ -75,7 +81,7 @@ export async function runInjuryWatch(source: "launchd" | "app", now = new Date()
       changes += diff.length;
       toOut += diff.filter((c) => c.toStatus === "out").length;
       // A running back newly out: alert with his teammates' rushing lines (not a probability change).
-      const rbOut = diff.filter((c) => c.toStatus === "out" && c.fromStatus != null && (c.position ?? "").toUpperCase() === "RB");
+      const rbOut = diff.filter((c) => isNewsworthyOut(c) && (c.position ?? "").toUpperCase() === "RB");
       if (rbOut.length) {
         const report = parseInjuryReport(summary).map((t) => ({ ...t, players: t.players.filter((p) => rbOut.some((c) => c.team === t.team && c.playerName === p.name)) }));
         const alerts = await rbOutAlerts(toNflSlateDate(g.kickoffISO), [{ game: g, injuries: report }], { cacheOnly: false });

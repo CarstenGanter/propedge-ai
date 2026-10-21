@@ -94,13 +94,26 @@ export interface InjuryChange {
   rawStatus: string | null;
 }
 
+/** Players we last recorded with a status who are missing from the report now (keys `${team}|${playerName}`). */
+export function missingFromReport(previous: Map<string, string>, current: NflTeamInjuryReport[]): Set<string> {
+  const seen = new Set(current.flatMap((t) => t.players.map((p) => `${t.team}|${p.name}`)));
+  return new Set([...previous].filter(([key, status]) => status !== "cleared" && !seen.has(key)).map(([key]) => key));
+}
+
 /**
  * What changed between the last statuses we recorded for a game and its
- * report now (pure). A new name is a change from null; a name that drops off
- * the report is "cleared" — ESPN removes players once they're off the report.
- * `previous` is keyed `${team}|${playerName}`.
+ * report now (pure). A new name is a change from null. A name that drops off
+ * the report is "cleared" — ESPN removes players once they're off it — but
+ * only when it was also missing at the previous check (`absentLastCheck`, from
+ * missingFromReport then): ESPN's report flaps, and on 2026-10-20 A.J. Brown
+ * went questionable → cleared → questionable → cleared within hours. One
+ * missing fetch is not news. `previous` is keyed `${team}|${playerName}`.
  */
-export function diffInjuryReports(previous: Map<string, string>, current: NflTeamInjuryReport[]): InjuryChange[] {
+export function diffInjuryReports(
+  previous: Map<string, string>,
+  current: NflTeamInjuryReport[],
+  absentLastCheck: Set<string> = new Set(),
+): InjuryChange[] {
   const out: InjuryChange[] = [];
   const seen = new Set<string>();
   for (const t of current) {
@@ -114,9 +127,20 @@ export function diffInjuryReports(previous: Map<string, string>, current: NflTea
     }
   }
   for (const [key, status] of previous) {
-    if (seen.has(key) || status === "cleared") continue;
+    if (seen.has(key) || status === "cleared" || !absentLastCheck.has(key)) continue;
     const [team, playerName] = key.split("|");
     out.push({ team, playerName, position: null, fromStatus: status, toStatus: "cleared", rawStatus: null });
   }
   return out;
+}
+
+/**
+ * A change to Out that counts as news, for the news-fetch trial and the
+ * latency test: from a real earlier status. A first sighting (from null) has
+ * no "before", and "cleared → out" is a player reappearing on the report —
+ * usually a flap, not news.
+ */
+export const NOT_NEWS_FROM = ["out", "cleared"] as const;
+export function isNewsworthyOut(c: { fromStatus: string | null; toStatus: string }): boolean {
+  return c.toStatus === "out" && c.fromStatus != null && !(NOT_NEWS_FROM as readonly string[]).includes(c.fromStatus);
 }

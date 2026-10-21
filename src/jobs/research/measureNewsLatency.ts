@@ -20,6 +20,7 @@ import { prisma } from "@/lib/db/client";
 import { bookMoves, latencyByGroup, venueGapsAtFetch, type BookMove, type TimedQuote } from "@/lib/analysis/newsLatency";
 import { buildConsensus } from "@/lib/analysis/marketConsensus";
 import { classifyWindow } from "@/lib/nfl/newsFetchTrial";
+import { NOT_NEWS_FROM } from "@/lib/nfl/injuryReport";
 import { resolveEspnAthlete } from "@/lib/providers/live/espnPlayerStats";
 import { teamsMatch } from "@/lib/utils/teamName";
 import { emitSummary } from "@/lib/jobSummary";
@@ -38,7 +39,8 @@ function printGroups(moves: BookMove[], indent: string) {
 
 async function main() {
   const changes = await prisma.injuryStatusChange.findMany({
-    where: { toStatus: "out", fromStatus: { not: null, notIn: ["out"] } },
+    // Real news only: not a first sighting, and not "cleared → out" (a player reappearing on a flapping report).
+    where: { toStatus: "out", fromStatus: { not: null, notIn: [...NOT_NEWS_FROM] } },
     orderBy: { detectedAt: "asc" },
   });
   const firstSightings = await prisma.injuryStatusChange.count({ where: { fromStatus: null } });

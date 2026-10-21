@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diffInjuryReports, parseInjuryReport, teammateAbsenceBoost, type NflTeamInjuryReport } from "./injuryReport";
+import { diffInjuryReports, isNewsworthyOut, missingFromReport, parseInjuryReport, teammateAbsenceBoost, type NflTeamInjuryReport } from "./injuryReport";
 
 // Verified ESPN summary `injuries` shape.
 const summary = {
@@ -81,9 +81,32 @@ describe("diffInjuryReports", () => {
     expect(diffInjuryReports(new Map([["Seattle Seahawks|Cooper Kupp", "out"]]), report([{ name: "Cooper Kupp", status: "out" }]))).toEqual([]);
   });
 
-  it("marks a player who dropped off the report as cleared, once", () => {
-    const changes = diffInjuryReports(new Map([["Seattle Seahawks|Cooper Kupp", "questionable"]]), report([]));
-    expect(changes).toMatchObject([{ playerName: "Cooper Kupp", fromStatus: "questionable", toStatus: "cleared" }]);
-    expect(diffInjuryReports(new Map([["Seattle Seahawks|Cooper Kupp", "cleared"]]), report([]))).toEqual([]);
+  it("clears a player only after two checks in a row without him, and only once", () => {
+    const prev = new Map([["Seattle Seahawks|Cooper Kupp", "questionable"]]);
+    // First miss: no change, but remembered.
+    expect(diffInjuryReports(prev, report([]))).toEqual([]);
+    const missing = missingFromReport(prev, report([]));
+    expect([...missing]).toEqual(["Seattle Seahawks|Cooper Kupp"]);
+    // Second miss in a row: cleared.
+    expect(diffInjuryReports(prev, report([]), missing)).toMatchObject([{ playerName: "Cooper Kupp", fromStatus: "questionable", toStatus: "cleared" }]);
+    expect(diffInjuryReports(new Map([["Seattle Seahawks|Cooper Kupp", "cleared"]]), report([]), missing)).toEqual([]);
+  });
+
+  it("ignores a one-fetch flap — the A.J. Brown pattern", () => {
+    const prev = new Map([["Seattle Seahawks|Cooper Kupp", "questionable"]]);
+    const missing = missingFromReport(prev, report([])); // dropped off once
+    // Back on the next fetch with the same status: nothing happened.
+    expect(diffInjuryReports(prev, report([{ name: "Cooper Kupp", status: "questionable" }]), missing)).toEqual([]);
+    expect(missingFromReport(prev, report([{ name: "Cooper Kupp", status: "questionable" }])).size).toBe(0);
+  });
+});
+
+describe("isNewsworthyOut", () => {
+  it("counts a change to Out from a real earlier status, not a first sighting or a reappearance", () => {
+    expect(isNewsworthyOut({ fromStatus: "questionable", toStatus: "out" })).toBe(true);
+    expect(isNewsworthyOut({ fromStatus: "doubtful", toStatus: "out" })).toBe(true);
+    expect(isNewsworthyOut({ fromStatus: null, toStatus: "out" })).toBe(false);
+    expect(isNewsworthyOut({ fromStatus: "cleared", toStatus: "out" })).toBe(false);
+    expect(isNewsworthyOut({ fromStatus: "questionable", toStatus: "doubtful" })).toBe(false);
   });
 });
