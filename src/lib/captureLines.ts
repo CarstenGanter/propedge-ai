@@ -7,7 +7,7 @@ import { teamsMatch } from "@/lib/utils/teamName";
 import { isLeague, type League } from "@/lib/teamLeagues";
 import { todaySlate } from "@/lib/utils/dates";
 import { toNflSlateDate } from "@/lib/nfl/slate";
-import { nameMatch } from "@/lib/utils/playerName";
+import { pickByName } from "@/lib/utils/playerName";
 import { sideProbsAtLine } from "@/lib/analysis/quoteHistory";
 import { consensusOf, parseSnapshot } from "@/lib/marketSnapshot";
 import { saveQuotes } from "@/lib/oddsStore";
@@ -127,13 +127,13 @@ export async function captureClosingLines(opts?: {
       if (res.props.length === 0) continue;
       for (const pick of marketPicks.filter((p) => p.playerProp.sport === sport)) {
         const pp = pick.playerProp;
-        const np = res.props.find(
+        const sameGameAndMarket = res.props.filter(
           (x) =>
             x.propType === pp.propType &&
-            nameMatch(x.playerName, pp.playerName) &&
             ((teamsMatch(x.homeTeam, pp.team) && teamsMatch(x.awayTeam, pp.opponent)) ||
               (teamsMatch(x.homeTeam, pp.opponent) && teamsMatch(x.awayTeam, pp.team))),
         );
+        const np = pickByName(sameGameAndMarket, pp.playerName, (x) => x.playerName);
         if (!np) continue;
         const line = playedLine(pp.line, pp.underdogLine);
         if (np.consensus) {
