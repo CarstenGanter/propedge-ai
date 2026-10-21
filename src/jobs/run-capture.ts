@@ -5,12 +5,16 @@
  * or: npm run capture   (add --props to also capture prop closing lines, uses credits)
  */
 import { captureClosingLines } from "@/lib/captureLines";
+import { runAutoCapture } from "@/lib/nfl/runAutoCapture";
+import { SPORTS } from "@/types";
 
 async function main() {
   const includeProps = process.argv.includes("--props");
   const stamp = new Date().toISOString();
   console.log(`[${stamp}] Capturing closing lines${includeProps ? " (incl. props)" : " (team picks only)"}…`);
-  const r = await captureClosingLines({ includeProps });
+  // NFL props only through the scheduled pass's window, lock and once-per-game rule.
+  const r = await captureClosingLines({ includeProps, sports: SPORTS.filter((s) => s !== "NFL") });
+  if (includeProps) console.log(await runAutoCapture("manual"));
   if (!r.ok) {
     console.error(`[${stamp}] Failed: ${r.error}`);
     process.exit(1);

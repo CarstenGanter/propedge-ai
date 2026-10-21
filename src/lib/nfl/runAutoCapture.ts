@@ -48,7 +48,7 @@ async function uncapturedGames(date: string): Promise<UncapturedGame[]> {
  *
  * Returns a one-line summary for the caller to log.
  */
-export async function runAutoCapture(source: "launchd" | "app", now = new Date()): Promise<string> {
+export async function runAutoCapture(source: "launchd" | "app" | "manual", now = new Date()): Promise<string> {
   const stamp = now.toISOString();
   const date = toNflSlateDate(stamp);
   const log = (msg: string) => `[${stamp}] ${source} ${date}: ${msg}`;
