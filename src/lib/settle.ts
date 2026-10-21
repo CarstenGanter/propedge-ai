@@ -7,7 +7,17 @@ export interface SettleOptions {
   actualResult?: number | null;
   /** Force a status (e.g. manual push/void) instead of deriving from the result. */
   status?: SettlementStatus;
+  /** Replaces the pick's note — the Settle dialog, where you edit the note itself. */
   note?: string;
+  /** Added after the pick's note, never replacing it — automatic settlement explaining itself. */
+  appendNote?: string;
+}
+
+/** The pick's note after settlement: a dialog note replaces, an automatic one is appended (pure). */
+export function settledNote(existing: string | null, opts: Pick<SettleOptions, "note" | "appendNote">): string | null {
+  const base = opts.note ?? existing;
+  if (!opts.appendNote) return base;
+  return base ? `${base}\n${opts.appendNote}` : opts.appendNote;
 }
 
 /** Settle a single pick, cascading to its bankroll entry and any parlay legs. */
@@ -33,7 +43,7 @@ export async function settlePickById(pickId: string, opts: SettleOptions) {
     });
     await tx.pick.update({
       where: { id: pick.id },
-      data: { status, actualResult: actual, userNote: opts.note ?? pick.userNote },
+      data: { status, actualResult: actual, userNote: settledNote(pick.userNote, opts) },
     });
 
     // Update any single-bet bankroll entry tied to this pick.

@@ -78,8 +78,8 @@ export async function runAutoSettle(source: "launchd" | "app", now = new Date())
           const d = await snaps.decide(pick.playerProp);
           // nflverse can't settle it (name or source disagreement): don't re-download every pass.
           if (d.kind === "manual") await cacheSet(manualKey(pick.id), d.reason);
-          if (d.kind === "settle") await settlePickById(pick.id, { actualResult: d.actualResult, note: d.note });
-          else if (d.kind === "void") await settlePickById(pick.id, { status: "void", actualResult: null, note: d.note });
+          if (d.kind === "settle") await settlePickById(pick.id, { actualResult: d.actualResult, appendNote: d.note });
+          else if (d.kind === "void") await settlePickById(pick.id, { status: "void", actualResult: null, appendNote: d.note });
           if (d.kind === "settle" || d.kind === "void") {
             settled++;
             fromSnaps++;
