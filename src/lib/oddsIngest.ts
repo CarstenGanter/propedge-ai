@@ -9,6 +9,7 @@ import { planIngest, propKey, refreshableFields } from "@/lib/ingestMerge";
 import { parseSnapshot, snapshotFrom } from "@/lib/marketSnapshot";
 import { mergeAvailability, mergeUnderdogLine, underdogPricesLookReal } from "@/lib/analysis/venues";
 import { saveQuotes } from "@/lib/oddsStore";
+import { teamsMatch } from "@/lib/utils/teamName";
 
 export interface OddsIngestResult {
   ok: boolean;
@@ -17,8 +18,8 @@ export interface OddsIngestResult {
   /** Props refreshed in place (user data on them kept). */
   updated?: number;
   created?: number;
-  /** Props no longer offered by any book, with nothing depending on them. */
-  removed?: number;
+  /** Props no longer offered in a game this fetch priced, marked withdrawn (never deleted). */
+  withdrawn?: number;
   events: number;
   creditsRemaining: number | null;
   dates: string[];
@@ -43,10 +44,11 @@ export interface IngestOptions {
 /**
  * Fetch, de-vig, and store player props for a sport from The Odds API.
  * Merges into the pending Odds-API props already stored for that sport (and
- * slate date, when given): a prop still offered is updated in place, a new one
- * is created, and one no longer offered is removed only if nothing depends on
- * it. See ingestMerge.ts for why this is not a delete-and-recreate. Does NOT
- * revalidate or generate — callers do that.
+ * slate date, when given): a prop still offered is updated in place (and
+ * revived if it had been withdrawn), a new one is created, and one no longer
+ * offered in a game this fetch priced is marked withdrawn if nothing depends on
+ * it. See ingestMerge.ts for why nothing is deleted. Does NOT revalidate or
+ * generate — callers do that.
  */
 export async function ingestOddsPropsForSport(
   sport: Sport,
@@ -110,11 +112,11 @@ export async function ingestOddsPropsForSport(
     where: {
       source: "The Odds API",
       sport,
-      status: "pending",
+      status: { in: ["pending", "withdrawn"] },
       ...(options.slateDate ? { date: options.slateDate } : {}),
     },
     select: {
-      id: true, date: true, playerName: true, propType: true, gameId: true, team: true, opponent: true,
+      id: true, date: true, status: true, playerName: true, propType: true, gameId: true, team: true, opponent: true,
       underdogLine: true, underdogAvailable: true, underdogPickMultiplier: true, marketDataJson: true,
       // Only a pick you bet (placed, or in a saved slip) locks the prop's line
       // and side. Auto-generated board picks are rebuilt by the re-rank anyway.
@@ -142,8 +144,11 @@ export async function ingestOddsPropsForSport(
     };
   };
   const byKey = new Map(rows.map((r) => [propKey(r), r]));
+  // Odds API props store the home side as `team`.
+  const priced = (s: (typeof stored)[number]) =>
+    result.pricedEvents.some((e) => teamsMatch(e.home, s.team) && teamsMatch(e.away, s.opponent));
   const plan = planIngest(
-    stored.map((s) => ({ id: s.id, key: propKey(s), hasPick: s._count.picks > 0 })),
+    stored.map((s) => ({ id: s.id, key: propKey(s), hasPick: s._count.picks > 0, priced: priced(s), withdrawn: s.status === "withdrawn" })),
     [...byKey.keys()],
   );
 
@@ -154,13 +159,20 @@ export async function ingestOddsPropsForSport(
     const data: Record<string, unknown> = refreshableFields(withUnderdog(byKey.get(key)!, prev, hasPick), hasPick);
     // A payout you typed belongs to the side shown when you typed it.
     if (prev?.underdogPickMultiplier != null) delete data.direction;
+    if (prev?.status === "withdrawn") data.status = "pending"; // re-offered
     await prisma.playerProp.update({ where: { id }, data });
   }
   if (plan.create.length > 0) {
     await prisma.playerProp.createMany({ data: plan.create.map((k) => withUnderdog(byKey.get(k)!)) });
   }
-  if (plan.remove.length > 0) {
-    await prisma.playerProp.deleteMany({ where: { id: { in: plan.remove } } });
+  if (plan.withdraw.length > 0) {
+    // Off the board: the prop's unplaced board picks go (the re-rank rebuilds
+    // the board anyway), while the prop row, its grade and its logged
+    // forecasts stay for research.
+    await prisma.pick.deleteMany({
+      where: { playerPropId: { in: plan.withdraw }, status: "pending", placedReal: false, parlayLegs: { none: {} } },
+    });
+    await prisma.playerProp.updateMany({ where: { id: { in: plan.withdraw } }, data: { status: "withdrawn" } });
   }
 
   return {
@@ -169,7 +181,7 @@ export async function ingestOddsPropsForSport(
     imported: rows.length,
     updated: plan.update.size,
     created: plan.create.length,
-    removed: plan.remove.length,
+    withdrawn: plan.withdraw.length,
     events: result.events,
     creditsRemaining: result.status.remaining,
     dates: [...dates],

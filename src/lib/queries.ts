@@ -88,7 +88,8 @@ export async function getPendingPicks(): Promise<SerializedPick[]> {
 
 export async function getProps(where?: { date?: string; sport?: string }) {
   const props = await prisma.playerProp.findMany({
-    where,
+    // Withdrawn props (no longer offered) are kept for research, not listed.
+    where: { ...where, status: { not: "withdrawn" } },
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
   });
   return props.map(serializeProp);

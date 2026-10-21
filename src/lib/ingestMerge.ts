@@ -9,6 +9,13 @@ import { normName } from "@/lib/utils/playerName";
  * same day silently wiped the Underdog lines and payouts typed in, "not
  * offered" marks, captured closing lines, and the legs of saved slips. Now a
  * prop is updated in place, matched on what identifies it.
+ *
+ * Nor is a prop ever deleted: one the books stopped offering is marked
+ * withdrawn (off the board, still graded, its logged forecasts kept), and only
+ * when this fetch actually priced its game. A fetch after kickoff no longer
+ * sees started games, and a game that timed out or fell past the event cap
+ * wasn't priced; before 2026-10-21 both deleted the game's props, their board
+ * picks and their logged forecasts.
  */
 
 export interface PropIdentity {
@@ -30,6 +37,10 @@ export interface StoredProp {
   key: string;
   /** Has at least one pick — something the user may have acted on. */
   hasPick: boolean;
+  /** This fetch returned odds for the prop's game (so "not offered" means something). */
+  priced: boolean;
+  /** Already withdrawn by an earlier fetch. */
+  withdrawn?: boolean;
 }
 
 export interface IngestPlan {
@@ -37,8 +48,11 @@ export interface IngestPlan {
   update: Map<string, { id: string; hasPick: boolean }>;
   /** Incoming keys with no stored prop. */
   create: string[];
-  /** Stored props the fetch no longer offers and nothing depends on. */
-  remove: string[];
+  /**
+   * Stored props to mark withdrawn: offered nowhere in a game this fetch
+   * priced, or a spare duplicate — and nothing the user bet depends on them.
+   */
+  withdraw: string[];
 }
 
 export function planIngest(stored: StoredProp[], incomingKeys: string[]): IngestPlan {
@@ -47,16 +61,19 @@ export function planIngest(stored: StoredProp[], incomingKeys: string[]): Ingest
   for (const s of stored) (byKey.get(s.key) ?? byKey.set(s.key, []).get(s.key)!).push(s);
 
   const update = new Map<string, { id: string; hasPick: boolean }>();
-  const remove: string[] = [];
+  const withdraw: string[] = [];
   for (const [key, rows] of byKey) {
-    // Prefer the row with a pick, so a duplicate never outranks real history.
-    const [keep, ...extra] = [...rows].sort((a, b) => Number(b.hasPick) - Number(a.hasPick));
-    for (const e of extra) if (!e.hasPick) remove.push(e.id);
+    // Prefer the row with a pick, then a live row over a withdrawn one, so a
+    // duplicate never outranks real history.
+    const [keep, ...extra] = [...rows].sort(
+      (a, b) => Number(b.hasPick) - Number(a.hasPick) || Number(Boolean(a.withdrawn)) - Number(Boolean(b.withdrawn)),
+    );
+    for (const e of extra) if (!e.hasPick && !e.withdrawn) withdraw.push(e.id);
     if (incoming.has(key)) update.set(key, { id: keep.id, hasPick: keep.hasPick });
-    else if (!keep.hasPick) remove.push(keep.id);
+    else if (!keep.hasPick && !keep.withdrawn && keep.priced) withdraw.push(keep.id);
   }
   const create = [...incoming].filter((k) => !update.has(k));
-  return { update, create, remove };
+  return { update, create, withdraw };
 }
 
 /**

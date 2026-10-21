@@ -20,13 +20,13 @@ describe("propKey", () => {
 });
 
 describe("planIngest", () => {
-  it("updates what is still offered, creates what is new, removes only what nothing depends on", () => {
+  it("updates what is still offered, creates what is new, withdraws only what nothing depends on", () => {
     const plan = planIngest(
       [
-        { id: "a", key: "k1", hasPick: true },
-        { id: "b", key: "k2", hasPick: false },
-        { id: "c", key: "gone-picked", hasPick: true },
-        { id: "d", key: "gone-free", hasPick: false },
+        { id: "a", key: "k1", hasPick: true, priced: true },
+        { id: "b", key: "k2", hasPick: false, priced: true },
+        { id: "c", key: "gone-picked", hasPick: true, priced: true },
+        { id: "d", key: "gone-free", hasPick: false, priced: true },
       ],
       ["k1", "k2", "k3"],
     );
@@ -35,25 +35,55 @@ describe("planIngest", () => {
       ["k2", { id: "b", hasPick: false }],
     ]);
     expect(plan.create).toEqual(["k3"]);
-    // A prop with a pick is never removed, even when the books pulled it.
-    expect(plan.remove).toEqual(["d"]);
+    // A prop with a pick is never withdrawn, even when the books pulled it.
+    expect(plan.withdraw).toEqual(["d"]);
   });
 
-  it("keeps the row with a pick when duplicates exist, and drops the spare", () => {
+  it("leaves a game this fetch didn't price alone: started after kickoff, timed out, or past the event cap", () => {
+    // Sunday 1:30pm re-fetch: the 1pm game has started, so the books' feed no longer lists it.
     const plan = planIngest(
       [
-        { id: "spare", key: "k", hasPick: false },
-        { id: "real", key: "k", hasPick: true },
+        { id: "early-game", key: "1pm|receiver", hasPick: false, priced: false },
+        { id: "late-game", key: "4pm|receiver", hasPick: false, priced: true },
+      ],
+      ["4pm|receiver"],
+    );
+    expect(plan.withdraw).toEqual([]);
+    expect(plan.update.get("4pm|receiver")).toEqual({ id: "late-game", hasPick: false });
+  });
+
+  it("keeps the row with a pick when duplicates exist, and withdraws the spare", () => {
+    const plan = planIngest(
+      [
+        { id: "spare", key: "k", hasPick: false, priced: true },
+        { id: "real", key: "k", hasPick: true, priced: true },
       ],
       ["k"],
     );
     expect(plan.update.get("k")).toEqual({ id: "real", hasPick: true });
-    expect(plan.remove).toEqual(["spare"]);
+    expect(plan.withdraw).toEqual(["spare"]);
+  });
+
+  it("revives a withdrawn prop the books offer again, in preference to a spare", () => {
+    const plan = planIngest(
+      [
+        { id: "old", key: "k", hasPick: false, priced: true, withdrawn: true },
+      ],
+      ["k"],
+    );
+    expect(plan.update.get("k")).toEqual({ id: "old", hasPick: false });
+    expect(plan.create).toEqual([]);
+    expect(plan.withdraw).toEqual([]);
+  });
+
+  it("does not withdraw twice", () => {
+    const plan = planIngest([{ id: "w", key: "k", hasPick: false, priced: true, withdrawn: true }], []);
+    expect(plan.withdraw).toEqual([]);
   });
 
   it("does nothing destructive on an empty fetch", () => {
-    const plan = planIngest([{ id: "a", key: "k", hasPick: true }], []);
-    expect(plan.remove).toEqual([]);
+    const plan = planIngest([{ id: "a", key: "k", hasPick: true, priced: false }], []);
+    expect(plan.withdraw).toEqual([]);
   });
 });
 
