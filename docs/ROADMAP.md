@@ -191,3 +191,48 @@ the model's small share of a market-dominated blend. Removed on the evidence fro
   beyond them only 17 props so far — too few to judge.
 
 Reproduce with `npm run research:skill`.
+
+## Review findings and backlog (2026-10-21)
+
+Review pass on 2026-10-20 (ECC silent-failure-hunter, mle-reviewer, typescript-reviewer,
+/code-review, and the prisma-patterns checklist). Severity tags are the reviewers'.
+
+**Fixed 2026-10-21** (one commit each, with tests): re-fetch deleting props and forecasts
+(`7250ae4`), division rematches graded from the wrong week (`3e835ee`), demo mode settling real
+picks (`846d0d4`), injury-report flaps (`b5e1d7c`), "active" from a stale report (`58ac86d`),
+Clear-all wiping the research record (`b9f2bfe`), negative yards / placeholders / renamed keys read
+as 0 (`6f80143`), credit-log write inside the abort window (`51c05ad`), timed-out calls unlogged
+(`e778a3a`), one failing scheduler step or pick stopping the rest (`5873cf5`), auto-settle
+overwriting notes (`7d66390`), manual capture outside the window (`8afef47`), three settlement paths
+(`f0b7b84`), Jr./Sr. name collisions in capture (`d57730e`), hidden partial-fetch errors (`0c30f49`),
+"absent" meaning five things (`7c7a28b`), Underdog line entry time and source (`da37486`). Decisions
+applied: backfill quote time unknown, no clamp (`70c2687`); news-trial measurement (`5a5787b`); σ
+held-out price test and revert rule (`d4b174e`); secondary intervals marked "exploratory, not
+corrected". Database: backup before every migration and Clear-all, off-machine copy that refuses
+credentials (`edc51eb`, `2354e19`).
+
+**Backlog — not fixed yet.** (a) bet decisions / settlement, (b) research numbers, (c) credits.
+
+| Sev | Area | Where | What goes wrong | Proposed fix |
+| --- | --- | --- | --- | --- |
+| Medium | (c) | `captureLines.ts`, `oddsIngest.ts`, `nfl/ingest.ts` | A storage error after a paid fetch: nothing written, game not marked attempted, so the next pass buys it again; the alt-ladder fetch's own error is never surfaced | Save raw quotes first and mark attempted before the pick writes; surface the alt error |
+| Medium | (c, b) | `nfl/newsFetch.ts` | A news fetch that made no request still charges 3 credits to the trial budget; a failure mid-row leaves it queued, so it re-runs | Take spend from CreditSpend rows; mark the row done/failed in a finally |
+| Medium | (a, b) | `nfl/nflverseSeasons.ts`, `nfl/gradeProps.ts` | No download timeout (a stall can outlast the 10-minute settle lock); synchronous unzip in the web server; files re-downloaded every pass; missing columns read as 0; snap rows without an ID link grade "did not play" (void) instead of 0 | AbortSignal timeout, async unzip, per-pass cache, header check, roster/name fallback for unlinked rows |
+| Medium | (a) | `runAutoSettle.ts` | The settle line still calls every unresolved pick "not final yet"; manual and ungradable picks stay hidden until the 3-day cutoff | Log each unresolved pick's reason |
+| Medium | (b) | `predictionLog.ts`, `scoreVsMarket.ts` | Pushes: backfill venue rows use P(over \| no push), live rows unconditional P(over) — the live and backfill Over-vs-books rows aren't comparable on whole-number lines | One convention, conditional |
+| Medium | (b) | `marketSnapshot.ts`, `scoreVsMarket.ts`, `weekly.ts` | Not reproducible: past history recomputed with the current method; nflverse inputs live and unversioned; backfill delete-then-insert not atomic; "too few games" / "no market" drops not in the weekly summary | Save a manifest (code SHA, file hashes, seed) per run; transaction; print drop counts |
+| Medium | (b) | `fitConsensusSigma.ts` | The fit's own 2026-10-17 ladders take main lines from prop snapshots (fetch time not aligned); new ladders now use the slate fetch as of the ladder (`d4b174e`) | Refit only if the price test says so; align then |
+| Medium | (b) — needs gate | `validateYardageDist.ts` | Shape test contaminated (CV prior includes 2024, a test year), synthetic lines, shipped before the task-1 metric existed | Re-measure the prior on 2022–23 and rerun against stored real lines; any change goes through the gate |
+| Medium | (b) — your decision, flagged | `gateTeammateBoost.ts` | The removal's gate showed no effect (0.00000 ± 0.00046), not that removal helps; reconstruction fires on 70% vs production's 55% | Leave as decided; note it isn't a gate pass |
+| Medium | (b) | `weekly.ts` | Chunk decoding can mangle characters; stderr can split a summary line; a spawn failure isn't caught | setEncoding, separate streams, error handler |
+| Medium | (b, latent) | `analysis/quoteHistory.ts` | `quotesAsOf` ignores fetch kind, so a later alt fetch would win "latest quote"; nothing uses it yet | Filter on slate/closing/news |
+| Medium | (b) (review, not in the numbered list) | `nfl/injuryWatch.ts` | An exception in the RB-out alert aborts the remaining games of that pass, and the change is already logged, so the trial fetch is never queued; a failed summary fetch is skipped silently | Per-game try/catch; queue in the same step as logging |
+| Medium | (b) (review, not in the numbered list) | `nfl/runAutoCapture.ts` | Closing-line coverage isn't reported (picks without kickoff skipped silently, a missed window leaves no trace), so CLV is on survivors | Report coverage per slate |
+| Low | (c) | `theOddsApiTeams.ts` | Missing balance header recorded as 0 | Parse like theOddsApi.ts |
+| Low | (b) | `marketSkill.ts`, `weekly.ts`, `nflverseSeasons.ts` | Over-status bootstrap cost grows weekly; duplicate helpers (players.csv map in two jobs, two week-boundary rules) | Precompute week keys; reuse helpers |
+| Low | (b) | tests | Over-status tests use zero-width intervals | Add a noisy case |
+| Low | (b) | `marketSkill.ts` | Percentile intervals with 21–33 games undercover; σ revert rule re-checked weekly with no adjustment | Labelled exploratory; no method change (decided) |
+| Low | (a) | `weeklySummary.ts`, `settlement.ts`, `providerCache.ts` | `sigmaVerdict` says keep with no interval; `easternMidnight` wrong on DST days (only Wednesdays passed today); missing moneyline price defaults to +100; two processes can make the displayed credit balance go backwards | Fail closed; probe offset at midnight; unknown price = no settle; compare-and-set on the balance |
+| Low | (a) (review, not in the numbered list) | `settle.ts`, `marketSnapshot.ts`, `settlement.ts` | A status-only settle with no result writes a null result beside a derived status; CLV entry vs close use different methods for pre-2026-10-20 rows; a PrizePicks-played pick would grade at the Underdog line (uncertain) | Fix as found |
+| Low | (b) | `fitRedistribution.ts` | No 2025 leak, but grid/δ choices landed in one commit (can't show they weren't tuned on 2025); team-games treated as independent | Note only |
+| Low | — | `package.json`, migrations | `package.json#prisma` is deprecated in Prisma 7; the 2026-10-20 migration dropped `LineSnapshot` (confirm it was empty) | Move to prisma.config.ts at the Prisma 7 upgrade |
