@@ -11,12 +11,14 @@
  * local backup already exists.
  */
 import path from "node:path";
-import { backupConfiguredDatabase } from "../lib/db/backup";
+import { backupConfiguredDatabase, RETENTION } from "../lib/db/backup";
 
 function main() {
-  const { backup: r, offsite } = backupConfiguredDatabase();
+  const { backup: r, offsite, pruned } = backupConfiguredDatabase();
   const key = ["OddsQuote", "PlayerProp", "PropPrediction", "Pick", "CreditSpend"].filter((t) => t in r.rows);
   console.log(`db:backup: ${path.relative(process.cwd(), r.path)} (${(r.bytes / 1e6).toFixed(1)} MB, integrity ok; ${key.map((t) => `${t} ${r.rows[t]}`).join(", ")})`);
+  if (pruned.local.length) console.log(`db:backup: removed ${pruned.local.length} old local backup(s) (keeping the newest ${RETENTION.recent} and one per week for ${RETENTION.weeks} weeks)`);
+  if (pruned.offsite.length) console.log(`db:backup: removed ${pruned.offsite.length} old off-machine backup(s)`);
   if (!offsite) return;
   if ("copied" in offsite) console.log(`db:backup: copied off-machine to ${offsite.copied}`);
   else if ("refused" in offsite) console.log(`db:backup: NOT copied off-machine — ${offsite.refused}`);

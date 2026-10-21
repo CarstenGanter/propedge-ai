@@ -1,9 +1,9 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { backupConfiguredDatabase, backupDatabase, backupFileName, copyOffsite, resolveDbPath, secretValues } from "./backup";
+import { backupConfiguredDatabase, backupDatabase, backupFileName, backupsToKeep, backupTime, copyOffsite, pruneBackups, resolveDbPath, secretValues } from "./backup";
 
 describe("resolveDbPath", () => {
   it("resolves a relative SQLite URL against the schema folder, as Prisma does", () => {
@@ -97,5 +97,62 @@ describe("backupConfiguredDatabase", () => {
 
   it("throws without DATABASE_URL", () => {
     expect(() => backupConfiguredDatabase({}, "/nowhere")).toThrow(/DATABASE_URL/);
+  });
+});
+
+describe("retention", () => {
+  const now = new Date("2026-10-21T12:00:00Z");
+  const name = (daysAgo: number) => backupFileName("/repo/prisma/dev.db", new Date(now.getTime() - daysAgo * 86_400_000));
+
+  it("reads a backup's time from its name, and nothing else", () => {
+    expect(backupTime("dev-20261021-020304Z.db")).toEqual(new Date("2026-10-21T02:03:04Z"));
+    expect(backupTime("dev-20261021-020304Z.db", "other")).toBeNull();
+    for (const n of ["notes.txt", ".dev-20261021-020304Z.db.icloud", "dev.db"]) expect(backupTime(n)).toBeNull();
+  });
+
+  it("keeps the newest 10 plus the newest of each of the last 8 weeks", () => {
+    const names = Array.from({ length: 40 }, (_, d) => name(d + 0.5)); // one a day, 40 days back
+    const keep = backupsToKeep(names, now);
+    // The 10 newest (0.5 to 9.5 days ago) ...
+    for (let d = 0; d < 10; d++) expect(keep.has(name(d + 0.5))).toBe(true);
+    // ... plus the newest in weeks 2-6 (weeks 0-1 are already covered by the newest 10); 40 days reaches into week 6.
+    for (const d of [14.5, 21.5, 28.5, 35.5]) expect(keep.has(name(d))).toBe(true);
+    expect(keep.size).toBe(14);
+    expect(keep.has(name(11.5))).toBe(false);
+  });
+
+  it("drops a backup older than 8 weeks unless it's among the newest 10", () => {
+    expect(backupsToKeep([name(70)], now).has(name(70))).toBe(true); // only backup: in the newest 10
+    const many = [...Array.from({ length: 10 }, (_, d) => name(d + 0.5)), name(70)];
+    expect(backupsToKeep(many, now).has(name(70))).toBe(false);
+  });
+
+  it("prunes a folder by the rule and never touches other files", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "prune-"));
+    const names = Array.from({ length: 15 }, (_, d) => name(d + 0.5));
+    for (const n of [...names, "notes.txt", "other-20261001-000000Z.db"]) writeFileSync(path.join(dir, n), "x");
+    const removed = pruneBackups(dir, "dev", now);
+    expect(removed.sort()).toEqual([name(11.5), name(12.5), name(13.5), name(10.5)].sort());
+    expect(readdirSync(dir)).toContain("notes.txt");
+    expect(readdirSync(dir)).toContain("other-20261001-000000Z.db");
+  });
+
+  it("is applied to both folders by every configured backup", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "project-"));
+    mkdirSync(path.join(root, "prisma", "backups"), { recursive: true });
+    mkdirSync(path.join(root, "icloud"));
+    const d = new DatabaseSync(path.join(root, "prisma", "dev.db"));
+    d.exec(`CREATE TABLE "OddsQuote" (id TEXT)`);
+    d.close();
+    const old = Array.from({ length: 12 }, (_, i) => backupFileName("dev.db", new Date(Date.now() - (i + 1) * 3_600_000)));
+    for (const n of old) {
+      writeFileSync(path.join(root, "prisma", "backups", n), "x");
+      writeFileSync(path.join(root, "icloud", n), "x");
+    }
+    const r = backupConfiguredDatabase({ DATABASE_URL: "file:./dev.db", DB_BACKUP_COPY_DIR: path.join(root, "icloud") }, root);
+    expect(readdirSync(path.join(root, "prisma", "backups"))).toHaveLength(10);
+    expect(readdirSync(path.join(root, "icloud"))).toHaveLength(10);
+    expect(readdirSync(path.join(root, "icloud"))).toContain(path.basename(r.backup.path));
+    expect(r.pruned.local).toHaveLength(3);
   });
 });

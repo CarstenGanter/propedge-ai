@@ -15,6 +15,7 @@ import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { prisma } from "@/lib/db/client";
+import { backupConfiguredDatabase } from "@/lib/db/backup";
 import { creditsByKind } from "@/lib/creditLedger";
 import { parseSummaries } from "@/lib/jobSummary";
 import { liveModelVersions, loadSkillItems, overGapRows, skillSection, type SkillSection } from "@/lib/predictionReport";
@@ -67,6 +68,19 @@ async function main() {
   const dir = path.join("logs", "weekly", todayNflSlate(now));
   mkdirSync(dir, { recursive: true });
 
+  // Back up first: the run rewrites the backfill and fills results. No backup, no run.
+  let backupLine: string;
+  try {
+    const b = backupConfiguredDatabase();
+    const copy = !b.offsite ? "" : "copied" in b.offsite ? "; copied off-machine" : "refused" in b.offsite ? `; NOT copied off-machine (${b.offsite.refused})` : `; off-machine copy FAILED (${b.offsite.failed})`;
+    backupLine = `Backup: ${path.relative(process.cwd(), b.backup.path)} (integrity ok${copy})`;
+    console.log(backupLine);
+  } catch (e) {
+    console.error(`research:weekly stopped — the database backup failed: ${e instanceof Error ? e.message : String(e)}`);
+    process.exitCode = 1;
+    return;
+  }
+
   const results = new Map<string, { code: number; summaries: Map<string, unknown> }>();
   for (const job of JOBS) {
     process.stdout.write(`running ${job.label}… `);
@@ -78,6 +92,7 @@ async function main() {
 
   out(`\nPropEdge weekly research — ${now.toISOString().slice(0, 16)}Z; NFL week from ${weekStart.toISOString().slice(0, 16)}Z (Wednesday 00:00 ET)`);
   out(`Full output: ${dir}/`);
+  out(backupLine);
 
   out("\nGRADING (nflverse weekly stats and snap counts)");
   const g = results.get("skill")!.summaries.get("grading") as Record<string, number> | undefined;
