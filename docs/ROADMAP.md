@@ -76,7 +76,14 @@ alternate-line reading.
   fit-week and after-fit samples are still shown separately, for information; they trigger
   nothing. `npm run research:sigma-validate` prints the pooled sample last; `npm run
   research:weekly` prints the keep/REVERT verdict from it.
-- **Next look:** a held-out price test runs automatically once the next slate's ladders are
+- **Held-out price test (decided 2026-10-21):** the shipped `FITTED_SPREAD_PARAMS` against the
+  current spread on ladders fetched after the fit's own day (2026-10-17), main lines as of each
+  ladder's fetch. Squared error per rung in probability points, fitted − current, 95% bootstrap
+  clustered by game. **Keep only if that interval sits below zero; otherwise revert** (remove the
+  receiving-yards entry, back to the CV prior). The outcome rule above is unchanged.
+  `research:sigma-validate` and `research:weekly` print it; pending until this week's ladders
+  are bought with the slate fetch.
+- **Next look:** the held-out price test above runs once the next slate's ladders are
   stored (receiving yards, ~13 credits a week, approved); the outcome gate is re-run as graded
   off-line props accumulate. Other prop types need their own ladders, at ~13 credits a week each:
   none this month; revisit at the credit reset, rushing yards first.

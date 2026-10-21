@@ -1,3 +1,4 @@
+import { clusterBootstrap, type Interval } from "./marketSkill";
 import { cvPrior } from "./probabilityModel";
 import {
   americanToProb,
@@ -138,3 +139,56 @@ export function fitAffineSigma(
 
 /** The production spread: FITTED_SPREAD_PARAMS where fitted (see marketConsensus.ts), the CV prior elsewhere. */
 export const FITTED_SPREAD = affineSpread(FITTED_SPREAD_PARAMS, "ladder-fit-2026-10-18");
+
+/**
+ * The held-out price test for the fitted spread (decided 2026-10-21): on
+ * ladders the fit never saw, does the fitted spread read the books' alternate
+ * prices better than the current one? Squared error in probability points per
+ * rung, fitted minus current, with a 95% bootstrap interval clustered by game.
+ * Keep only if that interval sits below zero; otherwise revert (pure).
+ */
+export interface PriceTest {
+  ladders: number;
+  rungs: number;
+  games: number;
+  rmseCurrent: number | null;
+  rmseFitted: number | null;
+  /** Mean squared-error difference per rung (fitted − current), in squared points; negative favours fitted. */
+  diff: number | null;
+  interval: Interval | null;
+  verdict: "keep" | "REVERT" | "pending";
+}
+
+export function heldOutPriceTest(
+  ladders: (Ladder & { game: string })[],
+  fitted: ConsensusSpread,
+  current: ConsensusSpread,
+  opts: { reps?: number; seed?: number } = {},
+): PriceTest {
+  const items: { cluster: string; d: number; ef: number; ec: number }[] = [];
+  let used = 0;
+  for (const l of ladders) {
+    const mf = buildConsensus(l.propType, l.main, { spread: fitted }).model;
+    const mc = buildConsensus(l.propType, l.main, { spread: current }).model;
+    if (!mf || !mc || l.rungs.length === 0) continue;
+    used++;
+    for (const r of l.rungs) {
+      const ef = ((consensusProbOver(mf, r.line) - r.pOver) * 100) ** 2;
+      const ec = ((consensusProbOver(mc, r.line) - r.pOver) * 100) ** 2;
+      items.push({ cluster: l.game, d: ef - ec, ef, ec });
+    }
+  }
+  if (items.length === 0) return { ladders: 0, rungs: 0, games: 0, rmseCurrent: null, rmseFitted: null, diff: null, interval: null, verdict: "pending" };
+  const mean = (xs: typeof items) => (xs.length ? xs.reduce((s, x) => s + x.d, 0) / xs.length : null);
+  const interval = clusterBootstrap(items, mean, opts);
+  return {
+    ladders: used,
+    rungs: items.length,
+    games: new Set(items.map((i) => i.cluster)).size,
+    rmseCurrent: Math.sqrt(items.reduce((s, i) => s + i.ec, 0) / items.length),
+    rmseFitted: Math.sqrt(items.reduce((s, i) => s + i.ef, 0) / items.length),
+    diff: mean(items),
+    interval,
+    verdict: interval && interval.hi < 0 ? "keep" : "REVERT",
+  };
+}

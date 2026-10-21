@@ -4,7 +4,7 @@
  *   node --conditions=react-server --env-file=.env --import tsx src/jobs/research/fitConsensusSigma.ts
  *
  * For every player with an alternate ladder in the odds store, the main-line
- * quotes come from that prop's stored snapshot (or the store's slate quotes),
+ * quotes come from the store's slate quotes as of the ladder's fetch (ladders.ts),
  * each book's one-sided alternates are de-vigged with its own main-line power
  * exponent, and σ = a + b × line is grid-searched per prop type to minimise the
  * squared error between the consensus's P(over) and the ladder's at every rung.
@@ -12,10 +12,9 @@
  * fit stay untouched.
  */
 import { prisma } from "@/lib/db/client";
-import { parseSnapshot } from "@/lib/marketSnapshot";
-import { buildConsensus, consensusProbOver, type ConsensusSpread, type RawQuote } from "@/lib/analysis/marketConsensus";
-import { affineSpread, CV_PRIOR_SPREAD, devigLadder, fitAffineSigma, type Ladder } from "@/lib/analysis/consensusSpread";
-import { teamsMatch } from "@/lib/utils/teamName";
+import { buildConsensus, consensusProbOver, type ConsensusSpread } from "@/lib/analysis/marketConsensus";
+import { affineSpread, CV_PRIOR_SPREAD, fitAffineSigma, type Ladder } from "@/lib/analysis/consensusSpread";
+import { loadLadders } from "./ladders";
 
 function rmsePts(ladders: Ladder[], spread: ConsensusSpread, bucket?: (d: number) => boolean) {
   let sse = 0;
@@ -33,37 +32,7 @@ function rmsePts(ladders: Ladder[], spread: ConsensusSpread, bucket?: (d: number
 }
 
 async function main() {
-  const alt = await prisma.oddsQuote.findMany({ where: { fetchKind: "alt" } });
-  const groups = new Map<string, typeof alt>();
-  for (const q of alt) {
-    const k = `${q.eventId}|${q.playerName}|${q.propType}`;
-    (groups.get(k) ?? groups.set(k, []).get(k)!).push(q);
-  }
-
-  const ladders: Ladder[] = [];
-  const ladderDay: string[] = [];
-  let noMain = 0;
-  for (const qs of groups.values()) {
-    const { playerName, propType, homeTeam, awayTeam, commenceTime } = qs[0];
-    // Main lines: the store's slate quotes when held, else the prop's snapshot from that slate.
-    const slate = await prisma.oddsQuote.findMany({ where: { fetchKind: "slate", eventId: qs[0].eventId, playerName, propType } });
-    let main: RawQuote[] = slate.map((q) => ({ book: q.book, line: q.line, over: q.over, under: q.under }));
-    if (main.length === 0) {
-      const day = 86_400_000;
-      const props = await prisma.playerProp.findMany({
-        where: { playerName, propType, isDemo: false, gameStartTime: { gte: new Date(commenceTime.getTime() - day), lte: new Date(commenceTime.getTime() + day) } },
-      });
-      const prop = props.find((p) => teamsMatch(p.team, homeTeam) && teamsMatch(p.opponent, awayTeam));
-      main = parseSnapshot(prop?.marketDataJson)?.quotes?.map((q) => ({ book: q.book, line: q.line, over: q.over, under: q.under })) ?? [];
-    }
-    if (main.length === 0) { noMain++; continue; }
-    const rungs = devigLadder(main, qs.map((q) => ({ book: q.book, line: q.line, over: q.over })));
-    if (rungs.length) {
-      ladders.push({ propType, main, rungs });
-      ladderDay.push(qs[0].fetchedAt.toISOString().slice(0, 10));
-    }
-  }
-
+  const { ladders, noMain } = await loadLadders();
   const types = [...new Set(ladders.map((l) => l.propType))];
   console.log(`ladders ${ladders.length} (no main quotes for ${noMain}); rungs ${ladders.reduce((s, l) => s + l.rungs.length, 0)}; prop types: ${types.join(", ")}`);
   const params: Record<string, { a: number; b: number }> = {};
@@ -88,21 +57,9 @@ async function main() {
   }
   console.log(`\nFITTED_SPREAD_PARAMS = ${JSON.stringify(params)}`);
 
-  // Held-out prices: fit on every ladder slate but the newest, score on the newest.
-  const days = [...new Set(ladderDay)].sort();
-  if (days.length < 2) {
-    console.log(`\nHeld-out price test: needs a second ladder slate (have ${days.join(", ") || "none"}); the next slate fetch buys one.`);
-  } else {
-    const last = days[days.length - 1];
-    const train = ladders.filter((_, i) => ladderDay[i] !== last);
-    const test = ladders.filter((_, i) => ladderDay[i] === last);
-    const trainParams: Record<string, { a: number; b: number }> = {};
-    for (const t of types) trainParams[t] = (({ a, b }) => ({ a, b }))(fitAffineSigma(t, train));
-    const cur = rmsePts(test, CV_PRIOR_SPREAD);
-    const held = rmsePts(test, affineSpread(trainParams));
-    console.log(`\nHeld-out price test (fit on slates before ${last}, scored on ${last}): ${JSON.stringify(trainParams)}`);
-    console.log(`  RMSE on ${held.n} held-out rungs: current ${cur.rmse.toFixed(2)} pts, fitted ${held.rmse.toFixed(2)} pts`);
-  }
+  // The held-out price test of what ships (FITTED_SPREAD_PARAMS) runs in
+  // research:sigma-validate, on ladders fetched after the fit's own day.
+  console.log(`\nFit ladders by day: ${[...new Set(ladders.map((l) => l.day))].sort().join(", ")}. Held-out price test: npm run research:sigma-validate.`);
   await prisma.$disconnect();
 }
 

@@ -25,7 +25,8 @@
 import { prisma } from "@/lib/db/client";
 import { parseSnapshot } from "@/lib/marketSnapshot";
 import { buildConsensus, consensusSideProb, pricedAt, type RawQuote } from "@/lib/analysis/marketConsensus";
-import { CV_PRIOR_SPREAD, FITTED_SPREAD } from "@/lib/analysis/consensusSpread";
+import { CV_PRIOR_SPREAD, FITTED_SPREAD, heldOutPriceTest } from "@/lib/analysis/consensusSpread";
+import { FIT_LADDER_DAY, loadLadders } from "./ladders";
 import { FITTED_SPREAD_PARAMS } from "@/lib/analysis/marketConsensus";
 import { clusterBootstrap } from "@/lib/analysis/marketSkill";
 import { calibrationSummary, excessByVenueGap, reliabilityTable, type BucketRow, type VenueItem } from "@/lib/analysis/venueCalibration";
@@ -143,6 +144,21 @@ async function main() {
     ),
   ];
   emitSummary("sigma", { types, samples });
+
+  // The held-out price test (decided 2026-10-21): the shipped spread vs the
+  // current one on ladders the fit never saw. Keep only if the error
+  // difference's interval sits below zero; otherwise revert.
+  const { ladders } = await loadLadders();
+  const heldOut = ladders.filter((l) => l.day > FIT_LADDER_DAY);
+  const price = heldOutPriceTest(heldOut, FITTED_SPREAD, CV_PRIOR_SPREAD);
+  console.log(`\n=== HELD-OUT PRICE TEST — ladders fetched after ${FIT_LADDER_DAY} (the fit's own day) ===`);
+  if (price.verdict === "pending") console.log("  no held-out ladders yet: the next slate fetch buys them (receiving yards, ~13 credits)");
+  else {
+    console.log(`  ${price.ladders} ladders, ${price.rungs} rungs, ${price.games} games | RMSE current ${price.rmseCurrent!.toFixed(2)} pts, fitted ${price.rmseFitted!.toFixed(2)} pts`);
+    console.log(`  squared-error difference (fitted − current) ${price.diff!.toFixed(2)} pts²` + (price.interval ? `  95% game-bootstrap [${price.interval.lo.toFixed(2)}, ${price.interval.hi.toFixed(2)}]` : ""));
+    console.log(`  VERDICT: ${price.verdict} — keep only if the interval sits below zero`);
+  }
+  emitSummary("sigmaPrice", { fitDay: FIT_LADDER_DAY, ...price });
   await prisma.$disconnect();
 }
 

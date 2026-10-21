@@ -24,6 +24,7 @@ import { PRICE_MOVE_PTS, type GroupLatency, type VenueChange } from "@/lib/analy
 import { NEWS_TRIAL } from "@/lib/nfl/newsFetchTrial";
 import { todayNflSlate } from "@/lib/nfl/slate";
 import { fmtInterval, nflWeekStart, overStatusLine, sigmaVerdict, unaccountedCredits, type SigmaSample } from "@/lib/weeklySummary";
+import type { PriceTest } from "@/lib/analysis/consensusSpread";
 
 const JOBS = [
   { name: "skill", script: "src/jobs/research/scoreVsMarket.ts", label: "grading + research:skill" },
@@ -129,6 +130,15 @@ async function main() {
     }
     const v = sigmaVerdict(sigma.samples);
     out(`  verdict: ${v.verdict} — ${v.reason}`);
+    const price = results.get("sigma")!.summaries.get("sigmaPrice") as (PriceTest & { fitDay: string }) | undefined;
+    if (price) {
+      out(
+        price.verdict === "pending"
+          ? `  held-out price test: no ladders after ${price.fitDay} yet (the next slate fetch buys them)`
+          : `  held-out price test (ladders after ${price.fitDay}): ${price.ladders} ladders, ${price.games} games, RMSE current ${price.rmseCurrent!.toFixed(2)} → fitted ${price.rmseFitted!.toFixed(2)} pts; ` +
+              `difference ${fmtInterval(price.diff!, price.interval, 2, " pts²")} — ${price.verdict === "keep" ? "keep" : "REVERT: σ doesn't beat the old spread on held-out ladders"}`,
+      );
+    }
     out("  (the revert rule reads the pooled sample only; the others are for information)");
   }
 
