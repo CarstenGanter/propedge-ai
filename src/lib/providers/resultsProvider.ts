@@ -20,12 +20,15 @@ export interface ResultsProvider {
   ): Promise<ResultLookup>;
 }
 
+/** The source every synthetic result carries — never a real grade. */
+export const DEMO_RESULT_SOURCE = "Demo data";
+
 /** Demo settlement uses deterministic synthetic results so the flow is testable. */
 export const demoResultsProvider: ResultsProvider = {
   async getActualResult(prop) {
     return {
       actualResult: demoActualResult(prop),
-      source: "Demo data",
+      source: DEMO_RESULT_SOURCE,
       resolved: true,
       note: "Synthetic demo result — not a real box score.",
     };

@@ -4,7 +4,7 @@ import { getStatsProvider } from "./sportsStatsProvider";
 import { getNewsProvider } from "./newsProvider";
 import { getOddsProvider } from "./oddsProvider";
 import { getSentimentProvider } from "./sentimentProvider";
-import { getResultsProvider, type ResultLookup } from "./resultsProvider";
+import { DEMO_RESULT_SOURCE, getResultsProvider, type ResultLookup } from "./resultsProvider";
 import { getLiveHistorical } from "./historicalProvider";
 import type { ProviderContext } from "./config";
 
@@ -21,6 +21,25 @@ export function resolveProviderContext(opts: {
     demo: Boolean(opts.propIsDemo) || opts.demoMode,
     enableWebResearch: opts.enableWebResearch,
   };
+}
+
+/**
+ * The context for settling one pick. Demo is decided by the pick alone: the
+ * global demo switch makes research deterministic, but must never grade a real
+ * pick with a synthetic result (the schema default for the switch is on, so a
+ * recreated settings row would otherwise do exactly that).
+ */
+export function settlementContext(pick: { isDemo: boolean }, settings: { enableWebResearch: boolean }): ProviderContext {
+  return { demo: pick.isDemo, enableWebResearch: settings.enableWebResearch };
+}
+
+/**
+ * A lookup that may settle this pick: resolved, with a value, and never a
+ * synthetic demo result on a real pick — whatever context produced it.
+ */
+export function usableResult(pick: { isDemo: boolean }, lookup: ResultLookup): lookup is ResultLookup & { actualResult: number } {
+  if (!lookup.resolved || lookup.actualResult == null) return false;
+  return pick.isDemo || lookup.source !== DEMO_RESULT_SOURCE;
 }
 
 /** Assemble a full research bundle for a prop from all configured providers. */

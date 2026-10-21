@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { getSettings } from "@/lib/settings";
-import { lookupResult, resolveProviderContext } from "@/lib/providers";
+import { lookupResult, settlementContext, usableResult } from "@/lib/providers";
 import { propToScorable } from "@/lib/generate";
 import { settlePickById } from "@/lib/settle";
 import { cacheGet, cacheSet, releaseLock, tryAcquireLock } from "@/lib/providerCache";
@@ -66,13 +66,8 @@ export async function runAutoSettle(source: "launchd" | "app", now = new Date())
       // Re-read under the lock: the other scheduler may have just settled it.
       const fresh = await prisma.pick.findUnique({ where: { id: pick.id }, select: { status: true } });
       if (fresh?.status !== "pending") continue;
-      const ctx = resolveProviderContext({
-        propIsDemo: pick.isDemo,
-        demoMode: settings.demoMode,
-        enableWebResearch: settings.enableWebResearch,
-      });
-      const r = await lookupResult({ ...propToScorable(pick.playerProp), date: pick.playerProp.date }, ctx);
-      if (r.resolved && r.actualResult != null) {
+      const r = await lookupResult({ ...propToScorable(pick.playerProp), date: pick.playerProp.date }, settlementContext(pick, settings));
+      if (usableResult(pick, r)) {
         await settlePickById(pick.id, { actualResult: r.actualResult });
         settled++;
       } else if (r.absentFromBoxScore && pick.playerProp.sport === "NFL" && !(await cacheGet<string>(manualKey(pick.id)))) {

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/client";
 import { settlePickById } from "@/lib/settle";
 import { getSettings } from "@/lib/settings";
-import { lookupResult, resolveProviderContext } from "@/lib/providers";
+import { lookupResult, settlementContext, usableResult } from "@/lib/providers";
 import { propToScorable } from "@/lib/generate";
 import { todaySlate } from "@/lib/utils/dates";
 import type { SettlementStatus } from "@/types";
@@ -52,16 +52,11 @@ export async function settleDailyPicks(date?: string): Promise<SettleDailySummar
   const notes: { player: string; note: string }[] = [];
 
   for (const pick of picks) {
-    const ctx = resolveProviderContext({
-      propIsDemo: pick.isDemo,
-      demoMode: settings.demoMode,
-      enableWebResearch: settings.enableWebResearch,
-    });
     const lookup = await lookupResult(
       { ...propToScorable(pick.playerProp), date: pick.playerProp.date },
-      ctx,
+      settlementContext(pick, settings),
     );
-    if (lookup.resolved && lookup.actualResult != null) {
+    if (usableResult(pick, lookup)) {
       await settlePickById(pick.id, { actualResult: lookup.actualResult });
       settled++;
     } else {

@@ -5,7 +5,7 @@ import { ingestOddsPropsForSport } from "@/lib/oddsIngest";
 import { oddsApiSupportsSport } from "@/lib/providers/live/theOddsApi";
 import { generatePicksForDate, propToScorable } from "@/lib/generate";
 import { generateTeamPicksForDate } from "@/lib/generateTeams";
-import { lookupResult, resolveProviderContext } from "@/lib/providers";
+import { lookupResult, settlementContext, usableResult } from "@/lib/providers";
 import { settlePickById } from "@/lib/settle";
 import { settleTeamPickById } from "@/lib/settleTeams";
 import { getGameResult } from "@/lib/providers/live/espnTeams";
@@ -154,16 +154,11 @@ async function settlePriorPending(
   });
   let settled = 0;
   for (const pick of picks) {
-    const ctx = resolveProviderContext({
-      propIsDemo: pick.isDemo,
-      demoMode: settings.demoMode,
-      enableWebResearch: settings.enableWebResearch,
-    });
     const lookup = await lookupResult(
       { ...propToScorable(pick.playerProp), date: pick.playerProp.date },
-      ctx,
+      settlementContext(pick, settings),
     );
-    if (lookup.resolved && lookup.actualResult != null) {
+    if (usableResult(pick, lookup)) {
       await settlePickById(pick.id, { actualResult: lookup.actualResult });
       settled++;
     }
