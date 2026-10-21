@@ -186,5 +186,7 @@ export async function ingestOddsPropsForSport(
     creditsRemaining: result.status.remaining,
     dates: [...dates],
     underdogPricesReal: underdogPricesLookReal(result.props.flatMap((p) => p.quotes ?? [])),
+    // Some games failed even though others came back: say so.
+    ...(result.status.error ? { error: `partial fetch: ${result.status.error}` } : {}),
   };
 }

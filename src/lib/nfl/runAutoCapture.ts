@@ -107,6 +107,7 @@ export async function runAutoCapture(source: "launchd" | "app" | "manual", now =
     return log(
       `captured ${r.propPicksUpdated} of ${wanted} pick(s) across ${due.length} game(s)` +
         (r.propPicksUpdated < wanted ? " (the rest had no matching book line — not retried)" : "") +
+        (r.error ? ` Fetch errors: ${r.error}.` : "") +
         `. Credits remaining: ${r.creditsRemaining ?? "unknown"}`,
     );
   } finally {

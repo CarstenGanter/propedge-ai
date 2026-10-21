@@ -181,7 +181,7 @@ export async function ingestNflSlate(
       summary.propsImported = r.imported;
       summary.creditsRemaining = r.creditsRemaining ?? summary.creditsRemaining;
       summary.underdogPricesReal = r.underdogPricesReal;
-      if (!r.ok) summary.error = r.error;
+      if (r.error) summary.error = r.error; // a failed or partial fetch
       // Alternate ladders: quotes for the odds store only, priced into the estimate above.
       if (r.ok && ALT_LADDER_PROP_TYPES.length > 0) {
         const alt = await withCreditKind("alt", () =>

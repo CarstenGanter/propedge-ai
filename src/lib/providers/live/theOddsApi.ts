@@ -275,9 +275,11 @@ export async function listSports(apiKey: string): Promise<{ status: OddsApiStatu
   };
 }
 
-async function getEvents(apiKey: string, sportKey: string): Promise<OddsEvent[]> {
+/** The event list (free). A failed request is an error, never "no games". */
+async function getEvents(apiKey: string, sportKey: string): Promise<{ events: OddsEvent[]; error?: string }> {
   const r = await fetchJson<OddsEvent[]>(`${BASE}/sports/${sportKey}/events/?apiKey=${apiKey}`);
-  return r.data ?? [];
+  if (!r.data) return { events: [], error: `event list failed (${r.status}): ${r.error ?? "no data"}` };
+  return { events: r.data };
 }
 
 export interface OddsEventSummary {
@@ -491,6 +493,8 @@ export interface FetchPropsResult {
   sportKey: string;
   /** Every quote fetched, for the odds store. */
   quotes: FetchedQuote[];
+  /** Games whose request failed (timeout, HTTP error) — reported even when other games succeeded. */
+  failedEvents: { home: string; away: string; error: string }[];
 }
 
 export interface FetchPropsOptions {
@@ -544,7 +548,7 @@ export async function fetchPlayerProps(
   const maxEvents = options.maxEvents ?? 12;
   const comps = competitionsForSport(sport);
   if (comps.length === 0) {
-    return { status: { ok: false, remaining: null, used: null, error: "Unsupported sport" }, props: [], events: 0, pricedEvents: [], sportKey: "", quotes: [] };
+    return { status: { ok: false, remaining: null, used: null, error: "Unsupported sport" }, props: [], events: 0, pricedEvents: [], sportKey: "", quotes: [], failedEvents: [] };
   }
   const perComp = Math.max(1, Math.floor(maxEvents / comps.length));
 
@@ -553,7 +557,8 @@ export async function fetchPlayerProps(
   const priced: { home: string; away: string }[] = [];
   let remaining: number | null = null;
   let used: number | null = null;
-  let lastError: string | undefined;
+  const errors: string[] = [];
+  const failed: { home: string; away: string; error: string }[] = [];
   let totalEvents = 0;
 
   for (const comp of comps) {
@@ -568,7 +573,8 @@ export async function fetchPlayerProps(
       return marketKeys.filter((k) => wanted.has(k));
     };
 
-    const events = await getEvents(apiKey, comp.sportKey);
+    const { events, error: listError } = await getEvents(apiKey, comp.sportKey);
+    if (listError) errors.push(listError);
     let candidates = notStartedYet(events);
     if (options.slateDate) {
       candidates = filterEventsForSlate(candidates, options.slateDate, options.toSlate ?? defaultToSlate);
@@ -586,7 +592,11 @@ export async function fetchPlayerProps(
       const r = await getEventProps(apiKey, comp.sportKey, ev.id, evKeys);
       if (r.remaining != null) remaining = r.remaining;
       if (r.used != null) used = r.used;
-      if (r.error) lastError = r.error;
+      if (r.error || !r.data) {
+        const error = r.error ?? `no data (status ${r.status})`;
+        failed.push({ home: ev.home_team, away: ev.away_team, error });
+        errors.push(`${ev.away_team} @ ${ev.home_team}: ${error}`);
+      }
       if (r.data) {
         if (!options.alternates) all.push(...normalizeEvent(r.data, comp.sportKey, comp.label));
         quotes.push(...flattenEventQuotes(r.data, comp.sportKey, ev.id));
@@ -596,18 +606,21 @@ export async function fetchPlayerProps(
       // the billing assumption behind the bookmaker list is wrong: stop before
       // the rest of the slate spends double.
       if (r.last != null && r.last > evKeys.length) {
-        lastError = `Credit regression: one event cost ${r.last} credits for ${evKeys.length} markets — stopped fetching.`;
+        errors.push(`Credit regression: one event cost ${r.last} credits for ${evKeys.length} markets — stopped fetching.`);
         break;
       }
     }
   }
 
   return {
-    status: { ok: all.length > 0 || !lastError, remaining, used, error: all.length === 0 ? lastError : undefined },
+    // Errors are reported even when other games succeeded: a partial fetch, a
+    // failed event list or the credit-regression stop must never vanish.
+    status: { ok: all.length > 0 || errors.length === 0, remaining, used, error: errors.length ? errors.join("; ") : undefined },
     props: all,
     events: totalEvents,
     pricedEvents: priced,
     sportKey: comps[0].sportKey,
     quotes,
+    failedEvents: failed,
   };
 }
