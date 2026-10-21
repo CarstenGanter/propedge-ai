@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appearsInBoxScore, extractFootballBoxStat, nameMatches, nameParts, type EspnStatGroup } from "./espn";
+import { appearsInBoxScore, extractFootballBoxStat, nameMatches, nameParts, parseBoxNumber, type EspnStatGroup } from "./espn";
 
 // Verified NFL box-score shape (group name + machine keys + parallel stats).
 const groups: EspnStatGroup[] = [
@@ -121,5 +121,43 @@ describe("name matching with generational suffixes", () => {
 
   it("does not strip a lone name that is only a suffix", () => {
     expect(nameParts("Jr")).toEqual(["jr"]);
+  });
+});
+
+describe("box-score cells that aren't a plain positive number", () => {
+  const withLoss = (rush: string, keys = ["rushingAttempts", "rushingYards"]): EspnStatGroup[] => [
+    { name: "rushing", keys, athletes: [{ athlete: { displayName: "Bucky Irving" }, stats: ["3", rush] }] },
+    { name: "receiving", keys: ["receptions", "receivingYards"], athletes: [{ athlete: { displayName: "Bucky Irving" }, stats: ["2", "12"] }] },
+  ];
+
+  it("reads negative yards as negative — a loss is not 0", () => {
+    expect(extractFootballBoxStat(withLoss("-5"), "Bucky Irving", "Rushing Yards")).toBe(-5);
+    // Rush+Rec: -5 + 12 = 7, not 12 (which could flip an Over/Under at 9.5).
+    expect(extractFootballBoxStat(withLoss("-5"), "Bucky Irving", "Rush+Rec Yards")).toBe(7);
+  });
+
+  it("treats a placeholder cell as unknown, never 0", () => {
+    expect(extractFootballBoxStat(withLoss("--"), "Bucky Irving", "Rushing Yards")).toBeNull();
+    expect(extractFootballBoxStat(withLoss(""), "Bucky Irving", "Rush+Rec Yards")).toBeNull();
+  });
+
+  it("treats a renamed key as unknown when the player is in that group, instead of grading 0", () => {
+    expect(extractFootballBoxStat(withLoss("40", ["rushingAttempts", "rushYds"]), "Bucky Irving", "Rushing Yards")).toBeNull();
+  });
+
+  it("still grades a genuine 0 for a player who played but isn't in the group", () => {
+    // Egbuka has a receiving line but no carries: 0 rushing yards.
+    expect(extractFootballBoxStat(groups, "Emeka Egbuka", "Rushing Yards")).toBe(0);
+  });
+});
+
+describe("parseBoxNumber", () => {
+  it("reads plain, negative, made-attempted and paired cells, and nothing else", () => {
+    expect(parseBoxNumber("39")).toBe(39);
+    expect(parseBoxNumber("-3")).toBe(-3);
+    expect(parseBoxNumber("6-13")).toBe(6);
+    expect(parseBoxNumber("17/32", "second")).toBe(32);
+    expect(parseBoxNumber("7.8")).toBe(7.8);
+    for (const bad of ["--", "-", "", "DNP", null, undefined]) expect(parseBoxNumber(bad)).toBeNull();
   });
 });

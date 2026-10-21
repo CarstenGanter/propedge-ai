@@ -274,12 +274,20 @@ const FOOTBALL_BOX_KEYS: Record<string, FootballBoxKey[]> = {
   ],
 };
 
-function parsePart(raw: string, part?: "first" | "second"): number | null {
+/**
+ * One box-score cell as a number, or null when it isn't one (exported for
+ * tests). Cells are a plain number, possibly negative ("-3" rushing yards), or
+ * made-attempted ("6-13", the first number counts); "a/b" pairs pick a side
+ * with `part`. A placeholder ("--", "") is unknown, never 0 — splitting "-3"
+ * on "-" used to read negative yards as 0.
+ */
+export function parseBoxNumber(raw: string | null | undefined, part?: "first" | "second"): number | null {
+  if (raw == null) return null;
   const pieces = String(raw).split("/");
-  const piece = part === "second" ? pieces[1] : pieces[0];
-  if (piece == null) return null;
-  const n = Number(piece.split("-")[0]);
-  return Number.isNaN(n) ? null : n;
+  const piece = (part === "second" ? pieces[1] : pieces[0])?.trim();
+  if (!piece) return null;
+  const m = /^(-?\d+(?:\.\d+)?)(?:-\d+(?:\.\d+)?)?$/.exec(piece);
+  return m ? Number(m[1]) : null;
 }
 
 /**
@@ -324,14 +332,14 @@ export function extractFootballBoxStat(
   for (const { group, key, part } of spec) {
     for (const g of groups) {
       if ((g.name ?? "").toLowerCase() !== group) continue;
-      const idx = (g.keys ?? []).indexOf(key);
-      if (idx < 0) continue;
       const ath = findAthleteRow(g, playerName);
       if (!ath) continue;
-      const raw = ath.stats?.[idx];
-      if (raw == null) continue;
-      const n = parsePart(raw, part);
-      if (n == null) continue;
+      // The player is in this group but the stat can't be read (ESPN renamed
+      // the key, or the cell is a placeholder): unknown, not a confident 0.
+      const idx = (g.keys ?? []).indexOf(key);
+      if (idx < 0) return null;
+      const n = parseBoxNumber(ath.stats?.[idx], part);
+      if (n == null) return null;
       total += n;
       found = true;
     }
@@ -372,9 +380,8 @@ export function extractBasketballBoxStat(groups: EspnStatGroup[], playerName: st
     if (!ath?.stats?.length) continue;
     let total = 0;
     for (const { key } of spec) {
-      const raw = ath.stats[keys.indexOf(key)];
-      const n = raw == null ? NaN : Number(String(raw).split("-")[0]);
-      if (Number.isNaN(n)) return null;
+      const n = parseBoxNumber(ath.stats[keys.indexOf(key)]);
+      if (n == null) return null; // "--" (did not play) or an unreadable cell
       total += n;
     }
     return total;
@@ -429,8 +436,8 @@ export async function fetchPlayerGameStat(
         if (ath.athlete?.displayName && nameMatches(ath.athlete.displayName, playerName)) {
           const raw = ath.stats?.[statIdx];
           if (raw == null) continue;
-          const num = Number(String(raw).split("-")[0]);
-          if (!Number.isNaN(num)) return num;
+          const num = parseBoxNumber(raw);
+          if (num != null) return num;
         }
       }
     }

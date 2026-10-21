@@ -39,6 +39,12 @@ describe("extractBasketballBoxStat", () => {
     expect(extractBasketballBoxStat([shuffled], "Napheesa Collier", "Rebounds")).toBe(6);
   });
 
+  it("treats a '--' cell as unknown, not 0 — a DNP listed with placeholders", () => {
+    const dnp: EspnStatGroup = { ...lynx, athletes: [{ athlete: { displayName: "Bench Player" }, stats: KEYS.map(() => "--") }] };
+    expect(extractBasketballBoxStat([dnp], "Bench Player", "Points")).toBeNull();
+    expect(extractBasketballBoxStat([dnp], "Bench Player", "Pts+Reb+Ast")).toBeNull();
+  });
+
   it("returns null for a player who dressed but did not play, or isn't listed", () => {
     expect(extractBasketballBoxStat([lynx], "Bench Player", "Points")).toBeNull();
     expect(extractBasketballBoxStat([lynx], "Someone Else", "Points")).toBeNull();
