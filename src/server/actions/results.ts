@@ -4,8 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/client";
 import { settlePickById } from "@/lib/settle";
 import { getSettings } from "@/lib/settings";
-import { lookupResult, settlementContext, usableResult } from "@/lib/providers";
-import { propToScorable } from "@/lib/generate";
+import { createSettler } from "@/lib/autoSettlePick";
 import { todaySlate } from "@/lib/utils/dates";
 import type { SettlementStatus } from "@/types";
 
@@ -51,20 +50,16 @@ export async function settleDailyPicks(date?: string): Promise<SettleDailySummar
   let unresolved = 0;
   const notes: { player: string; note: string }[] = [];
 
+  // The same per-pick path as the auto-settle pass (box score, then nflverse
+  // snap counts for an NFL player missing from it).
+  const settler = createSettler(settings);
   for (const pick of picks) {
-    const lookup = await lookupResult(
-      { ...propToScorable(pick.playerProp), date: pick.playerProp.date },
-      settlementContext(pick, settings),
-    );
-    if (usableResult(pick, lookup)) {
-      await settlePickById(pick.id, { actualResult: lookup.actualResult });
+    const outcome = await settler.settle(pick);
+    if (outcome.kind === "settled") {
       settled++;
     } else {
       unresolved++;
-      notes.push({
-        player: pick.playerProp.playerName,
-        note: lookup.note ?? "Manual settlement required.",
-      });
+      notes.push({ player: pick.playerProp.playerName, note: outcome.kind === "waiting" ? `Waiting: ${outcome.reason}` : outcome.note });
     }
   }
 

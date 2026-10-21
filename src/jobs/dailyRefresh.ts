@@ -3,10 +3,9 @@ import { prisma } from "@/lib/db/client";
 import { getSettings } from "@/lib/settings";
 import { ingestOddsPropsForSport } from "@/lib/oddsIngest";
 import { oddsApiSupportsSport } from "@/lib/providers/live/theOddsApi";
-import { generatePicksForDate, propToScorable } from "@/lib/generate";
+import { generatePicksForDate } from "@/lib/generate";
 import { generateTeamPicksForDate } from "@/lib/generateTeams";
-import { lookupResult, settlementContext, usableResult } from "@/lib/providers";
-import { settlePickById } from "@/lib/settle";
+import { createSettler } from "@/lib/autoSettlePick";
 import { settleTeamPickById } from "@/lib/settleTeams";
 import { getGameResult } from "@/lib/providers/live/espnTeams";
 import { isLeague, type League } from "@/lib/teamLeagues";
@@ -153,15 +152,10 @@ async function settlePriorPending(
     include: { playerProp: true },
   });
   let settled = 0;
+  // The same per-pick path as the auto-settle pass and the Results page.
+  const settler = createSettler(settings);
   for (const pick of picks) {
-    const lookup = await lookupResult(
-      { ...propToScorable(pick.playerProp), date: pick.playerProp.date },
-      settlementContext(pick, settings),
-    );
-    if (usableResult(pick, lookup)) {
-      await settlePickById(pick.id, { actualResult: lookup.actualResult });
-      settled++;
-    }
+    if ((await settler.settle(pick)).kind === "settled") settled++;
   }
   return settled;
 }
