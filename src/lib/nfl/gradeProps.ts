@@ -55,6 +55,55 @@ export interface SeasonData {
   specialTeamsOnly?: Appearance[];
   /** nflverse weekly rosters: who was on which team, with which status, each week. */
   roster?: RosterEntry[];
+  /** nflverse schedule: which week each game was, by date and ESPN game id. */
+  schedule?: ScheduledGame[];
+}
+
+export interface ScheduledGame {
+  week: number;
+  /** "YYYY-MM-DD", the game's local date as nflverse lists it. */
+  gameday: string;
+  home: string;
+  away: string;
+  espnGameId: string | null;
+}
+
+/** nflverse schedules games.csv → one season's games. */
+export function parseSchedule(csv: string, season: number): ScheduledGame[] {
+  const out: ScheduledGame[] = [];
+  for (const r of parseCsv(csv).rows) {
+    if (Number(r.season) !== season) continue;
+    const week = Number(r.week);
+    if (!Number.isFinite(week) || !r.gameday) continue;
+    out.push({ week, gameday: r.gameday, home: r.home_team ?? "", away: r.away_team ?? "", espnGameId: r.espn || null });
+  }
+  return out;
+}
+
+/**
+ * The week of one game from the schedule: by ESPN game id when the prop has
+ * one, otherwise the two teams (either side at home — a neutral-site game may
+ * list them the other way) within a day of the slate date. Null when it can't
+ * be told. Stat rows can't answer this: they carry the player's team and
+ * opponent but no date and no home side, so the second meeting of division
+ * rivals looks exactly like the first.
+ */
+export function weekForScheduledGame(
+  schedule: ScheduledGame[],
+  game: { home: string; away: string; date?: string; espnGameId?: string | null },
+): number | null {
+  if (game.espnGameId) {
+    const byId = schedule.find((s) => s.espnGameId === game.espnGameId);
+    if (byId) return byId.week;
+  }
+  if (!game.date) return null;
+  const day = Date.parse(`${game.date}T12:00:00Z`);
+  const near = schedule.filter(
+    (s) =>
+      ((s.home === game.home && s.away === game.away) || (s.home === game.away && s.away === game.home)) &&
+      Math.abs(Date.parse(`${s.gameday}T12:00:00Z`) - day) <= 86_400_000,
+  );
+  return near.length === 1 ? near[0].week : null;
 }
 
 export interface RosterEntry {
@@ -163,14 +212,20 @@ export function statValue(row: StatRow, propType: string): number | null {
   }
 }
 
+/** Every week in which these two teams met, from the stat rows (which can't say who was at home). */
+export function weeksForPair(rows: StatRow[], home: string, away: string): number[] {
+  const weeks = new Set<number>();
+  for (const r of rows) if ((r.team === home && r.opponent === away) || (r.team === away && r.opponent === home)) weeks.add(r.week);
+  return [...weeks].sort((a, b) => a - b);
+}
+
 /**
- * The week a game was played, from any stat row of the home team against the
- * away team. Home and away together identify one regular-season game: a
- * division rematch swaps them.
+ * The week of a game from stat rows alone, only when the two teams met once.
+ * A rematch (division rivals meet twice) is ambiguous here: use the schedule.
  */
 export function weekForGame(rows: StatRow[], home: string, away: string): number | null {
-  for (const r of rows) if (r.team === home && r.opponent === away) return r.week;
-  return null;
+  const weeks = weeksForPair(rows, home, away);
+  return weeks.length === 1 ? weeks[0] : null;
 }
 
 export type Grade =
@@ -215,18 +270,29 @@ function matchPlayer(playerName: string, candidates: Candidate[], played: Set<st
 }
 
 /**
- * Grade one prop. By ESPN id when the prop has one and that week's roster
- * knows it; otherwise by name among the two teams' players that week, so a
- * common surname elsewhere in the league cannot collide. Pending means the
- * game is not in the data yet.
+ * Grade one prop. The game's week comes from the schedule (by ESPN game id,
+ * else teams and date) when the season data has one; stat rows alone can
+ * only place a game the two teams played once. The player is matched by ESPN
+ * id when the prop has one and that week's roster knows it; otherwise by name
+ * among the two teams' players that week, so a common surname elsewhere in
+ * the league cannot collide. Pending means the game is not in the data yet.
  */
 export function gradeProp(
-  prop: { playerName: string; espnId?: string | null; propType: string; home: string; away: string },
+  prop: { playerName: string; espnId?: string | null; propType: string; home: string; away: string; date?: string; espnGameId?: string | null },
   season: SeasonData,
 ): Grade {
-  const week = weekForGame(season.rows, prop.home, prop.away);
-  if (week == null) return { kind: "pending" };
   const teams = new Set([prop.home, prop.away]);
+  let week: number | null;
+  if (season.schedule && (prop.espnGameId || prop.date)) {
+    week = weekForScheduledGame(season.schedule, prop);
+    if (week == null) return { kind: "unmatched", week: 0, reason: "game not found in the nflverse schedule" };
+    if (!season.rows.some((r) => r.week === week && teams.has(r.team))) return { kind: "pending" };
+  } else {
+    const weeks = weeksForPair(season.rows, prop.home, prop.away);
+    if (weeks.length === 0) return { kind: "pending" };
+    if (weeks.length > 1) return { kind: "unmatched", week: 0, reason: `the teams met in weeks ${weeks.join(" and ")}; needs the schedule to tell which` };
+    week = weeks[0];
+  }
   const rows = season.rows.filter((r) => r.week === week && teams.has(r.team));
   const apps = season.appearances.filter((a) => a.week === week && teams.has(a.team));
   const stOnly = (season.specialTeamsOnly ?? []).filter((a) => a.week === week && teams.has(a.team));

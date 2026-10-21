@@ -47,4 +47,22 @@ describe("snapFallbackDecision", () => {
     expect(snapFallbackDecision(prop, s)).toMatchObject({ kind: "manual" });
     expect(snapFallbackDecision({ ...prop, espnId: null, playerName: "Nobody Here" }, season())).toMatchObject({ kind: "manual" });
   });
+
+  it("settles a division rematch from its own week, never the first meeting's", () => {
+    // Humphrey took offensive snaps in week 6 (DEN home); in the week-15 rematch (SEA home) he has no snap row.
+    const rematch = season({
+      rows: [statRow("00-sutton", "Courtland Sutton"), { ...statRow("00-sutton", "Courtland Sutton"), week: 15, team: "DEN", opponent: "SEA" }],
+      appearances: [
+        { gsisId: "00-humphrey", name: "Lil'Jordan Humphrey", week: 6, team: "DEN" },
+        { gsisId: "00-sutton", name: "Courtland Sutton", week: 15, team: "DEN" },
+      ],
+      roster: [rostered("00-humphrey", "2", "Lil'Jordan Humphrey"), { ...rostered("00-humphrey", "2", "Lil'Jordan Humphrey", "INA"), week: 15 }],
+      schedule: [
+        { week: 6, gameday: "2026-10-15", home: "DEN", away: "SEA", espnGameId: "401872995" },
+        { week: 15, gameday: "2026-12-20", home: "SEA", away: "DEN", espnGameId: "401873100" },
+      ],
+    });
+    const d = snapFallbackDecision({ ...prop, home: "SEA", away: "DEN", date: "2026-12-20", espnGameId: "401873100" }, rematch);
+    expect(d).toMatchObject({ kind: "void" });
+  });
 });

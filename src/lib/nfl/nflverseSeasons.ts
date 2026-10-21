@@ -5,7 +5,7 @@
  */
 import zlib from "node:zlib";
 import { parseCsv } from "@/lib/utils/csv";
-import { parseGradingStats, parseWeeklyRoster, type Appearance, type SeasonData, type StatRow } from "@/lib/nfl/gradeProps";
+import { parseGradingStats, parseSchedule, parseWeeklyRoster, type Appearance, type ScheduledGame, type SeasonData, type StatRow } from "@/lib/nfl/gradeProps";
 
 export const BASE = "https://github.com/nflverse/nflverse-data/releases/download";
 
@@ -21,19 +21,28 @@ export async function loadSeasonStats(season: number): Promise<StatRow[]> {
   return parseGradingStats(await fetchCsv(`${BASE}/stats_player/stats_player_week_${season}.csv.gz`));
 }
 
+/** One season's schedule: the week of every game, by date and ESPN game id (~2 MB, all seasons). */
+export async function loadSchedule(season: number): Promise<ScheduledGame[]> {
+  return parseSchedule(await fetchCsv(`${BASE}/schedules/games.csv`), season);
+}
+
 /** players.csv's PFR → gsis links, the backup for snap-count rows. */
 export async function loadPfrToGsis(): Promise<Map<string, string>> {
   const players = parseCsv(await fetchCsv(`${BASE}/players/players.csv`)).rows;
   return new Map(players.filter((p) => p.pfr_id && p.gsis_id).map((p) => [p.pfr_id, p.gsis_id]));
 }
 
-export async function loadSeason(season: number, playersPfrToGsis: Map<string, string>): Promise<SeasonData> {
-  const [weekly, snaps, rosterCsv] = await Promise.all([
-    fetchCsv(`${BASE}/stats_player/stats_player_week_${season}.csv.gz`),
+export async function loadSeason(
+  season: number,
+  playersPfrToGsis: Map<string, string>,
+  preloaded: { rows?: StatRow[]; schedule?: ScheduledGame[] } = {},
+): Promise<SeasonData> {
+  const [rows, snaps, rosterCsv, schedule] = await Promise.all([
+    preloaded.rows ?? loadSeasonStats(season),
     fetchCsv(`${BASE}/snap_counts/snap_counts_${season}.csv.gz`),
     fetchCsv(`${BASE}/weekly_rosters/roster_weekly_${season}.csv`),
+    preloaded.schedule ?? loadSchedule(season),
   ]);
-  const rows = parseGradingStats(weekly);
   const roster = parseWeeklyRoster(rosterCsv);
   // Snap counts are keyed by PFR id: the weekly roster links it to gsis, players.csv backs it up.
   const pfrToGsis = new Map(playersPfrToGsis);
@@ -50,5 +59,5 @@ export async function loadSeason(season: number, playersPfrToGsis: Map<string, s
     if (Number(r.offense_snaps) > 0) appearances.push(a);
     else if (Number(r.st_snaps) > 0) specialTeamsOnly.push(a);
   }
-  return { rows, appearances, specialTeamsOnly, roster };
+  return { rows, appearances, specialTeamsOnly, roster, schedule };
 }

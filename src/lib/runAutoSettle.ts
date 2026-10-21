@@ -9,8 +9,8 @@ import { toNflSlateDate } from "@/lib/nfl/slate";
 import { dueForSettlement, settleRetryDue, staleForAutoSettle } from "./settleSchedule";
 import { nflSeasonForDate } from "@/lib/nfl/slate";
 import { nflverseCode } from "@/lib/nfl/teamCodes";
-import { weekForGame, type SeasonData, type StatRow } from "@/lib/nfl/gradeProps";
-import { loadPfrToGsis, loadSeason, loadSeasonStats } from "@/lib/nfl/nflverseSeasons";
+import { weekForScheduledGame, type ScheduledGame, type SeasonData, type StatRow } from "@/lib/nfl/gradeProps";
+import { loadPfrToGsis, loadSchedule, loadSeason, loadSeasonStats } from "@/lib/nfl/nflverseSeasons";
 import { snapFallbackDecision, type SnapDecision } from "@/lib/nfl/snapFallback";
 import type { PlayerProp } from "@prisma/client";
 
@@ -106,6 +106,7 @@ export async function runAutoSettle(source: "launchd" | "app", now = new Date())
  */
 function nflverseFallback() {
   const stats = new Map<number, Promise<StatRow[]>>();
+  const schedules = new Map<number, Promise<ScheduledGame[]>>();
   const seasons = new Map<number, Promise<SeasonData>>();
   let pfr: Promise<Map<string, string>> | null = null;
   return {
@@ -116,10 +117,18 @@ function nflverseFallback() {
       const { season } = nflSeasonForDate(prop.date);
       try {
         if (!stats.has(season)) stats.set(season, loadSeasonStats(season));
-        if (weekForGame(await stats.get(season)!, home, away) == null) return { kind: "wait", reason: "nflverse has not posted the game yet" };
+        if (!schedules.has(season)) schedules.set(season, loadSchedule(season));
+        const [rows, schedule] = await Promise.all([stats.get(season)!, schedules.get(season)!]);
+        // The game's own week (a rematch of division rivals is another week entirely).
+        const week = weekForScheduledGame(schedule, { home, away, date: prop.date, espnGameId: prop.gameId });
+        if (week == null) return { kind: "wait", reason: "game not found in the nflverse schedule" };
+        if (!rows.some((r) => r.week === week && (r.team === home || r.team === away))) return { kind: "wait", reason: "nflverse has not posted the game yet" };
         pfr ??= loadPfrToGsis();
-        if (!seasons.has(season)) seasons.set(season, pfr.then((m) => loadSeason(season, m)));
-        return snapFallbackDecision({ playerName: prop.playerName, espnId: prop.espnAthleteId, propType: prop.propType, home, away }, await seasons.get(season)!);
+        if (!seasons.has(season)) seasons.set(season, pfr.then((m) => loadSeason(season, m, { rows, schedule })));
+        return snapFallbackDecision(
+          { playerName: prop.playerName, espnId: prop.espnAthleteId, propType: prop.propType, home, away, date: prop.date, espnGameId: prop.gameId },
+          await seasons.get(season)!,
+        );
       } catch (e) {
         return { kind: "wait", reason: `nflverse download failed: ${String(e)}` };
       }

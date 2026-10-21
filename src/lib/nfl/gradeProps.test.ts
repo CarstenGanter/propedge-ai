@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gradeProp, parseGradingStats, parseWeeklyRoster, priorGames, statValue, weekForGame, type RosterEntry, type SeasonData, type StatRow } from "./gradeProps";
+import { gradeProp, parseGradingStats, parseSchedule, parseWeeklyRoster, priorGames, statValue, weekForGame, weekForScheduledGame, type RosterEntry, type ScheduledGame, type SeasonData, type StatRow } from "./gradeProps";
 
 const row = (o: Partial<StatRow>): StatRow => ({
   gsisId: "x",
@@ -224,5 +224,64 @@ describe("priorGames", () => {
     const g = priorGames("p", "Receptions", 19, many, null);
     expect(g).toHaveLength(15);
     expect(g[0]).toBe(18);
+  });
+});
+
+describe("division rematches", () => {
+  // Seattle at Denver in week 6 (2026-10-15), Denver at Seattle in week 15 (2026-12-20).
+  const schedule: ScheduledGame[] = [
+    { week: 6, gameday: "2026-10-15", home: "DEN", away: "SEA", espnGameId: "401872995" },
+    { week: 15, gameday: "2026-12-20", home: "SEA", away: "DEN", espnGameId: "401873100" },
+  ];
+  const rematch: SeasonData = {
+    rows: [
+      row({ gsisId: "sutton", name: "Courtland Sutton", week: 6, team: "DEN", opponent: "SEA", receivingYards: 88 }),
+      row({ gsisId: "sutton", name: "Courtland Sutton", week: 15, team: "DEN", opponent: "SEA", receivingYards: 21 }),
+    ],
+    appearances: [
+      { gsisId: "humphrey", name: "Lil'Jordan Humphrey", week: 6, team: "DEN" },
+      { gsisId: "sutton", name: "Courtland Sutton", week: 6, team: "DEN" },
+      { gsisId: "sutton", name: "Courtland Sutton", week: 15, team: "DEN" },
+    ],
+    schedule,
+  };
+  // Odds API props store the home side as `team`: week 15's home team is Seattle.
+  const week15 = { propType: "Receiving Yards", home: "SEA", away: "DEN", date: "2026-12-20" };
+
+  it("grades the second meeting from its own week, by ESPN game id or by date", () => {
+    expect(gradeProp({ ...week15, playerName: "Courtland Sutton", espnGameId: "401873100" }, rematch)).toMatchObject({ kind: "graded", value: 21, week: 15 });
+    expect(gradeProp({ ...week15, playerName: "Courtland Sutton" }, rematch)).toMatchObject({ kind: "graded", value: 21, week: 15 });
+    expect(gradeProp({ ...week15, playerName: "Courtland Sutton", home: "DEN", away: "SEA", date: "2026-10-15" }, rematch)).toMatchObject({ value: 88, week: 6 });
+  });
+
+  it("never borrows the first meeting's snaps: no week-15 snap row is not a week-6 zero", () => {
+    // Humphrey played offense in week 6 and has no week-15 row: void, not "graded 0 from week 6".
+    expect(gradeProp({ ...week15, playerName: "Lil'Jordan Humphrey" }, { ...rematch, roster: [{ gsisId: "humphrey", espnId: null, week: 15, team: "DEN", status: "INA", name: "Lil'Jordan Humphrey" }] })).toMatchObject({ kind: "void", week: 15 });
+  });
+
+  it("is pending until nflverse posts the second meeting, even though the first is posted", () => {
+    const beforeWeek15 = { ...rematch, rows: rematch.rows.filter((r) => r.week === 6), appearances: rematch.appearances.filter((a) => a.week === 6) };
+    expect(gradeProp({ ...week15, playerName: "Courtland Sutton" }, beforeWeek15)).toEqual({ kind: "pending" });
+  });
+
+  it("refuses to guess without the schedule", () => {
+    const { schedule: _s, ...noSchedule } = rematch;
+    void _s;
+    expect(gradeProp({ ...week15, playerName: "Courtland Sutton" }, noSchedule)).toMatchObject({ kind: "unmatched", reason: expect.stringContaining("weeks 6 and 15") });
+    expect(weekForGame(noSchedule.rows, "SEA", "DEN")).toBeNull();
+  });
+
+  it("finds the week by ESPN id, else teams within a day of the slate date (either side at home)", () => {
+    expect(weekForScheduledGame(schedule, { home: "SEA", away: "DEN", espnGameId: "401873100" })).toBe(15);
+    expect(weekForScheduledGame(schedule, { home: "DEN", away: "SEA", date: "2026-12-21" })).toBe(15);
+    expect(weekForScheduledGame(schedule, { home: "DEN", away: "SEA", date: "2026-11-01" })).toBeNull();
+  });
+
+  it("reads the nflverse schedule for one season", () => {
+    const csv =
+      "game_id,season,game_type,week,gameday,away_team,home_team,espn\n" +
+      "2026_06_SEA_DEN,2026,REG,6,2026-10-15,SEA,DEN,401872995\n" +
+      "2025_06_SEA_DEN,2025,REG,6,2025-10-16,SEA,DEN,401700000\n";
+    expect(parseSchedule(csv, 2026)).toEqual([{ week: 6, gameday: "2026-10-15", home: "DEN", away: "SEA", espnGameId: "401872995" }]);
   });
 });

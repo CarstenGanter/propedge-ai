@@ -167,7 +167,7 @@ async function main() {
       unmatched.push({ label, reason: "team name has no nflverse code" });
       continue;
     }
-    const g = gradeProp({ playerName: p.playerName, espnId: p.espnAthleteId, propType: p.propType, home, away }, current);
+    const g = gradeProp({ playerName: p.playerName, espnId: p.espnAthleteId, propType: p.propType, home, away, date: p.date, espnGameId: p.gameId }, current);
     if (g.kind === "pending") { tally.pending++; continue; }
     if (g.kind === "unmatched") {
       tally.unmatched++;

@@ -17,7 +17,7 @@ export type SnapDecision =
   | { kind: "manual"; reason: string };
 
 export function snapFallbackDecision(
-  prop: { playerName: string; espnId?: string | null; propType: string; home: string; away: string },
+  prop: { playerName: string; espnId?: string | null; propType: string; home: string; away: string; date?: string; espnGameId?: string | null },
   season: SeasonData,
 ): SnapDecision {
   const g = gradeProp(prop, season);

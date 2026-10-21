@@ -65,7 +65,7 @@ async function main() {
     const home = nflverseCode(p.team);
     const away = nflverseCode(p.opponent);
     if (!m || !home || !away) continue;
-    const g = gradeProp({ playerName: p.playerName, espnId: p.espnAthleteId, propType: p.propType, home, away }, current);
+    const g = gradeProp({ playerName: p.playerName, espnId: p.espnAthleteId, propType: p.propType, home, away, date: p.date, espnGameId: p.gameId }, current);
     if (g.kind !== "graded" || g.value === m.referenceLine) continue;
     const myTeam = roster.find((r) => r.gsisId === g.gsisId && r.week === g.week)?.team;
     const boosting = positionsBoostingProp(p.propType);
