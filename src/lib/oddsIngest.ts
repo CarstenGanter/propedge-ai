@@ -7,7 +7,7 @@ import { toSlateDate } from "@/lib/utils/dates";
 import type { Sport } from "@/types";
 import { planIngest, propKey, refreshableFields } from "@/lib/ingestMerge";
 import { parseSnapshot, snapshotFrom } from "@/lib/marketSnapshot";
-import { mergeAvailability, mergeUnderdogLine, underdogPricesLookReal } from "@/lib/analysis/venues";
+import { mergeAvailability, mergeUnderdogLine, underdogLineStamp, underdogPricesLookReal } from "@/lib/analysis/venues";
 import { saveQuotes } from "@/lib/oddsStore";
 import { teamsMatch } from "@/lib/utils/teamName";
 
@@ -140,6 +140,7 @@ export async function ingestOddsPropsForSport(
       ...data,
       marketDataJson: JSON.stringify(snap),
       underdogLine: merged.line,
+      ...underdogLineStamp({ line: prev?.underdogLine ?? null }, merged, fetchedAtDate),
       underdogAvailable: mergeAvailability(prev?.underdogAvailable ?? null, feedUnderdogLine),
     };
   };

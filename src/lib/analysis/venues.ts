@@ -123,3 +123,18 @@ export function bestPrizePicksSide(m: ConsensusModel, ppLine: number): { dir: Di
   const under = readVenueLine(m, ppLine, "UNDER");
   return over.probAtVenue >= under.probAtVenue ? { dir: "OVER", read: over } : { dir: "UNDER", read: under };
 }
+
+/**
+ * When the Underdog line changes — set, moved or cleared — record the time and
+ * where it came from (pure). An unchanged line keeps its original stamp, so a
+ * refresh never makes an old line look new.
+ */
+export function underdogLineStamp(
+  prev: { line: number | null },
+  next: { line: number | null; source: LineSource | null },
+  now: Date,
+): { underdogLineAt: Date | null; underdogLineSource: LineSource | null } | Record<string, never> {
+  if (prev.line === next.line) return {};
+  if (next.line == null) return { underdogLineAt: null, underdogLineSource: null };
+  return { underdogLineAt: now, underdogLineSource: next.source };
+}

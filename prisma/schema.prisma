@@ -33,6 +33,11 @@ model PlayerProp {
   propType        String
   line            Float // sharp-market consensus line (from The Odds API)
   underdogLine    Float? // the line Underdog actually offers (user-entered)
+  // When the current Underdog line arrived and where from ("feed" | "manual"),
+  // recorded from 2026-10-21 on (null before: unknown). A line typed after
+  // kickoff, or after the market moved, can then be told apart.
+  underdogLineAt     DateTime?
+  underdogLineSource String?
   // Whether the pick'em platform posts this prop at all. Props come from a
   // sportsbook feed, which carries markets and players pick'em sites do not, so
   // the board can otherwise recommend a bet that cannot be placed. Three states

@@ -1,4 +1,5 @@
 import "server-only";
+import { underdogLineStamp } from "@/lib/analysis/venues";
 import { prisma } from "@/lib/db/client";
 import { propToScorable } from "@/lib/generate";
 import { buildResearchBundle, resolveProviderContext } from "@/lib/providers";
@@ -29,6 +30,7 @@ export async function applyUnderdogLine(
     where: { id: pick.playerPropId },
     data: {
       underdogLine,
+      ...underdogLineStamp({ line: pick.playerProp.underdogLine }, { line: underdogLine, source: underdogLine != null ? "manual" : null }, new Date()),
       // Only props priced from the feed carry a snapshot; don't invent one.
       marketDataJson: pick.playerProp.marketDataJson
         ? patchSnapshot(pick.playerProp.marketDataJson, {
