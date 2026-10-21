@@ -12,18 +12,18 @@ import { runAutoCapture } from "@/lib/nfl/runAutoCapture";
 import { runAutoSettle } from "@/lib/runAutoSettle";
 import { runInjuryWatch } from "@/lib/nfl/injuryWatch";
 import { runNewsFetches } from "@/lib/nfl/newsFetch";
+import { runSteps } from "@/lib/schedulerSteps";
 
 // Capture first: it is time-critical (20-60 min before kickoff); settling can wait.
-runAutoCapture("launchd")
-  .then((line) => console.log(line))
-  .then(() => runAutoSettle("launchd"))
-  .then((line) => console.log(line))
-  .then(() => runInjuryWatch("launchd"))
-  .then((line) => console.log(line))
-  .then(() => runNewsFetches("launchd"))
-  .then((line) => console.log(line))
-  .catch((e) => {
-    console.error(`[${new Date().toISOString()}] launchd`, e);
-    process.exitCode = 1;
+// Each step runs on its own, so a failure in one never skips the others.
+runSteps([
+  ["capture", () => runAutoCapture("launchd")],
+  ["settle", () => runAutoSettle("launchd")],
+  ["injury-watch", () => runInjuryWatch("launchd")],
+  ["news-fetch", () => runNewsFetches("launchd")],
+])
+  .then((results) => {
+    for (const r of results) (r.ok ? console.log : console.error)(r.line);
+    if (results.some((r) => !r.ok)) process.exitCode = 1;
   })
   .finally(() => prisma.$disconnect());

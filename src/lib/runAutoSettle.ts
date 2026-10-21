@@ -62,31 +62,39 @@ export async function runAutoSettle(source: "launchd" | "app", now = new Date())
     let settled = 0;
     let fromSnaps = 0;
     let waiting = 0;
+    const failed: string[] = [];
     for (const pick of due) {
-      // Re-read under the lock: the other scheduler may have just settled it.
-      const fresh = await prisma.pick.findUnique({ where: { id: pick.id }, select: { status: true } });
-      if (fresh?.status !== "pending") continue;
-      const r = await lookupResult({ ...propToScorable(pick.playerProp), date: pick.playerProp.date }, settlementContext(pick, settings));
-      if (usableResult(pick, r)) {
-        await settlePickById(pick.id, { actualResult: r.actualResult });
-        settled++;
-      } else if (r.absentFromBoxScore && pick.playerProp.sport === "NFL" && !(await cacheGet<string>(manualKey(pick.id)))) {
-        const d = await snaps.decide(pick.playerProp);
-        // nflverse can't settle it (name or source disagreement): don't re-download every pass.
-        if (d.kind === "manual") await cacheSet(manualKey(pick.id), d.reason);
-        if (d.kind === "settle") await settlePickById(pick.id, { actualResult: d.actualResult, note: d.note });
-        else if (d.kind === "void") await settlePickById(pick.id, { status: "void", actualResult: null, note: d.note });
-        if (d.kind === "settle" || d.kind === "void") {
+      // One pick that throws (bad data, a provider error) is logged by id and
+      // skipped; it no longer stops every later pick, pass after pass.
+      try {
+        // Re-read under the lock: the other scheduler may have just settled it.
+        const fresh = await prisma.pick.findUnique({ where: { id: pick.id }, select: { status: true } });
+        if (fresh?.status !== "pending") continue;
+        const r = await lookupResult({ ...propToScorable(pick.playerProp), date: pick.playerProp.date }, settlementContext(pick, settings));
+        if (usableResult(pick, r)) {
+          await settlePickById(pick.id, { actualResult: r.actualResult });
           settled++;
-          fromSnaps++;
-        } else if (d.kind === "wait") waiting++;
+        } else if (r.absentFromBoxScore && pick.playerProp.sport === "NFL" && !(await cacheGet<string>(manualKey(pick.id)))) {
+          const d = await snaps.decide(pick.playerProp);
+          // nflverse can't settle it (name or source disagreement): don't re-download every pass.
+          if (d.kind === "manual") await cacheSet(manualKey(pick.id), d.reason);
+          if (d.kind === "settle") await settlePickById(pick.id, { actualResult: d.actualResult, note: d.note });
+          else if (d.kind === "void") await settlePickById(pick.id, { status: "void", actualResult: null, note: d.note });
+          if (d.kind === "settle" || d.kind === "void") {
+            settled++;
+            fromSnaps++;
+          } else if (d.kind === "wait") waiting++;
+        }
+      } catch (e) {
+        failed.push(`${pick.id} (${pick.playerProp.playerName} ${pick.playerProp.propType}): ${e instanceof Error ? e.message : String(e)}`);
       }
     }
     return log(
       `settled ${settled} of ${due.length} due` +
+        (failed.length ? `; ${failed.length} FAILED — ${failed.join("; ")}` : "") +
         (fromSnaps ? ` (${fromSnaps} from nflverse snap counts)` : "") +
         (waiting ? `; ${waiting} not in the box score, waiting for nflverse` : "") +
-        (settled + waiting < due.length ? " (the rest not final yet — retried later)" : "") +
+        (settled + waiting + failed.length < due.length ? " (the rest not final yet — retried later)" : "") +
         staleNote,
     );
   } finally {
