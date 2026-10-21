@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -58,4 +58,34 @@ export function backupDatabase(dbPath: string, outDir: string, now = new Date())
   } finally {
     copy.close();
   }
+}
+
+/**
+ * Values of environment variables that look like credentials (name contains
+ * KEY, SECRET, TOKEN or PASSWORD; value at least 8 characters).
+ */
+export function secretValues(env: Record<string, string | undefined>): { name: string; value: string }[] {
+  return Object.entries(env)
+    .filter(([name, value]) => /KEY|SECRET|TOKEN|PASSWORD/i.test(name) && typeof value === "string" && value.length >= 8)
+    .map(([name, value]) => ({ name, value: value! }));
+}
+
+/** Names of the secrets whose value appears anywhere in the file's bytes. */
+export function secretsInFile(file: string, secrets: { name: string; value: string }[]): string[] {
+  const bytes = readFileSync(file);
+  return secrets.filter((s) => bytes.includes(Buffer.from(s.value))).map((s) => s.name);
+}
+
+/**
+ * Copy a backup off the machine (DB_BACKUP_COPY_DIR, e.g. an iCloud Drive
+ * folder) — but never a file holding a credential: it is re-scanned for every
+ * secret-looking value in the environment first.
+ */
+export function copyOffsite(backup: string, dir: string, env: Record<string, string | undefined>): { copied: string } | { refused: string } {
+  const found = secretsInFile(backup, secretValues(env));
+  if (found.length) return { refused: `the backup contains the value of ${found.join(", ")}` };
+  mkdirSync(dir, { recursive: true });
+  const dest = path.join(dir, path.basename(backup));
+  copyFileSync(backup, dest);
+  return { copied: dest };
 }

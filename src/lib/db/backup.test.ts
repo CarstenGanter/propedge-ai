@@ -1,9 +1,9 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { backupDatabase, backupFileName, resolveDbPath } from "./backup";
+import { backupDatabase, backupFileName, copyOffsite, resolveDbPath, secretValues } from "./backup";
 
 describe("resolveDbPath", () => {
   it("resolves a relative SQLite URL against the schema folder, as Prisma does", () => {
@@ -55,5 +55,29 @@ describe("backupDatabase", () => {
     const bad = path.join(dir, "bad.db");
     writeFileSync(bad, "not a database");
     expect(() => backupDatabase(bad, path.join(dir, "backups"))).toThrow();
+  });
+});
+
+describe("copyOffsite", () => {
+  it("copies a clean backup off the machine", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "offsite-"));
+    const file = path.join(dir, "dev-20261021-020304Z.db");
+    writeFileSync(file, "odds history, no credentials");
+    const r = copyOffsite(file, path.join(dir, "icloud"), { ODDS_API_KEY: "abcdef1234567890" });
+    expect(r).toEqual({ copied: path.join(dir, "icloud", "dev-20261021-020304Z.db") });
+    expect(existsSync(path.join(dir, "icloud", "dev-20261021-020304Z.db"))).toBe(true);
+  });
+
+  it("refuses a backup that contains a credential's value", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "offsite-"));
+    const file = path.join(dir, "dev.db");
+    writeFileSync(file, "...url ?apiKey=abcdef1234567890&markets=...");
+    const r = copyOffsite(file, path.join(dir, "icloud"), { ODDS_API_KEY: "abcdef1234567890" });
+    expect(r).toEqual({ refused: "the backup contains the value of ODDS_API_KEY" });
+    expect(existsSync(path.join(dir, "icloud"))).toBe(false);
+  });
+
+  it("only treats credential-looking variables as secrets", () => {
+    expect(secretValues({ ODDS_API_KEY: "abcdef1234567890", NEWS_API_KEY: "", DATABASE_URL: "file:./dev.db", MAX_DAILY_PICKS: "10" }).map((s) => s.name)).toEqual(["ODDS_API_KEY"]);
   });
 });
