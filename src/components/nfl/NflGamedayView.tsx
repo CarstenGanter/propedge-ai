@@ -88,7 +88,7 @@ export function NflGamedayView({ data }: { data: NflGamedayData }) {
       />
 
       {/* The slate in numbers, as a ruled stat line */}
-      <section aria-label="Slate summary" className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
+      <section aria-label="Slate summary" className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4">
         <StatCard label={data.games.length === 1 ? "game on the slate" : "games on the slate"} value={data.games.length} />
         <StatCard label={data.pickCount === 1 ? "pick on the board" : "picks on the board"} value={data.pickCount} />
         <StatCard label={data.pendingPropCount === 1 ? "prop stored" : "props stored"} value={data.pendingPropCount} />

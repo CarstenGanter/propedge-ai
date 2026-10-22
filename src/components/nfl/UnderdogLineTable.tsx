@@ -171,11 +171,11 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                           value={draft[p.id] ?? ""}
                           onChange={(e) => { touchedLine.current.add(p.id); setDraft((d) => ({ ...d, [p.id]: e.target.value })); }}
                           placeholder="—"
-                          className="h-8 w-20 rounded-md border border-border bg-input/60 px-2 text-right text-sm tabular-nums"
+                          className="h-8 w-20 rounded-md border border-elevated-border bg-input shadow-sm px-2 text-right text-sm tabular-nums"
                         />
                         {p.prop.underdogLineSource === "feed" && typed === p.prop.underdogLine && (
                           <div
-                            className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground"
+                            className="mt-0.5 text-2xs uppercase tracking-wide text-muted-foreground"
                             title="Filled from Underdog via The Odds API — indicative. Edit it and save to mark it as yours; the feed never overwrites a line you typed."
                           >
                             from feed
@@ -198,7 +198,7 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                         {p.prop.underdogRead && typed === p.prop.underdogLine && p.prop.underdogRead.flag !== "none" && (
                           <div
                             className={cn(
-                              "mt-0.5 text-[10px] font-medium uppercase tracking-wide",
+                              "mt-0.5 text-2xs font-medium uppercase tracking-wide",
                               p.prop.underdogRead.flag === "soft" ? "text-success" : "text-danger",
                             )}
                             title={`At Underdog's line the books give this side ${(p.prop.underdogRead.probAtLine * 100).toFixed(1)}% — ${p.prop.underdogRead.flag === "soft" ? "kinder" : "harsher"} than at their own line. A soft line is the one edge that has held up.`}
@@ -217,7 +217,7 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                           onChange={(e) => { touchedTag.current.add(p.id); setTagDraft((d) => ({ ...d, [p.id]: e.target.value })); }}
                           placeholder={String(STANDARD_PICK_PAYOUT)}
                           aria-label={`Payout multiplier for ${p.prop.playerName}`}
-                          className="h-8 w-16 rounded-md border border-border bg-input/60 px-2 text-right text-sm tabular-nums"
+                          className="h-8 w-16 rounded-md border border-elevated-border bg-input shadow-sm px-2 text-right text-sm tabular-nums"
                         />
                       </td>
                       <NeedsCell pick={p} tagRaw={tagDraft[p.id] ?? ""} />

@@ -59,7 +59,7 @@ export default async function DashboardPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-6 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard
           label="Bankroll"
           value={formatCurrency(summary.currentBankroll)}
@@ -91,7 +91,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-4">
+        <div className="min-w-0 space-y-4 lg:col-span-2">
           <SectionHeading
             title="Top picks"
             description={topPicks.length ? formatSlate(displayDate) : "Latest slate"}

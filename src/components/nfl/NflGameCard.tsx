@@ -28,7 +28,7 @@ export function NflGameCard({ entry, profile, date }: { entry: NflGamedayGame; p
   const injuryCount = context?.injuries.reduce((n, t) => n + t.players.length, 0) ?? 0;
 
   return (
-    <Card className="overflow-hidden animate-in">
+    <Card className="overflow-hidden">
       {/* Game header */}
       <div className="flex flex-col gap-3 border-b border-border/60 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -88,7 +88,7 @@ export function NflGameCard({ entry, profile, date }: { entry: NflGamedayGame; p
               {a.concern ? <Wind className="mt-0.5 h-3 w-3 shrink-0" /> : <CloudRain className="mt-0.5 h-3 w-3 shrink-0" />}
               <span>
                 {a.note}{" "}
-                <span className="rounded bg-muted/60 px-1 py-0.5 text-[10px]">{a.sourceName}</span>
+                <span className="rounded bg-muted/60 px-1 py-0.5 text-2xs">{a.sourceName}</span>
                 {a.sourceUrl && (
                   <a href={a.sourceUrl} target="_blank" rel="noreferrer" className="ml-1 text-primary hover:underline">
                     source
@@ -100,12 +100,12 @@ export function NflGameCard({ entry, profile, date }: { entry: NflGamedayGame; p
             <span className="inline-flex items-center gap-1">
               <CloudRain className="h-3 w-3" /> {game.weatherText}
               {game.weatherTempF != null && ` · ${game.weatherTempF}°F`}{" "}
-              <span className="rounded bg-muted/60 px-1 py-0.5 text-[10px]">ESPN</span>
+              <span className="rounded bg-muted/60 px-1 py-0.5 text-2xs">ESPN</span>
             </span>
           ) : null}
           {context?.odds?.provider && (context.odds.details || context.odds.overUnder != null) && (
             <span>
-              Line via <span className="rounded bg-muted/60 px-1 py-0.5 text-[10px]">{context.odds.provider} · ESPN</span>
+              Line via <span className="rounded bg-muted/60 px-1 py-0.5 text-2xs">{context.odds.provider} · ESPN</span>
             </span>
           )}
         </div>
@@ -143,7 +143,7 @@ export function NflGameCard({ entry, profile, date }: { entry: NflGamedayGame; p
                     )}
                   </div>
                 ))}
-                <p className="text-[11px] text-muted-foreground sm:col-span-2">
+                <p className="text-2xs text-muted-foreground sm:col-span-2">
                   Source: ESPN game injury report{context.fetchedAt ? `, fetched ${new Date(context.fetchedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}.
                 </p>
               </div>

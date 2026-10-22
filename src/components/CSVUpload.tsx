@@ -78,7 +78,7 @@ export function CSVUpload() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={CSV_TEMPLATE_HEADERS.join(",")}
-          className="h-28 w-full rounded-md border border-border bg-input/60 p-2 font-mono text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
+          className="h-28 w-full rounded-md border border-elevated-border bg-input shadow-sm p-2 font-mono text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
         />
         <Button onClick={() => submit(text)} disabled={pending || !text.trim()}>
           {pending ? "Importing…" : "Import pasted CSV"}

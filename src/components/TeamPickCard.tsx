@@ -30,7 +30,7 @@ export function TeamPickCard({ pick, defaultOpen = false }: { pick: SerializedTe
   const homePicked = pick.recommendedSide === "HOME";
 
   return (
-    <Card className="glass-hover overflow-hidden animate-in">
+    <Card className="glass-hover overflow-hidden">
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/60 font-mono text-sm font-bold text-primary">
@@ -53,7 +53,7 @@ export function TeamPickCard({ pick, defaultOpen = false }: { pick: SerializedTe
                 (mkt {Math.round(pick.marketWinProb * 100)}% · {fmtPrice(pick.priceAmerican)})
               </span>
             </p>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
               <Clock className="h-3 w-3" /> {formatGameDateTime(pick.gameStartTime, pick.date)}
               {pick.tags.slice(0, 3).map((t) => (
                 <TagChip key={t} tag={t} />
@@ -105,7 +105,7 @@ export function TeamPickCard({ pick, defaultOpen = false }: { pick: SerializedTe
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Evidence</h4>
               <EvidenceList evidence={pick.evidence} />
               {pick.warnings.length > 0 && (
-                <div className="mt-3 space-y-1 rounded-lg border border-warning/25 bg-warning/5 p-2 text-[11px] text-warning">
+                <div className="mt-3 space-y-1 rounded-lg border border-warning/25 bg-warning/5 p-2 text-2xs text-warning">
                   {pick.warnings.map((w, i) => (
                     <p key={i}>⚠ {w}</p>
                   ))}

@@ -23,17 +23,15 @@ export function StatCard({
     muted: "text-foreground",
   }[accent ?? "muted"];
 
-  // A ruled stat, as in a newspaper's stat line: the number leads, the label follows.
+  // A KPI card: what it is, the figure in its verdict colour, then the context.
   return (
-    <div className="border-t-2 border-border-strong pt-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <p className={cn("font-serif text-[34px] font-semibold leading-none tabular-nums", accentColor)}>{value}</p>
-          <p className="text-sm text-muted-foreground">{label}</p>
-          {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
-        </div>
-        {icon && <div className="text-muted-foreground" aria-hidden="true">{icon}</div>}
+    <div className="glass flex flex-col gap-3 rounded-xl p-5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="kicker">{label}</p>
+        {icon && <div className="text-faint [&_svg]:size-4" aria-hidden="true">{icon}</div>}
       </div>
+      <p className={cn("text-3xl font-semibold leading-none tracking-tight tabular-nums", accentColor)}>{value}</p>
+      {sub && <p className="text-xs leading-relaxed text-muted-foreground">{sub}</p>}
     </div>
   );
 }
@@ -54,14 +52,14 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 py-14 text-center",
+        "flex flex-col items-center justify-center rounded-xl border border-dashed border-border-strong bg-surface/40 px-6 py-14 text-center",
         className,
       )}
     >
       {icon && <div className="mb-3 text-muted-foreground" aria-hidden="true">{icon}</div>}
-      <h3 className="font-serif text-lg font-semibold">{title}</h3>
+      <h3 className="text-base font-semibold tracking-tight">{title}</h3>
       {description && (
-        <p className="mt-1 max-w-md text-sm text-muted-foreground">{description}</p>
+        <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">{description}</p>
       )}
       {action && <div className="mt-4">{action}</div>}
     </div>
@@ -89,8 +87,8 @@ export function SectionHeading({
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h2 className="font-serif text-2xl font-semibold tracking-tight">{title}</h2>
-        {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
+        <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+        {description && <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p>}
       </div>
       {action}
     </div>
@@ -98,7 +96,7 @@ export function SectionHeading({
 }
 
 /**
- * A page's headline block: navy kicker, serif headline, a one-paragraph deck,
+ * A page's headline block: an overline, the title, a one-paragraph summary,
  * and the page's actions on the right (they wrap below on a phone).
  */
 export function PageHeader({
@@ -116,15 +114,13 @@ export function PageHeader({
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-      <div className="min-w-0 max-w-3xl flex-[999_1_480px]">
+      <div className="min-w-0 max-w-3xl flex-1 basis-96">
         {kicker && <p className="kicker">{kicker}</p>}
-        <h1 className="mt-1.5 font-serif text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">{title}</h1>
+        <h1 className="mt-2 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">{title}</h1>
         {meta && <div className="mt-3 flex flex-wrap items-center gap-2">{meta}</div>}
-        {description && (
-          <p className="mt-3 max-w-[62ch] font-serif text-lg leading-relaxed text-muted-foreground">{description}</p>
-        )}
+        {description && <p className="mt-3 max-w-prose text-base leading-relaxed text-body">{description}</p>}
       </div>
-      {actions && <div className="flex flex-[1_1_auto] flex-wrap items-center justify-end gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>}
     </div>
   );
 }

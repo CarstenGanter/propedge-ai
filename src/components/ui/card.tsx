@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils/cn";
 
+/** Layer 1: a translucent panel over the page, with a hairline border. */
 export function Card({
   className,
   glass = true,
@@ -9,8 +10,8 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-lg border text-card-foreground",
-        glass ? "glass" : "bg-card border-border",
+        "rounded-xl text-card-foreground",
+        glass ? "glass" : "border border-border bg-card",
         className,
       )}
       {...props}
@@ -19,17 +20,15 @@ export function Card({
 }
 
 export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex flex-col space-y-1.5 p-5", className)} {...props} />;
+  return <div className={cn("flex flex-col gap-1 p-5", className)} {...props} />;
 }
 
 export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return (
-    <h3 className={cn("font-serif text-lg font-semibold leading-tight tracking-tight", className)} {...props} />
-  );
+  return <h3 className={cn("text-base font-semibold leading-snug tracking-tight text-foreground", className)} {...props} />;
 }
 
 export function CardDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn("text-sm text-muted-foreground", className)} {...props} />;
+  return <p className={cn("text-sm leading-relaxed text-muted-foreground", className)} {...props} />;
 }
 
 export function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

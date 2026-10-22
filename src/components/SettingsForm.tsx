@@ -22,6 +22,7 @@ import { VISIBLE_LEAGUES, VISIBLE_SPORTS } from "@/components/visibleSports";
 import type { AppSettingsData } from "@/lib/settings";
 import type { ProviderStatus } from "@/lib/providers/config";
 import { cn } from "@/lib/utils/cn";
+import { toggleChipClass } from "@/components/ui/segmented";
 
 interface AvoidItem {
   id: string;
@@ -109,13 +110,10 @@ export function SettingsForm({
               {VISIBLE_SPORTS.map((s) => (
                 <button
                   key={s}
+                  type="button"
+                  aria-pressed={sports.includes(s)}
                   onClick={() => toggleSport(s)}
-                  className={cn(
-                    "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                    sports.includes(s)
-                      ? "border-primary/40 bg-primary/12 text-primary"
-                      : "border-border bg-muted/30 text-muted-foreground",
-                  )}
+                  className={toggleChipClass(sports.includes(s))}
                 >
                   {s}
                 </button>
@@ -145,13 +143,10 @@ export function SettingsForm({
             {VISIBLE_LEAGUES.map((l) => (
               <button
                 key={l}
+                type="button"
+                aria-pressed={leagues.includes(l)}
                 onClick={() => setLeagues((prev) => (prev.includes(l) ? prev.filter((x) => x !== l) : [...prev, l]))}
-                className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                  leagues.includes(l)
-                    ? "border-primary/40 bg-primary/12 text-primary"
-                    : "border-border bg-muted/30 text-muted-foreground",
-                )}
+                className={toggleChipClass(leagues.includes(l))}
               >
                 {LEAGUE_LABELS[l]}
               </button>
@@ -201,7 +196,7 @@ export function SettingsForm({
                     )}
                   >
                     <span className="font-medium">{m.propType}</span>
-                    <span className="block text-[11px] opacity-80">{m.note}</span>
+                    <span className="block text-2xs opacity-80">{m.note}</span>
                   </button>
                 );
               })}
@@ -428,7 +423,7 @@ function AvoidListManager({
           <select
             value={type}
             onChange={(e) => setType(e.target.value as "player" | "propType")}
-            className="h-10 rounded-md border border-border bg-input/60 px-2 text-sm"
+            className="h-10 rounded-md border border-elevated-border bg-input shadow-sm px-2 text-sm"
           >
             <option value="player">Player</option>
             <option value="propType">Prop type</option>

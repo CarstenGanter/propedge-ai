@@ -23,8 +23,8 @@ function tone(iv: Interval | null) {
 
 function BreakdownTable({ title, rows }: { title: string; rows: SkillBreakdown[] }) {
   return (
-    <div>
-      <p className="mb-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">{title}</p>
+    <div className="min-w-0">
+      <p className="kicker mb-2">{title}</p>
       <Table>
         <TableHeader>
           <TableRow>
@@ -64,7 +64,7 @@ function Section({ s }: { s: SkillSection }) {
           <EmptyState title="No scored props yet" description="Rows appear here once their games are graded (npm run research:skill)." />
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-6 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
               <StatCard label="Log-loss skill vs market" value={<span className={tone(r.interval)}>{pct(r.overall.skill)}</span>} sub={`95%: ${interval(r.interval)}`} />
               <StatCard label="Model log-loss" value={r.overall.llModel.toFixed(4)} sub={`Market ${r.overall.llMarket.toFixed(4)}`} />
               <StatCard label="Props scored" value={r.overall.n} />
@@ -74,8 +74,8 @@ function Section({ s }: { s: SkillSection }) {
               <BreakdownTable title="By prop type" rows={r.byPropType} />
               <BreakdownTable title="By the side the model leans" rows={r.byLean} />
             </div>
-            <div>
-              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+            <div className="min-w-0">
+              <p className="kicker mb-2">
                 Claimed edge vs what happened — hits on the model&apos;s side minus the hits the market expected there
               </p>
               <Table>
@@ -139,7 +139,7 @@ function OverGapCard({ rows }: { rows: OverGapRow[] }) {
       </CardHeader>
       <CardContent className="space-y-3">
         {findings.length > 0 && (
-          <div role="status" className="rounded-sm border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+          <div role="status" className="rounded-lg border border-warning/25 bg-warning/10 px-3 py-2 text-sm">
             <span className="font-semibold">Interval excludes zero: </span>
             {findings
               .map((r) => `${r.label} (${r.gap!.gapPts >= 0 ? "+" : ""}${r.gap!.gapPts.toFixed(1)} pts, ${r.gap!.interval!.lo.toFixed(1)} to ${r.gap!.interval!.hi.toFixed(1)})`)
@@ -190,7 +190,7 @@ export function MarketSkillPanel({
 }) {
   return (
     <div className="space-y-4">
-      <p className="max-w-[70ch] text-sm leading-relaxed text-muted-foreground">
+      <p className="max-w-prose text-sm leading-relaxed text-muted-foreground">
         Skill = 1 − model log-loss ÷ market log-loss on the same props. Above zero, the model adds information the books
         don&apos;t have; at zero it <em>is</em> the books; below zero it subtracts. A number only counts when its 95% interval
         excludes zero. Sections are never pooled: different sources, model versions and market methods are reported apart.

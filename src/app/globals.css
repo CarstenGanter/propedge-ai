@@ -1,11 +1,20 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 /* ------------------------------------------------------------------ */
-/*  PropEdge — "Form Guide": an editorial betting page.                */
-/*  Paper and ink by default, a night edition under data-theme=dark.   */
+/*  PropEdge — dark analytics surface.                                 */
 /*                                                                     */
-/*  Green, amber and red mean edge, break-even and overpriced. They    */
-/*  are never decoration: the brand accent is ink-blue.                */
+/*  Three depths: the page (L0), cards and panels (L1, translucent     */
+/*  over the page), and interactive layers — inputs, menus, dialogs    */
+/*  (L2). Borders are 1px hairlines at low opacity, never solid rules. */
+/*                                                                     */
+/*  Emerald, rose and amber mean edge/profit, loss and break-even.     */
+/*  They are never decoration; the one accent (periwinkle) marks       */
+/*  links, focus and the active data series.                           */
+/*                                                                     */
+/*  Dark is the default; a matching zinc light theme sits under        */
+/*  data-theme="light" for the toggle.                                 */
 /* ------------------------------------------------------------------ */
 
 /* `dark:` follows the toggle (data-theme on <html>), not the OS setting. */
@@ -13,105 +22,149 @@
 
 /* static: every variable is emitted, including the chart ones read at runtime. */
 @theme static {
-  --color-background: #f5f2ea;
-  --color-surface: #efebe1;
-  --color-card: #fbfaf6;
-  --color-card-foreground: #16150f;
-  --color-foreground: #16150f;
-  --color-muted: #ece7da;
-  --color-muted-foreground: #5e5a4e;
-  --color-border: #d9d3c4;
-  --color-border-strong: #16150f;
-  --color-input: #fffdf8;
-  --color-ring: #1d3a8a;
+  /* L0 — page */
+  --color-background: #09090b;
+  /* L1 — cards and panels (zinc-900/60 over the page, blurred) */
+  --color-surface: rgb(24 24 27 / 0.6);
+  --color-card: rgb(24 24 27 / 0.6);
+  --color-card-foreground: #f4f4f5;
+  /* L2 — inputs, menus, dialogs (zinc-800/90) */
+  --color-elevated: rgb(39 39 42 / 0.9);
+  --color-elevated-border: rgb(63 63 70 / 0.6);
+  --color-popover: #1c1c1f;
+  --color-popover-foreground: #f4f4f5;
 
-  --color-primary: #1d3a8a;
-  --color-primary-foreground: #f5f2ea;
-  --color-secondary: #5e5a4e;
-  --color-secondary-foreground: #f5f2ea;
-  --color-accent: #1d3a8a;
+  --color-foreground: #f4f4f5; /* headings, emphasis — zinc-100 */
+  --color-body: #d4d4d8; /* running copy — zinc-300 */
+  --color-muted: rgb(39 39 42 / 0.6); /* quiet fills */
+  --color-muted-foreground: #a1a1aa; /* secondary text — zinc-400 */
+  --color-faint: #71717a; /* tertiary text, axis ticks — zinc-500 */
+  --color-border: rgb(255 255 255 / 0.08);
+  --color-border-strong: rgb(255 255 255 / 0.16);
+  --color-input: rgb(39 39 42 / 0.9);
+  --color-ring: #93a4ff;
 
-  --color-success: #0e7a52;
-  --color-danger: #b3362f;
-  --color-warning: #8a5800;
-  --color-info: #2b5bb5;
+  --color-primary: #93a4ff;
+  --color-primary-foreground: #09090b;
+  --color-secondary: #a1a1aa;
+  --color-secondary-foreground: #09090b;
+  --color-accent: #93a4ff;
+  --color-accent-foreground: #09090b;
 
-  --color-chart-1: #1d3a8a;
-  --color-chart-2: #b86b1f;
-  --color-chart-axis: #5e5a4e;
-  --color-chart-grid: #e3ddcf;
-  --color-chart-reference: #b8b09e;
+  --color-success: #34d399; /* emerald-400 */
+  --color-danger: #fb7185; /* rose-400 */
+  --color-destructive: #fb7185;
+  --color-warning: #fbbf24; /* amber-400 */
+  --color-info: #7dd3fc; /* sky-300 */
 
-  /* Crisp, printed corners: pills (rounded-full) stay round. */
-  --radius-sm: 2px;
-  --radius-md: 3px;
-  --radius-lg: 4px;
-  --radius-xl: 4px;
-  --radius-2xl: 6px;
+  /* Accent and orange: distinct for colour-blind readers, neither a verdict colour. */
+  --color-chart-1: #93a4ff;
+  --color-chart-2: #fb923c;
+  --color-chart-axis: #71717a;
+  --color-chart-grid: rgb(255 255 255 / 0.06);
+  --color-chart-reference: #52525b;
 
-  --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-newsreader), ui-serif, Georgia, serif;
-  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  /* Radius follows hierarchy: chips are round, controls 8px, cards 12px. */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+
+  /* L2 shadow: a soft contact shadow plus a wide ambient one. */
+  --shadow-elevated: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -12px rgb(0 0 0 / 0.6);
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.03) inset;
+
+  /* Overlines and micro-labels. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "SF Pro Display", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "SF Pro Display", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 :root {
-  color-scheme: light;
-}
-
-/* The night edition: the same paper-and-ink hierarchy, inverted warm. */
-:root[data-theme="dark"] {
   color-scheme: dark;
-  --color-background: #131210;
-  --color-surface: #181714;
-  --color-card: #1c1b18;
-  --color-card-foreground: #ede8dc;
-  --color-foreground: #ede8dc;
-  --color-muted: #26241f;
-  --color-muted-foreground: #a8a193;
-  --color-border: #34312a;
-  --color-border-strong: #ede8dc;
-  --color-input: #1a1916;
-  --color-ring: #9db4f5;
-
-  --color-primary: #9db4f5;
-  --color-primary-foreground: #10131c;
-  --color-secondary: #a8a193;
-  --color-secondary-foreground: #131210;
-  --color-accent: #9db4f5;
-
-  --color-success: #4cc38a;
-  --color-danger: #f07b72;
-  --color-warning: #e2ae4a;
-  --color-info: #9db4f5;
-
-  --color-chart-1: #9db4f5;
-  --color-chart-2: #e59a4c;
-  --color-chart-axis: #a8a193;
-  --color-chart-grid: #2a2823;
-  --color-chart-reference: #4a463d;
 }
 
-/* In the base layer, so utility classes (border-primary, font-sans…) still
-   win. Unlayered, `*` overrode every border colour utility in the app. */
+/* The light theme: the same three depths on zinc-50. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-background: #fafafa;
+  --color-surface: rgb(255 255 255 / 0.75);
+  --color-card: rgb(255 255 255 / 0.8);
+  --color-card-foreground: #18181b;
+  --color-elevated: #ffffff;
+  --color-elevated-border: rgb(9 9 11 / 0.12);
+  --color-popover: #ffffff;
+  --color-popover-foreground: #18181b;
+
+  --color-foreground: #18181b;
+  --color-body: #3f3f46;
+  --color-muted: rgb(244 244 245 / 0.9);
+  --color-muted-foreground: #52525b;
+  --color-faint: #71717a;
+  --color-border: rgb(9 9 11 / 0.08);
+  --color-border-strong: rgb(9 9 11 / 0.16);
+  --color-input: #ffffff;
+  --color-ring: #4f5bd5;
+
+  --color-primary: #4f5bd5;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #52525b;
+  --color-secondary-foreground: #ffffff;
+  --color-accent: #4f5bd5;
+  --color-accent-foreground: #ffffff;
+
+  --color-success: #047857;
+  --color-danger: #be123c;
+  --color-destructive: #be123c;
+  --color-warning: #b45309;
+  --color-info: #0369a1;
+
+  --color-chart-1: #4f5bd5;
+  --color-chart-2: #c2410c;
+  --color-chart-axis: #71717a;
+  --color-chart-grid: rgb(9 9 11 / 0.06);
+  --color-chart-reference: #a1a1aa;
+
+  --shadow-elevated: 0 1px 2px rgb(9 9 11 / 0.06), 0 12px 32px -12px rgb(9 9 11 / 0.18);
+  --shadow-card: 0 1px 2px rgb(9 9 11 / 0.04);
+}
+
+/* In the base layer, so utility classes (border-primary, font-mono…) still win. */
 @layer base {
   * {
     border-color: var(--color-border);
   }
 
-  body {
-    background: var(--color-background);
-    color: var(--color-foreground);
+  html {
     font-family: var(--font-sans);
-    min-height: 100vh;
-    font-feature-settings: "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Headlines are set in the serif; numbers line up in tables everywhere. */
-  h1,
-  h2 {
-    font-family: var(--font-serif);
+  body {
+    min-height: 100vh;
+    background: var(--color-background);
+    color: var(--color-body);
+    font-family: var(--font-sans);
+    line-height: 1.6;
   }
-  table {
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    color: var(--color-foreground);
+    font-family: var(--font-heading);
+    letter-spacing: -0.02em;
+  }
+
+  /* Numbers line up wherever they are tabulated. */
+  table,
+  .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
 
@@ -119,37 +172,55 @@
     outline: 2px solid var(--color-ring);
     outline-offset: 2px;
   }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  }
 }
 
-/* Card surface (legacy class name kept so every Card restyles automatically) */
-.glass {
-  background: var(--color-card);
-  border: 1px solid var(--color-border);
-}
+/* Components layer: utilities (bg-warning/5, border-danger/20…) still override
+   these, so a Card can take a tint. Unlayered, they would beat every utility. */
+@layer components {
+  /* L1 card surface (legacy class name kept so every Card restyles automatically). */
+  .glass {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
 
-.glass-hover {
-  transition: border-color 0.15s ease;
-}
-.glass-hover:hover {
-  border-color: var(--color-muted-foreground);
-}
+  .glass-hover {
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+  .glass-hover:hover {
+    border-color: var(--color-border-strong);
+  }
 
-/* Legacy brand classes — flat (no gradients, no glow) */
-.gradient-text {
-  color: var(--color-foreground);
-}
+  /* L2 interactive surface: inputs, menus, dialogs. */
+  .surface-elevated {
+    background: var(--color-elevated);
+    border: 1px solid var(--color-elevated-border);
+    box-shadow: var(--shadow-elevated);
+  }
 
-.gradient-primary {
-  background: var(--color-primary);
-}
+  /* Legacy brand classes — flat, no gradients, no glow. */
+  .gradient-text {
+    color: var(--color-foreground);
+  }
+  .gradient-primary {
+    background: var(--color-primary);
+  }
 
-/* A section kicker: the small navy capitals above a headline. */
-.kicker {
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-primary);
+  /* Overline: the compact uppercase label above a heading or a figure. */
+  .kicker {
+    font-size: var(--text-2xs);
+    line-height: var(--text-2xs--line-height);
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-muted-foreground);
+  }
 }
 
 ::-webkit-scrollbar {
@@ -160,35 +231,21 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
+  background: var(--color-border-strong);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-muted-foreground);
+  background: var(--color-faint);
   background-clip: content-box;
 }
 
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-.animate-in {
-  animation: fade-in-up 0.35s ease both;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .animate-in {
-    animation: none;
-  }
-  * {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
 }

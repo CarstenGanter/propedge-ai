@@ -56,7 +56,7 @@ export function DemoDataBadge({ className }: { className?: string }) {
 // Sports and leagues are labels, set like a printed tag. Colour is kept for
 // verdicts, so no sport gets a hue of its own.
 const TAG_CLASS =
-  "inline-flex items-center rounded-sm border border-border px-1.5 py-0.5 font-mono text-[11px] font-medium uppercase tracking-wide text-foreground";
+  "inline-flex items-center rounded-md border border-border px-1.5 py-0.5 font-mono text-2xs font-medium uppercase tracking-wide text-foreground";
 
 export function SportBadge({ sport }: { sport: string }) {
   return <span className={TAG_CLASS}>{sport}</span>;
@@ -112,7 +112,7 @@ export function TeamStatusBadge({ status }: { status: TeamStatus }) {
 
 export function TagChip({ tag }: { tag: string }) {
   return (
-    <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
+    <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-2xs text-muted-foreground">
       {tag}
     </span>
   );

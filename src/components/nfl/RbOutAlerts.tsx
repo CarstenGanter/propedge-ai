@@ -14,10 +14,10 @@ const pct = (x: number) => `${Math.round(x * 100)}%`;
 export function RbOutAlerts({ alerts }: { alerts: RbOutAlert[] }) {
   if (alerts.length === 0) return null;
   return (
-    <Card className="border-t-4 border-t-warning">
+    <Card className="border-warning/25 bg-warning/5">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-warning" aria-hidden="true" /> Running back out
+          <AlertTriangle className="size-4 text-warning" aria-hidden="true" /> Running back out
         </CardTitle>
         <CardDescription>
           Teammates&apos; rushing lines, each venue against the books, and where the fitted redistribution expects the

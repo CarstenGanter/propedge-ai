@@ -21,10 +21,10 @@ import { formatCurrency } from "@/lib/utils/format";
 import { EmptyState } from "@/components/common";
 
 /**
- * Chart palette, read from the theme so charts follow the paper and night
- * editions. Series are ink-blue and burnt orange: a blue/orange pair stays
- * distinct for colour-blind readers, and neither is a verdict colour. The
- * fallback is the paper edition, used only before the browser can be asked.
+ * Chart palette, read from the theme so charts follow the dark and light
+ * themes. Series are the periwinkle accent and orange: the pair stays distinct
+ * for colour-blind readers, and neither is a verdict colour. The fallback is
+ * the dark theme, used only before the browser can be asked.
  */
 interface ChartPalette {
   series1: string;
@@ -37,29 +37,30 @@ interface ChartPalette {
   tooltipText: string;
 }
 
-const PAPER_PALETTE: ChartPalette = {
-  series1: "#1d3a8a",
-  series2: "#b86b1f",
-  axis: "#5e5a4e",
-  grid: "#e3ddcf",
-  reference: "#b8b09e",
-  tooltipBg: "#fbfaf6",
-  tooltipBorder: "#d9d3c4",
-  tooltipText: "#16150f",
+const DEFAULT_PALETTE: ChartPalette = {
+  series1: "#93a4ff",
+  series2: "#fb923c",
+  axis: "#71717a",
+  grid: "rgb(255 255 255 / 0.06)",
+  reference: "#52525b",
+  tooltipBg: "#1c1c1f",
+  tooltipBorder: "rgb(63 63 70 / 0.6)",
+  tooltipText: "#f4f4f5",
 };
 
 function readPalette(): ChartPalette {
   const css = getComputedStyle(document.documentElement);
   const v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
   return {
-    series1: v("--color-chart-1", PAPER_PALETTE.series1),
-    series2: v("--color-chart-2", PAPER_PALETTE.series2),
-    axis: v("--color-chart-axis", PAPER_PALETTE.axis),
-    grid: v("--color-chart-grid", PAPER_PALETTE.grid),
-    reference: v("--color-chart-reference", PAPER_PALETTE.reference),
-    tooltipBg: v("--color-card", PAPER_PALETTE.tooltipBg),
-    tooltipBorder: v("--color-border", PAPER_PALETTE.tooltipBorder),
-    tooltipText: v("--color-foreground", PAPER_PALETTE.tooltipText),
+    series1: v("--color-chart-1", DEFAULT_PALETTE.series1),
+    series2: v("--color-chart-2", DEFAULT_PALETTE.series2),
+    axis: v("--color-chart-axis", DEFAULT_PALETTE.axis),
+    grid: v("--color-chart-grid", DEFAULT_PALETTE.grid),
+    reference: v("--color-chart-reference", DEFAULT_PALETTE.reference),
+    // Tooltips are Layer 2: a solid popover surface, readable over any series.
+    tooltipBg: v("--color-popover", DEFAULT_PALETTE.tooltipBg),
+    tooltipBorder: v("--color-elevated-border", DEFAULT_PALETTE.tooltipBorder),
+    tooltipText: v("--color-popover-foreground", DEFAULT_PALETTE.tooltipText),
   };
 }
 
@@ -68,7 +69,7 @@ function useChartPalette(): ChartPalette {
   // Charts only draw in the browser (ResponsiveContainer measures first), so
   // reading the DOM in the initializer cannot mismatch the server render.
   const [palette, setPalette] = React.useState<ChartPalette>(() =>
-    typeof window === "undefined" ? PAPER_PALETTE : readPalette(),
+    typeof window === "undefined" ? DEFAULT_PALETTE : readPalette(),
   );
   React.useEffect(() => {
     const observer = new MutationObserver(() => setPalette(readPalette()));
@@ -84,8 +85,10 @@ function chrome(c: ChartPalette) {
     tooltip: {
       background: c.tooltipBg,
       border: `1px solid ${c.tooltipBorder}`,
-      borderRadius: 3,
+      borderRadius: 8,
+      boxShadow: "0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -12px rgb(0 0 0 / 0.6)",
       fontSize: 12,
+      fontVariantNumeric: "tabular-nums",
       color: c.tooltipText,
     },
     legend: { fontSize: 12, color: c.axis } as const,

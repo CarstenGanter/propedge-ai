@@ -90,7 +90,7 @@ export function TeamParlayBuilder({
         <CardHeader>
           <CardTitle>Pick teams to win ({picks.length} pending team picks)</CardTitle>
         </CardHeader>
-        <CardContent className="max-h-[560px] space-y-2 overflow-y-auto">
+        <CardContent className="max-h-140 space-y-2 overflow-y-auto">
           {picks.length === 0 ? (
             <EmptyState
               title="No pending team picks"

@@ -2,18 +2,19 @@ import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils/cn";
 
+/** Status chips: a translucent tint, a faint border of the same hue, and the hue as text. */
 const badgeVariants = cva(
-  "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
+  "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium",
   {
     variants: {
       variant: {
-        default: "border-transparent bg-primary/15 text-primary",
-        secondary: "border-transparent bg-secondary/15 text-secondary",
-        muted: "border-border bg-muted/60 text-muted-foreground",
-        success: "border-transparent bg-success/15 text-success",
-        danger: "border-transparent bg-danger/15 text-danger",
-        warning: "border-transparent bg-warning/15 text-warning",
-        outline: "border-border text-foreground",
+        default: "border-primary/20 bg-primary/10 text-primary",
+        secondary: "border-border bg-muted text-body",
+        muted: "border-border bg-muted text-muted-foreground",
+        success: "border-success/20 bg-success/10 text-success",
+        danger: "border-danger/20 bg-danger/10 text-danger",
+        warning: "border-warning/20 bg-warning/10 text-warning",
+        outline: "border-border-strong text-foreground",
       },
     },
     defaultVariants: { variant: "default" },

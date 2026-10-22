@@ -1,18 +1,14 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Instrument_Sans, Newsreader } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
 import { THEME_INIT_SCRIPT } from "@/components/themeScript";
 import { InlineScript } from "@/components/InlineScript";
+import { cn } from "@/lib/utils/cn";
 
-const newsreader = Newsreader({
-  variable: "--font-newsreader",
-  subsets: ["latin"],
-  style: ["normal", "italic"],
-  axes: ["opsz"],
-});
-const instrumentSans = Instrument_Sans({ variable: "--font-instrument-sans", subsets: ["latin"] });
-const plexMono = IBM_Plex_Mono({ variable: "--font-plex-mono", subsets: ["latin"], weight: ["400", "500", "600"] });
+// One family: Geist for text, Geist Mono for figures that must line up.
+const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "PropEdge AI — Sports Prop Research",
@@ -22,14 +18,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="en"
-      data-theme="light"
-      suppressHydrationWarning
-      className={`${newsreader.variable} ${instrumentSans.variable} ${plexMono.variable} antialiased`}
-    >
+    <html lang="en" data-theme="dark" suppressHydrationWarning className={cn(geistSans.variable, geistMono.variable)}>
       <head>
-        {/* Applies a saved theme before first paint, so the night edition never flashes paper. */}
+        {/* Applies a saved theme before first paint, so a light-theme choice never flashes dark. */}
         <InlineScript html={THEME_INIT_SCRIPT} />
       </head>
       <body>

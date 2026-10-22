@@ -75,7 +75,7 @@ export function NflSlipsPanel({
           ))}
         </div>
         {basis === "model" && (
-          <p className="flex items-start gap-1.5 rounded-lg border border-warning/25 bg-warning/5 p-2 text-[11px] leading-snug text-warning">
+          <p className="flex items-start gap-1.5 rounded-lg border border-warning/25 bg-warning/5 p-2 text-2xs leading-snug text-warning">
             <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
             These slips trust the model&apos;s probabilities. So far they have scored worse than the books&apos;
             — picks it rated 8+ points above the market won 3 of 8. Treat these as the model&apos;s opinion, not an edge.
@@ -219,7 +219,7 @@ function SlipCard({
         <p
           key={i}
           className={cn(
-            "mt-2 flex items-start gap-1.5 text-[11px] leading-snug",
+            "mt-2 flex items-start gap-1.5 text-2xs leading-snug",
             f.tone === "good" ? "text-success" : "text-muted-foreground",
           )}
         >
@@ -240,7 +240,7 @@ function SlipCard({
             step="0.05"
             value={multiplier}
             onChange={(e) => setMultiplier(e.target.value)}
-            className="h-7 w-16 rounded-md border border-border bg-input/60 px-2 text-xs"
+            className="h-7 w-16 rounded-md border border-elevated-border bg-input shadow-sm px-2 text-xs"
           />
           <span className="text-muted-foreground">
             × {formatCurrency(defaultStake)} → {formatCurrency(payout.projectedPayout)}
@@ -302,14 +302,14 @@ function SlipCard({
         </span>
       </div>
       {econ.overconfident ? (
-        <p className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-warning/25 bg-warning/5 p-2 text-[11px] leading-snug text-warning">
+        <p className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-warning/25 bg-warning/5 p-2 text-2xs leading-snug text-warning">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
           The model claims {econ.modelPerLeg == null ? "" : pct(econ.modelPerLeg)} per leg. Prop markets
           are priced too well for an edge that size, so this expected value is inflated. Trust the
           break-even figure and the ranking between slips, not the percentage.
         </p>
       ) : (
-        <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+        <p className="mt-1.5 text-2xs leading-snug text-muted-foreground">
           Break-even is exact. Expected value leans on confidence as a probability, which is not yet
           calibrated, so use it to choose between slips rather than as a promised return.
         </p>

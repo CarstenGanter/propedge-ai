@@ -67,7 +67,7 @@ export function ResearchLab({ props }: { props: SerializedProp[] }) {
             />
           </div>
         </CardHeader>
-        <CardContent className="max-h-[520px] space-y-2 overflow-y-auto">
+        <CardContent className="max-h-130 space-y-2 overflow-y-auto">
           {filtered.length === 0 ? (
             <EmptyState title="No props" description="Import a CSV or add a prop above." />
           ) : (

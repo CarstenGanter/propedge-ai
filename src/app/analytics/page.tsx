@@ -213,7 +213,7 @@ export default async function AnalyticsPage({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-6 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard label="Overall record" value={`${overall.hits}-${overall.misses}`} sub={`${overall.pushes + overall.voids} push/void`} />
         <StatCard
           label="Hit rate"

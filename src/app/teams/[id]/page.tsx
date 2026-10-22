@@ -44,7 +44,7 @@ export default async function TeamPickDetailPage({ params }: { params: Promise<{
             <TeamStatusBadge status={pick.status} />
             {pick.isDemo && <DemoDataBadge />}
           </div>
-          <h1 className="font-serif text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
+          <h1 className="text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
             {pick.recommendedTeam} <span className="text-base font-normal text-muted-foreground">to win</span>
           </h1>
           <p className="text-muted-foreground">

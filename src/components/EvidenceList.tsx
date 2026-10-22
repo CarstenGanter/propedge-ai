@@ -28,7 +28,7 @@ export function EvidenceList({ evidence }: { evidence: EvidenceItem[] }) {
               <p className="text-sm font-medium">{e.title}</p>
             </div>
             <p className="text-sm text-muted-foreground">{e.summary}</p>
-            <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground/80">
+            <div className="mt-1 flex items-center gap-2 text-2xs text-muted-foreground/80">
               <span
                 className={cn(
                   "rounded px-1.5 py-0.5",

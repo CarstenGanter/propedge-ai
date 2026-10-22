@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { segmentClass, segmentGroupClass } from "@/components/ui/segmented";
 import { Award, CalendarDays, ListChecks, TrendingDown } from "lucide-react";
 import { prisma } from "@/lib/db/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +10,6 @@ import { ResultSettlementModal } from "@/components/ResultSettlementModal";
 import { SettleAllButton } from "@/components/SettleAllButton";
 import { SettleTeamsButton } from "@/components/SettleTeamsButton";
 import { TeamSettlementModal } from "@/components/TeamPickActions";
-import { Button } from "@/components/ui/button";
 import {
   getResultsForDate,
   getDistinctPickDates,
@@ -95,22 +95,24 @@ export default async function ResultsPage({
       />
 
       {dates.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          {dates.slice(0, 10).map((d) => (
-            <Button
-              key={d}
-              asChild
-              size="sm"
-              variant={d === date ? "default" : "ghost"}
-            >
-              <Link href={`/results?date=${d}`}>{d.slice(5)}</Link>
-            </Button>
-          ))}
+        <div className="flex min-w-0 items-center gap-3">
+          <CalendarDays className="size-4 shrink-0 text-faint" aria-hidden="true" />
+          <nav aria-label="Slate date" className={segmentGroupClass}>
+            {dates.slice(0, 10).map((d) => (
+              <Link
+                key={d}
+                href={`/results?date=${d}`}
+                aria-current={d === date ? "page" : undefined}
+                className={cn(segmentClass(d === date), "tabular-nums")}
+              >
+                {d.slice(5)}
+              </Link>
+            ))}
+          </nav>
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-6 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard label="Daily accuracy" value={formatPercent(record.hitRate)} sub={`${hits.length}-${misses.length} decided`} accent="primary" />
         <StatCard label="Daily P/L" value={formatSignedCurrency(dailyPL)} accent={dailyPL >= 0 ? "success" : "danger"} />
         <StatCard label="Settled" value={`${settled.length}/${picks.length}`} sub={`${picks.length - settled.length} pending`} />

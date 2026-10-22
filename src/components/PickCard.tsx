@@ -36,7 +36,7 @@ export function PickCard({
   const p = pick.prop;
 
   return (
-    <Card className="glass-hover overflow-hidden animate-in">
+    <Card className="glass-hover overflow-hidden">
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/60 font-mono text-sm font-bold text-primary">
@@ -51,7 +51,7 @@ export function PickCard({
             <p className="mt-0.5 text-xs text-muted-foreground">
               {p.team} vs {p.opponent} · <span className="font-medium text-foreground/80">{p.direction} {p.line} {p.propType}</span>
             </p>
-            <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <div className="mt-1 flex items-center gap-2 text-2xs text-muted-foreground">
               <Clock className="h-3 w-3" /> {formatGameDateTime(p.gameStartTime, p.date)}
               {pick.tags.slice(0, 2).map((t) => (
                 <TagChip key={t} tag={t} />
@@ -149,7 +149,7 @@ export function PickCard({
               </h4>
               <EvidenceList evidence={pick.evidence.slice(0, 5)} />
               {pick.warnings.length > 0 && (
-                <div className="mt-3 rounded-lg border border-warning/25 bg-warning/5 p-2 text-[11px] text-warning">
+                <div className="mt-3 rounded-lg border border-warning/25 bg-warning/5 p-2 text-2xs text-warning">
                   {pick.warnings.map((w, i) => (
                     <p key={i}>⚠ {w}</p>
                   ))}

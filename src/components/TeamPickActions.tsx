@@ -53,7 +53,7 @@ export function TeamBetControls({
         <span className="text-sm font-medium">Moneyline bet (simulated)</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center rounded-md border border-border bg-input/60 px-2">
+        <div className="flex items-center rounded-md border border-elevated-border bg-input shadow-sm px-2">
           <span className="text-sm text-muted-foreground">$</span>
           <Input
             type="number"

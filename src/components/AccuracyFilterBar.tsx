@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { cn } from "@/lib/utils/cn";
+import { segmentClass, segmentGroupClass } from "@/components/ui/segmented";
 import type { AccuracyScope } from "@/lib/analytics";
 
 /**
@@ -32,26 +32,30 @@ export function AccuracyFilterBar({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
-      <div className="flex items-center gap-2">
-        <span className="text-xs font-medium text-muted-foreground">Show</span>
-        <Pill href={href({ scope: "all" })} active={scope === "all"}>
-          Every model pick ({allCount})
-        </Pill>
-        <Pill href={href({ scope: "mine" })} active={scope === "mine"}>
-          Only picks I took ({mineCount})
-        </Pill>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-muted-foreground">Sport</span>
-        <Pill href={href({ sport: "All" })} active={sport === "All"}>
-          All
-        </Pill>
-        {sports.map((s) => (
-          <Pill key={s} href={href({ sport: s })} active={sport === s}>
-            {s}
+    <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="kicker">Show</span>
+        <div className={segmentGroupClass}>
+          <Pill href={href({ scope: "all" })} active={scope === "all"}>
+            Every model pick <span className="tabular-nums text-faint">{allCount}</span>
           </Pill>
-        ))}
+          <Pill href={href({ scope: "mine" })} active={scope === "mine"}>
+            Only picks I took <span className="tabular-nums text-faint">{mineCount}</span>
+          </Pill>
+        </div>
+      </div>
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="kicker">Sport</span>
+        <div className={segmentGroupClass}>
+          <Pill href={href({ sport: "All" })} active={sport === "All"}>
+            All
+          </Pill>
+          {sports.map((s) => (
+            <Pill key={s} href={href({ sport: s })} active={sport === s}>
+              {s}
+            </Pill>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -62,12 +66,7 @@ function Pill({ href, active, children }: { href: string; active: boolean; child
     <Link
       href={href}
       aria-current={active ? "true" : undefined}
-      className={cn(
-        "inline-flex h-9 items-center rounded-full border px-3.5 text-xs font-medium transition-colors",
-        active
-          ? "border-foreground bg-foreground text-background"
-          : "border-border text-muted-foreground hover:border-foreground/60 hover:text-foreground",
-      )}
+      className={`${segmentClass(active)} gap-1.5`}
     >
       {children}
     </Link>

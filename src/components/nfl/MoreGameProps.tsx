@@ -99,7 +99,7 @@ export function MoreGameProps({ date, gameId, started }: { date: string; gameId:
               </table>
             </div>
           )}
-          <p className="text-[11px] leading-snug text-muted-foreground">
+          <p className="text-2xs leading-snug text-muted-foreground">
             Scores props already fetched this slate — no credits. Market is the books&apos; no-vig probability
             for that side; the gap between it and the model is the edge being claimed. Adding a pick puts it
             on the board with the line table and slip builder, and leaves every other pick untouched.
