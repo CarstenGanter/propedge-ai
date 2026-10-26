@@ -461,7 +461,7 @@ async function enteredPricePoints(): Promise<PricePoint[]> {
     .map((r) => ({ books: r.marketProb ?? r.entryProb ?? Number.NaN, payout: r.playerProp.underdogPickMultiplier ?? Number.NaN }));
 }
 
-function inferOut(raw?: string | null): "out" | undefined {
+export function inferOut(raw?: string | null): "out" | undefined {
   if (raw && raw.toLowerCase().includes("out")) return "out";
   return undefined;
 }

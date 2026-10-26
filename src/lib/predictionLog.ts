@@ -65,3 +65,20 @@ export function buildLivePrediction(input: {
     teammateOut: input.teammateOut,
   };
 }
+
+/**
+ * The forecast row for a line typed in by hand (decided 2026-10-26): the
+ * re-score at that line, stamped with when it was typed. A line typed after
+ * the scoring run otherwise had no row at the line actually played. Nothing
+ * once the game has started, nor from quotes of unknown or post-kickoff time:
+ * either could carry knowledge of the game.
+ */
+export function buildManualLinePrediction(
+  input: Parameters<typeof buildLivePrediction>[0] & { enteredAt: Date; kickoff: Date | null; playerOut: boolean },
+): Prisma.PropPredictionCreateManyInput | null {
+  if (input.prop.underdogLine == null || input.playerOut) return null;
+  const quotedAt = input.snapshot?.fetchedAt ? new Date(input.snapshot.fetchedAt) : null;
+  if (!quotedAt || (input.kickoff && (input.enteredAt >= input.kickoff || quotedAt >= input.kickoff))) return null;
+  const row = buildLivePrediction(input);
+  return row ? { ...row, createdAt: input.enteredAt } : null;
+}

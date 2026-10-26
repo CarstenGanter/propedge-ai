@@ -1,12 +1,13 @@
 import "server-only";
 import { underdogLineStamp } from "@/lib/analysis/venues";
 import { prisma } from "@/lib/db/client";
-import { propToScorable } from "@/lib/generate";
+import { inferOut, propToScorable } from "@/lib/generate";
+import { buildManualLinePrediction } from "@/lib/predictionLog";
 import { buildResearchBundle, resolveProviderContext } from "@/lib/providers";
 import { analyzeProp, SCORING_MODEL_VERSION } from "@/lib/analysis/scoringEngine";
 import { recommendedStake } from "@/lib/analysis/confidenceModel";
 import { getSettings } from "@/lib/settings";
-import { patchSnapshot } from "@/lib/marketSnapshot";
+import { consensusOf, parseSnapshot, patchSnapshot } from "@/lib/marketSnapshot";
 
 /**
  * Store the line your pick'em app actually offers and re-score the pick against
@@ -26,17 +27,19 @@ export async function applyUnderdogLine(
 
   // Record that this line came from the user, so a later fetch never
   // overwrites it. Clearing it hands the field back to the feed.
+  const enteredAt = new Date();
+  const marketDataJson = pick.playerProp.marketDataJson
+    ? patchSnapshot(pick.playerProp.marketDataJson, {
+        underdogLineSource: underdogLine != null ? "manual" : undefined,
+      })
+    : null;
   await prisma.playerProp.update({
     where: { id: pick.playerPropId },
     data: {
       underdogLine,
-      ...underdogLineStamp({ line: pick.playerProp.underdogLine }, { line: underdogLine, source: underdogLine != null ? "manual" : null }, new Date()),
+      ...underdogLineStamp({ line: pick.playerProp.underdogLine }, { line: underdogLine, source: underdogLine != null ? "manual" : null }, enteredAt),
       // Only props priced from the feed carry a snapshot; don't invent one.
-      marketDataJson: pick.playerProp.marketDataJson
-        ? patchSnapshot(pick.playerProp.marketDataJson, {
-            underdogLineSource: underdogLine != null ? "manual" : undefined,
-          })
-        : null,
+      marketDataJson,
     },
   });
 
@@ -49,6 +52,30 @@ export async function applyUnderdogLine(
   });
   const bundle = await buildResearchBundle(scorable, ctx);
   const analysis = analyzeProp(scorable, bundle, { profile: settings.scoringProfile });
+
+  // The forecast log gets this re-score too, at the typed line: the scoring
+  // run's rows are at whatever line was known when it ran.
+  const snapshot = parseSnapshot(marketDataJson);
+  const previous = await prisma.propPrediction.findFirst({
+    where: { playerPropId: pick.playerPropId, source: "live" },
+    orderBy: { createdAt: "desc" },
+    select: { playerStatus: true, teammateOut: true },
+  });
+  const forecast = buildManualLinePrediction({
+    prop: { ...pick.playerProp, underdogLine },
+    modelProbability: analysis.modelProbability,
+    modelRawProbability: analysis.modelRawProbability,
+    consensus: consensusOf(snapshot),
+    snapshot,
+    playerStatus: bundle.news?.playerStatus ?? null,
+    teammateOut: bundle.news?.teammateAbsencesBoost ?? null,
+    previous,
+    modelVersion: SCORING_MODEL_VERSION,
+    enteredAt,
+    kickoff: pick.playerProp.gameStartTime,
+    playerOut: (bundle.news?.playerStatus ?? inferOut(pick.playerProp.injuryStatus)) === "out",
+  });
+  if (forecast) await prisma.propPrediction.create({ data: forecast });
 
   // Tag the entered line's value relative to the sharp market. Line vs line —
   // never against the synthesised "projection", which is the market's lean in

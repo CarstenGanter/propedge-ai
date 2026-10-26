@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildConsensus, consensusProbOver } from "@/lib/analysis/marketConsensus";
-import { buildLivePrediction, marketMethodOf, overProb } from "./predictionLog";
+import { buildLivePrediction, buildManualLinePrediction, marketMethodOf, overProb } from "./predictionLog";
 import type { MarketSnapshot } from "./marketSnapshot";
 
 const { model } = buildConsensus("Receiving Yards", [
@@ -50,6 +50,31 @@ describe("buildLivePrediction", () => {
   it("logs nothing without a model probability or a market", () => {
     expect(buildLivePrediction({ ...base, modelProbability: null })).toBeNull();
     expect(buildLivePrediction({ ...base, consensus: null })).toBeNull();
+  });
+});
+
+describe("buildManualLinePrediction", () => {
+  // Quotes fetched 14:00Z, line typed 15:00Z, kickoff 17:00Z.
+  const typed = { ...base, prop: { ...prop, underdogLine: 32.5 }, enteredAt: new Date("2026-10-18T15:00:00Z"), kickoff: new Date("2026-10-18T17:00:00Z"), playerOut: false };
+
+  it("logs the forecast at the typed line, stamped with when it was typed", () => {
+    const row = buildManualLinePrediction(typed)!;
+    expect(row).toMatchObject({ line: 32.5, lineKind: "venue", source: "live" });
+    expect(row.createdAt).toEqual(new Date("2026-10-18T15:00:00Z"));
+    expect(row.quotedAt).toEqual(new Date("2026-10-18T14:00:00.000Z"));
+    expect(row.marketProbOver).toBeCloseTo(consensusProbOver(model!, 32.5), 12);
+  });
+
+  it("logs nothing once the game has started: that forecast could see the game", () => {
+    expect(buildManualLinePrediction({ ...typed, enteredAt: new Date("2026-10-18T17:00:00Z") })).toBeNull();
+    // Nor when the quotes themselves are from after kickoff, or of unknown time.
+    expect(buildManualLinePrediction({ ...typed, snapshot: { ...snapshot, fetchedAt: "2026-10-18T17:05:00.000Z" } })).toBeNull();
+    expect(buildManualLinePrediction({ ...typed, snapshot: { ...snapshot, fetchedAt: undefined } })).toBeNull();
+  });
+
+  it("logs nothing for a cleared line or a player ruled out, as the scoring run doesn't", () => {
+    expect(buildManualLinePrediction({ ...typed, prop: { ...prop, underdogLine: null } })).toBeNull();
+    expect(buildManualLinePrediction({ ...typed, playerOut: true })).toBeNull();
   });
 });
 
