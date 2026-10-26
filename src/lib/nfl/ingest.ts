@@ -24,10 +24,11 @@ import { prisma } from "@/lib/db/client";
 
 /**
  * Alternate-line ladders bought with each slate fetch, for fitting the
- * consensus spread. ~1 credit per game each (about 13 a Sunday); approved for
- * receiving yards on 2026-10-20. Other prop types need approval first.
+ * consensus spread. ~1 credit per game each (about 13 a Sunday). Receiving
+ * yards ran 2026-10-20 → 10-25 and stopped once the σ price test passed with
+ * 12 games (November budget, 2026-10-26). Any prop type needs approval first.
  */
-export const ALT_LADDER_PROP_TYPES = ["Receiving Yards"];
+export const ALT_LADDER_PROP_TYPES: string[] = [];
 
 export interface NflFetchEstimate {
   date: string;
