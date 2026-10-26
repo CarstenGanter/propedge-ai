@@ -101,12 +101,14 @@ function sportFamily(sportKey: string): string {
 /**
  * Alternate-line ladders: several lines per player, Over only at most books.
  * Stored for fitting the consensus spread (the σ task), never turned into
- * props. One credit per game per market; only the key verified against the
- * live feed (2026-10-17) is listed — add others once their cost is approved.
+ * props. One credit per game per market; add others once their cost is
+ * approved. Receiving yards verified against the live feed 2026-10-17;
+ * rushing yards approved 2026-10-26, first used on the 2026-11-01 fetch.
  */
 export const ALT_MARKET_KEYS: Record<string, Record<string, string>> = {
   americanfootball: {
     "Receiving Yards": "player_reception_yds_alternate",
+    "Rushing Yards": "player_rush_yds_alternate",
   },
 };
 

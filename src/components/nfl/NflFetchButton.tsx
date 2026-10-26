@@ -88,6 +88,7 @@ export function NflFetchButton({ date, disabled }: { date: string; disabled?: bo
                   books&apos; spread, never shown as props.
                 </p>
               )}
+              {estimate.altNote && <p className="text-xs text-muted-foreground">{estimate.altNote}</p>}
               {estimate.reason && <p className="text-xs text-warning">{estimate.reason}</p>}
             </div>
             <button onClick={() => setEstimate(null)} className="text-muted-foreground hover:text-foreground" aria-label="Dismiss">

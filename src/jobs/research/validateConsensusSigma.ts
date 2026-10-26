@@ -149,7 +149,9 @@ async function main() {
   // current one on ladders the fit never saw. Keep only if the error
   // difference's interval sits below zero; otherwise revert.
   const { ladders } = await loadLadders();
-  const heldOut = ladders.filter((l) => l.day > FIT_LADDER_DAY);
+  // Only prop types the shipped spread was fitted on: rushing-yards ladders
+  // (from 2026-11-01) are for their own fit, and would read as a tie here.
+  const heldOut = ladders.filter((l) => l.day > FIT_LADDER_DAY && l.propType in FITTED_SPREAD_PARAMS);
   const price = heldOutPriceTest(heldOut, FITTED_SPREAD, CV_PRIOR_SPREAD);
   console.log(`\n=== HELD-OUT PRICE TEST — ladders fetched after ${FIT_LADDER_DAY} (the fit's own day) ===`);
   if (price.ladders === 0) console.log("  no held-out ladders yet: the next slate fetch buys them (receiving yards, ~13 credits)");

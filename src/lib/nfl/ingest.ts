@@ -14,6 +14,8 @@ import { getDefenseAgg, refreshNflDefense, type DefenseRefreshSummary } from "./
 import { nflSeasonForDate, toNflSlateDate } from "./slate";
 import { previousSlateFetch, refetchBlock, type PreviousFetch } from "./fetchGuard";
 import { prisma } from "@/lib/db/client";
+import { ladderPropTypesFor, RUSH_LADDERS } from "./ladderPlan";
+import { planFor, spendVsPlan } from "@/lib/creditPlan";
 
 /**
  * NFL game-day orchestration. Everything except the Odds API pull is free:
@@ -23,12 +25,20 @@ import { prisma } from "@/lib/db/client";
  */
 
 /**
- * Alternate-line ladders bought with each slate fetch, for fitting the
- * consensus spread. ~1 credit per game each (about 13 a Sunday). Receiving
- * yards ran 2026-10-20 → 10-25 and stopped once the σ price test passed with
- * 12 games (November budget, 2026-10-26). Any prop type needs approval first.
+ * Alternate-line ladders bought with a slate fetch, for fitting the consensus
+ * spread, ~1 credit per game each. Receiving yards ran 2026-10-20 → 10-25 and
+ * stopped once the σ price test passed; rushing yards run on the Sundays
+ * ladderPlan.ts names (November budget, 2026-10-26). Any other slate: none.
  */
-export const ALT_LADDER_PROP_TYPES: string[] = [];
+async function laddersForSlate(date: string): Promise<{ propTypes: string[]; note?: string }> {
+  if (date !== RUSH_LADDERS.second) return ladderPropTypesFor(date, null);
+  const plan = planFor(RUSH_LADDERS.checkThrough)!;
+  const spends = await prisma.creditSpend.findMany({
+    where: { at: { gte: plan.periodStart, lt: plan.periodEnd } },
+    select: { at: true, credits: true },
+  });
+  return ladderPropTypesFor(date, spendVsPlan(plan, spends, RUSH_LADDERS.checkThrough).drift);
+}
 
 export interface NflFetchEstimate {
   date: string;
@@ -39,6 +49,8 @@ export interface NflFetchEstimate {
   /** Alternate ladders bought alongside, and their share of `credits`. */
   altMarkets: string[];
   altCredits: number;
+  /** Why scheduled ladders were dropped (the Nov 15 spend rule), if they were. */
+  altNote?: string;
   credits: number;
   creditsKnownRemaining: number | null;
   creditsAfter: number | null;
@@ -76,7 +88,7 @@ export async function estimateNflFetch(date: string, opts?: { allowRefetch?: boo
     gamesPriced: 0,
     gamesToFetch: 0,
     markets,
-    altMarkets: ALT_LADDER_PROP_TYPES,
+    altMarkets: [],
     altCredits: 0,
     credits: 0,
     creditsKnownRemaining: (await getOddsCredits())?.remaining ?? null,
@@ -102,14 +114,17 @@ export async function estimateNflFetch(date: string, opts?: { allowRefetch?: boo
     ),
   );
   const gamesToFetch = Math.min(priced.length, settings.nflMaxGames);
-  const altCredits = estimateCredits(gamesToFetch, ALT_LADDER_PROP_TYPES.length);
+  const ladders = await laddersForSlate(date);
+  const altCredits = estimateCredits(gamesToFetch, ladders.propTypes.length);
   const credits = estimateCredits(gamesToFetch, markets.length) + altCredits;
   const creditsAfter = remaining != null ? remaining - credits : null;
   const est: NflFetchEstimate = {
     ...base,
     gamesPriced: priced.length,
     gamesToFetch,
+    altMarkets: ladders.propTypes,
     altCredits,
+    altNote: ladders.note,
     credits,
     creditsKnownRemaining: remaining,
     creditsAfter,
@@ -215,13 +230,14 @@ export async function ingestNflSlate(
       summary.underdogPricesReal = r.underdogPricesReal;
       if (r.error) summary.error = r.error; // a failed or partial fetch
       // Alternate ladders: quotes for the odds store only, priced into the estimate above.
-      if (r.ok && ALT_LADDER_PROP_TYPES.length > 0) {
+      // Exactly the ladders the estimate priced, so the spend matches what was confirmed.
+      if (r.ok && estimate.altMarkets.length > 0) {
         const alt = await withCreditKind("alt", () =>
           fetchPlayerProps(process.env.ODDS_API_KEY!, "NFL", {
             maxEvents: settings.nflMaxGames,
             slateDate: date,
             toSlate: toNflSlateDate,
-            propTypes: ALT_LADDER_PROP_TYPES,
+            propTypes: estimate.altMarkets,
             alternates: true,
           }),
         );

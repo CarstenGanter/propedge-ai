@@ -11,6 +11,7 @@ import { prisma } from "@/lib/db/client";
 import { clvDayAndToDate, type CLVSummary } from "@/lib/analysis/modelQuality";
 import { emitSummary } from "@/lib/jobSummary";
 import { planFor, planThrough, spendVsPlan } from "@/lib/creditPlan";
+import { ladderPropTypesFor, RUSH_LADDERS } from "@/lib/nfl/ladderPlan";
 
 async function main() {
   const picks = await prisma.pick.findMany({
@@ -55,6 +56,15 @@ async function main() {
         (r.unknownCost ? `; ${r.unknownCost} call(s) of unknown cost not counted` : ""),
     );
     emitSummary("credits", { day, ...r });
+    // The second rushing-ladder Sunday is decided on spend through Nov 15.
+    if (day >= RUSH_LADDERS.checkThrough && day <= RUSH_LADDERS.second) {
+      const drift = spendVsPlan(plan, spends, RUSH_LADDERS.checkThrough).drift;
+      const ladders = ladderPropTypesFor(RUSH_LADDERS.second, drift);
+      console.log(
+        `  ${RUSH_LADDERS.second} rushing-yards ladders: ${ladders.propTypes.length ? "ON" : "DROPPED"} ` +
+          `(through ${RUSH_LADDERS.checkThrough}: ${drift > 0 ? "+" : ""}${drift} vs plan, limit +${RUSH_LADDERS.maxOverPlan})`,
+      );
+    }
   }
   await prisma.$disconnect();
 }
