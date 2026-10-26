@@ -180,15 +180,19 @@ export function heldOutPriceTest(
   }
   if (items.length === 0) return { ladders: 0, rungs: 0, games: 0, rmseCurrent: null, rmseFitted: null, diff: null, interval: null, verdict: "pending" };
   const mean = (xs: typeof items) => (xs.length ? xs.reduce((s, x) => s + x.d, 0) / xs.length : null);
+  // Rungs of one game are correlated, so the interval resamples whole games;
+  // with fewer than two there is no interval, and that is "not yet", not a
+  // failure (decided 2026-10-26, after one Thursday game read REVERT).
+  const games = new Set(items.map((i) => i.cluster)).size;
   const interval = clusterBootstrap(items, mean, opts);
   return {
     ladders: used,
     rungs: items.length,
-    games: new Set(items.map((i) => i.cluster)).size,
+    games,
     rmseCurrent: Math.sqrt(items.reduce((s, i) => s + i.ec, 0) / items.length),
     rmseFitted: Math.sqrt(items.reduce((s, i) => s + i.ef, 0) / items.length),
     diff: mean(items),
     interval,
-    verdict: interval && interval.hi < 0 ? "keep" : "REVERT",
+    verdict: games < 2 ? "pending" : interval && interval.hi < 0 ? "keep" : "REVERT",
   };
 }

@@ -81,11 +81,16 @@ alternate-line reading.
   ladder's fetch. Squared error per rung in probability points, fitted − current, 95% bootstrap
   clustered by game. **Keep only if that interval sits below zero; otherwise revert** (remove the
   receiving-yards entry, back to the CV prior). The outcome rule above is unchanged.
-  `research:sigma-validate` and `research:weekly` print it; pending until this week's ladders
-  are bought with the slate fetch.
-- **Next look:** the held-out price test above runs once the next slate's ladders are
-  stored (receiving yards, ~13 credits a week, approved); the outcome gate is re-run as graded
-  off-line props accumulate. Other prop types need their own ladders, at ~13 credits a week each:
+  `research:sigma-validate` and `research:weekly` print it. **Pending, not revert, with ladders
+  from fewer than 2 games** (decided 2026-10-26): the interval resamples whole games, so one game
+  has none. On 2026-10-22 one Thursday game (15 ladders; RMSE 8.85 → 3.13 pts, fitted better on
+  15 of 15) read REVERT only for lack of an interval.
+- **Price test result (2026-10-26): KEEP.** Ladders from 2026-10-22 and 10-25: 153 ladders, 7,789
+  rungs, 12 games. RMSE current 9.25 pts, fitted 3.16 pts; difference −75.64 pts², 95%
+  game-bootstrap −82.78 to −70.12. The outcome rule's pooled sample (371 venue lines, 23 games):
+  −0.00002 (−0.0017 to +0.0019), not above zero, so no revert there either. The fitted spread stays.
+- **Next look:** the price test keeps running on each week's ladders (receiving yards, ~13
+  credits a week, approved); the outcome gate is re-run as graded off-line props accumulate. Other prop types need their own ladders, at ~13 credits a week each:
   none this month; revisit at the credit reset, rushing yards first.
 
 An observation, not a finding: at venue lines the Over finished 2–8 points below the books'

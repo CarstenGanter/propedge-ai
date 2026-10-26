@@ -31,4 +31,14 @@ describe("heldOutPriceTest", () => {
   it("is pending with no held-out ladders", () => {
     expect(heldOutPriceTest([], FITTED_SPREAD, CV_PRIOR_SPREAD).verdict).toBe("pending");
   });
+
+  it("is pending, not REVERT, with ladders from one game: a by-game interval needs two (2026-10-22's false REVERT)", () => {
+    const oneGame = laddersPricedBy(FITTED_SPREAD).map((l) => ({ ...l, game: "g1" }));
+    const t = heldOutPriceTest(oneGame, FITTED_SPREAD, CV_PRIOR_SPREAD, { reps: 200 });
+    expect(t.verdict).toBe("pending");
+    expect(t.interval).toBeNull();
+    // The numbers are still reported.
+    expect(t).toMatchObject({ ladders: 4, games: 1 });
+    expect(t.rmseFitted!).toBeLessThan(t.rmseCurrent!);
+  });
 });

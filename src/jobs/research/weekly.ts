@@ -148,9 +148,11 @@ async function main() {
     const price = results.get("sigma")!.summaries.get("sigmaPrice") as (PriceTest & { fitDay: string }) | undefined;
     if (price) {
       out(
-        price.verdict === "pending"
+        price.ladders === 0
           ? `  held-out price test: no ladders after ${price.fitDay} yet (the next slate fetch buys them)`
-          : `  held-out price test (ladders after ${price.fitDay}): ${price.ladders} ladders, ${price.games} games, RMSE current ${price.rmseCurrent!.toFixed(2)} → fitted ${price.rmseFitted!.toFixed(2)} pts; ` +
+          : price.verdict === "pending"
+            ? `  held-out price test (ladders after ${price.fitDay}): ${price.ladders} ladders from ${price.games} game — pending; the by-game interval needs at least 2`
+            : `  held-out price test (ladders after ${price.fitDay}): ${price.ladders} ladders, ${price.games} games, RMSE current ${price.rmseCurrent!.toFixed(2)} → fitted ${price.rmseFitted!.toFixed(2)} pts; ` +
               `difference ${fmtInterval(price.diff!, price.interval, 2, " pts²")} — ${price.verdict === "keep" ? "keep" : "REVERT: σ doesn't beat the old spread on held-out ladders"}`,
       );
     }

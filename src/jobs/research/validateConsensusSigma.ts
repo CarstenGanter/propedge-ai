@@ -152,11 +152,15 @@ async function main() {
   const heldOut = ladders.filter((l) => l.day > FIT_LADDER_DAY);
   const price = heldOutPriceTest(heldOut, FITTED_SPREAD, CV_PRIOR_SPREAD);
   console.log(`\n=== HELD-OUT PRICE TEST — ladders fetched after ${FIT_LADDER_DAY} (the fit's own day) ===`);
-  if (price.verdict === "pending") console.log("  no held-out ladders yet: the next slate fetch buys them (receiving yards, ~13 credits)");
+  if (price.ladders === 0) console.log("  no held-out ladders yet: the next slate fetch buys them (receiving yards, ~13 credits)");
   else {
     console.log(`  ${price.ladders} ladders, ${price.rungs} rungs, ${price.games} games | RMSE current ${price.rmseCurrent!.toFixed(2)} pts, fitted ${price.rmseFitted!.toFixed(2)} pts`);
     console.log(`  squared-error difference (fitted − current) ${price.diff!.toFixed(2)} pts²` + (price.interval ? `  95% game-bootstrap [${price.interval.lo.toFixed(2)}, ${price.interval.hi.toFixed(2)}]` : ""));
-    console.log(`  VERDICT: ${price.verdict} — keep only if the interval sits below zero`);
+    console.log(
+      price.verdict === "pending"
+        ? `  VERDICT: pending — ${price.games} game; the interval resamples by game and needs at least 2`
+        : `  VERDICT: ${price.verdict} — keep only if the interval sits below zero`,
+    );
   }
   emitSummary("sigmaPrice", { fitDay: FIT_LADDER_DAY, ...price });
   await prisma.$disconnect();
