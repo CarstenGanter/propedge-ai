@@ -16,6 +16,8 @@ export function NflFetchButton({ date, disabled }: { date: string; disabled?: bo
   const [pending, startTransition] = React.useTransition();
   const [estimate, setEstimate] = React.useState<NflFetchEstimate | null>(null);
   const [teamPicks, setTeamPicks] = React.useState(false);
+  // The explicit override for a second fetch of the same date (it re-buys every game).
+  const [refetch, setRefetch] = React.useState(false);
   const [phase, setPhase] = React.useState<"idle" | "estimating" | "fetching">("idle");
   const [msg, setMsg] = React.useState<string | null>(null);
   const [underdogPricesReal, setUnderdogPricesReal] = React.useState(false);
@@ -23,6 +25,7 @@ export function NflFetchButton({ date, disabled }: { date: string; disabled?: bo
   function estimate_() {
     setMsg(null);
     setPhase("estimating");
+    setRefetch(false);
     startTransition(async () => {
       const e = await estimateNflFetchAction(date);
       setEstimate(e);
@@ -34,7 +37,7 @@ export function NflFetchButton({ date, disabled }: { date: string; disabled?: bo
     if (!estimate) return;
     setPhase("fetching");
     startTransition(async () => {
-      const s = await fetchNflSlateAction(date, { includeTeamPicks: teamPicks });
+      const s = await fetchNflSlateAction(date, { includeTeamPicks: teamPicks, allowRefetch: refetch });
       setUnderdogPricesReal(s.underdogPricesReal === true);
       const picks = s.picks ? `${s.picks.created} pick(s) from ${s.picks.evaluated} prop(s)` : "no picks generated";
       setMsg(
@@ -101,7 +104,18 @@ export function NflFetchButton({ date, disabled }: { date: string; disabled?: bo
               />
               Also refresh moneyline team leans (~1 credit per enabled league)
             </label>
-            <Button size="sm" onClick={confirm} disabled={!estimate.allowed || pending}>
+            {estimate.refetchBlocked && (
+              <label className="flex items-center gap-2 text-xs text-warning">
+                <input
+                  type="checkbox"
+                  checked={refetch}
+                  onChange={(e) => setRefetch(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-[var(--color-warning)]"
+                />
+                Fetch again — re-buys every game ({estimate.credits} credits)
+              </label>
+            )}
+            <Button size="sm" onClick={confirm} disabled={!(estimate.allowed || (estimate.refetchBlocked && refetch)) || pending}>
               {phase === "fetching" && pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {phase === "fetching" && pending ? "Fetching + researching…" : `Confirm — spend ${estimate.credits} credits`}
             </Button>

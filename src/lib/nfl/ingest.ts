@@ -12,6 +12,8 @@ import { findNflGame, getNflSlate, type NflGame } from "./schedule";
 import { warmNflGameContexts } from "./gameContext";
 import { getDefenseAgg, refreshNflDefense, type DefenseRefreshSummary } from "./defenseCache";
 import { nflSeasonForDate, toNflSlateDate } from "./slate";
+import { previousSlateFetch, refetchBlock, type PreviousFetch } from "./fetchGuard";
+import { prisma } from "@/lib/db/client";
 
 /**
  * NFL game-day orchestration. Everything except the Odds API pull is free:
@@ -42,9 +44,27 @@ export interface NflFetchEstimate {
   floor: number;
   allowed: boolean;
   reason?: string;
+  /** The slate fetch already made for this date, if any (ISO time). */
+  previousFetch: { at: string; games: number } | null;
+  /** Refused only because it would repeat that fetch; allowRefetch lets it run. */
+  refetchBlocked: boolean;
 }
 
-export async function estimateNflFetch(date: string): Promise<NflFetchEstimate> {
+/** The slate fetch already stored for a date (free: reads the odds store). */
+async function storedSlateFetch(date: string): Promise<PreviousFetch | null> {
+  const day = Date.parse(`${date}T00:00:00Z`);
+  const quotes = await prisma.oddsQuote.findMany({
+    where: {
+      fetchKind: "slate",
+      sportKey: "americanfootball_nfl",
+      commenceTime: { gte: new Date(day - 86_400_000), lte: new Date(day + 2 * 86_400_000) },
+    },
+    select: { eventId: true, commenceTime: true, fetchedAt: true },
+  });
+  return previousSlateFetch(quotes, date, toNflSlateDate);
+}
+
+export async function estimateNflFetch(date: string, opts?: { allowRefetch?: boolean }): Promise<NflFetchEstimate> {
   const settings = await getSettings();
   const markets = settings.nflMarkets;
   const floor = settings.oddsCreditFloor;
@@ -62,6 +82,8 @@ export async function estimateNflFetch(date: string): Promise<NflFetchEstimate> 
     creditsAfter: null,
     floor,
     allowed: false,
+    previousFetch: null,
+    refetchBlocked: false,
   };
   if (!hasKey("ODDS_API_KEY")) return { ...base, reason: "No ODDS_API_KEY set in .env" };
   if (slate.length === 0) return { ...base, reason: `No NFL games on ${date}` };
@@ -95,6 +117,15 @@ export async function estimateNflFetch(date: string): Promise<NflFetchEstimate> 
   if (!listed.status.ok) est.reason = listed.status.error ?? "The Odds API request failed";
   else if (priced.length === 0) est.reason = "The Odds API lists no upcoming games for this date (already started, or not posted yet)";
   else if (!est.allowed) est.reason = `Would leave ${creditsAfter} credits, below your floor of ${floor}`;
+
+  const previous = await storedSlateFetch(date);
+  est.previousFetch = previous ? { at: previous.at.toISOString(), games: previous.games } : null;
+  const block = refetchBlock(previous, Boolean(opts?.allowRefetch));
+  if (block && est.allowed) {
+    est.allowed = false;
+    est.refetchBlocked = true;
+    est.reason = block;
+  }
   return est;
 }
 
@@ -144,7 +175,7 @@ export interface NflIngestSummary {
 
 export async function ingestNflSlate(
   date: string,
-  opts?: { onlyIfGameday?: boolean; includeTeamPicks?: boolean; skipOddsFetch?: boolean },
+  opts?: { onlyIfGameday?: boolean; includeTeamPicks?: boolean; skipOddsFetch?: boolean; allowRefetch?: boolean },
 ): Promise<NflIngestSummary> {
   const slate = await getNflSlate(date);
   const summary: NflIngestSummary = {
@@ -164,7 +195,7 @@ export async function ingestNflSlate(
   }
 
   if (!opts?.skipOddsFetch) {
-    const estimate = await estimateNflFetch(date);
+    const estimate = await estimateNflFetch(date, { allowRefetch: opts?.allowRefetch });
     summary.estimate = estimate;
     summary.creditsRemaining = estimate.creditsKnownRemaining;
     if (estimate.allowed) {

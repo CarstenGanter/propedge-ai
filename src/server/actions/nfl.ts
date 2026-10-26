@@ -17,16 +17,16 @@ function revalidateNfl() {
 }
 
 /** Free: how many credits a fetch for this slate would cost, and whether it's allowed. */
-export async function estimateNflFetchAction(date: string): Promise<NflFetchEstimate> {
-  return estimateNflFetch(date);
+export async function estimateNflFetchAction(date: string, opts?: { allowRefetch?: boolean }): Promise<NflFetchEstimate> {
+  return estimateNflFetch(date, { allowRefetch: opts?.allowRefetch });
 }
 
-/** Paid (Odds API): pull the slate's props, prep research, generate ranked picks. */
+/** Paid (Odds API): pull the slate's props, prep research, generate ranked picks. Once per date unless allowRefetch. */
 export async function fetchNflSlateAction(
   date: string,
-  opts?: { includeTeamPicks?: boolean },
+  opts?: { includeTeamPicks?: boolean; allowRefetch?: boolean },
 ): Promise<NflIngestSummary> {
-  const summary = await ingestNflSlate(date, { includeTeamPicks: opts?.includeTeamPicks });
+  const summary = await ingestNflSlate(date, { includeTeamPicks: opts?.includeTeamPicks, allowRefetch: opts?.allowRefetch });
   revalidateNfl();
   return summary;
 }
