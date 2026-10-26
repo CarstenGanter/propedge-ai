@@ -59,6 +59,16 @@ describe("settleParlay", () => {
     expect(r.effectiveMultiplier).toBeLessThan(9);
     expect(r.effectiveMultiplier).toBeGreaterThan(1);
   });
+  it("refunds a 2-pick entry with a void leg, whatever the other leg did (Underdog, 2026-10-25 Dillon + Hill)", () => {
+    for (const other of ["miss", "hit"] as const) {
+      const r = settleParlay(3, 3.5, ["void", other]);
+      expect(r).toMatchObject({ status: "void", payout: 3, profitLoss: 0, effectiveMultiplier: 1 });
+    }
+    expect(settleParlay(3, 3.5, ["hit", "push"]).status).toBe("void");
+  });
+  it("still loses a 3-pick entry with a void leg and a miss", () => {
+    expect(settleParlay(5, 6, ["void", "miss", "hit"]).status).toBe("lost");
+  });
 });
 
 describe("moneyline", () => {

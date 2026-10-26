@@ -75,6 +75,7 @@ export function settleSingle(
 
 /**
  * Settle a parlay from its legs' settlement statuses and a manual multiplier.
+ * - a 2-pick entry with a push/void leg => refunded, whatever the other leg did
  * - any leg miss => lost
  * - a leg push/void reduces the effective multiplier (leg removed)
  * - all remaining legs hit => won
@@ -92,6 +93,11 @@ export function settleParlay(
       status: "pending",
       effectiveMultiplier: multiplier,
     };
+  }
+  // Underdog has no 1-pick entry, so it refunds a 2-pick entry that loses a
+  // leg (2026-10-25: Dillon inactive, Hill missed — refunded, not lost).
+  if (legStatuses.length === 2 && legStatuses.some((s) => s === "push" || s === "void")) {
+    return { stake, payout: stake, profitLoss: 0, status: "void", effectiveMultiplier: 1 };
   }
   if (legStatuses.some((s) => s === "miss")) {
     return {
