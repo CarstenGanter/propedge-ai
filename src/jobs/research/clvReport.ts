@@ -1,14 +1,16 @@
 /**
- * CLV for one slate, next to every pick through that slate:
+ * The daily report: CLV for one slate next to every pick through it, and
+ * month-to-date Odds API spend against the approved credit plan.
  *
  *   npm run research:clv [-- YYYY-MM-DD]     (default: the latest slate with a closing line)
  *
- * Read-only, no Odds API credits. Same function as the analytics page's CLV
+ * Read-only, no Odds API credits. Same CLV function as the analytics page's
  * card, so the two never disagree. Voided picks are left out of both columns.
  */
 import { prisma } from "@/lib/db/client";
 import { clvDayAndToDate, type CLVSummary } from "@/lib/analysis/modelQuality";
 import { emitSummary } from "@/lib/jobSummary";
+import { planFor, planThrough, spendVsPlan } from "@/lib/creditPlan";
 
 async function main() {
   const picks = await prisma.pick.findMany({
@@ -35,6 +37,25 @@ async function main() {
   console.log(`${"Picks taken".padEnd(14)}${fmt(taken.day)}    ${fmt(taken.toDate)}`);
   if (all.toDate.voidExcluded > 0) console.log(`  left out as void: ${all.day.voidExcluded} this slate, ${all.toDate.voidExcluded} to date`);
   emitSummary("clv", { day, all, taken });
+
+  // Month-to-date Odds API spend against the approved plan, so drift shows early.
+  const plan = planFor(day);
+  console.log(`\n=== Credits — month to date through slate ${day} ===`);
+  if (!plan) {
+    console.log(`  no approved credit plan for ${day.slice(0, 7)}`);
+  } else {
+    const spends = await prisma.creditSpend.findMany({
+      where: { at: { gte: plan.periodStart, lt: plan.periodEnd } },
+      select: { at: true, credits: true },
+    });
+    const r = spendVsPlan(plan, spends, day);
+    console.log(
+      `  spent ${r.spent} vs plan ${r.plan} through this slate (${r.drift > 0 ? "+" : ""}${r.drift}); ` +
+        `month plan ${planThrough(plan, `${plan.month}-31`)} of ${plan.allowance}` +
+        (r.unknownCost ? `; ${r.unknownCost} call(s) of unknown cost not counted` : ""),
+    );
+    emitSummary("credits", { day, ...r });
+  }
   await prisma.$disconnect();
 }
 
