@@ -186,6 +186,38 @@ the definition whose firing rate is closest to production's (40 of 73 stored rec
 **No change** on 808 primary-sample receiving props (33 games) — expected, since the boost moves only
 the model's small share of a market-dominated blend. Removed on the evidence from task 4, not this gate.
 
+## November 2026 credit budget (decided 2026-10-26)
+
+Free plan: 500 credits a month, reset at 00:00 UTC on the 1st (7 pm Central Oct 31; 6 pm Central
+Nov 30, so Monday Nov 30's closing lines count against December). At October's setup November
+would cost ~586 (69 fetchable games: 6 markets + 1 ladder a game, plus closing lines).
+
+- **Markets (from 2026-10-26): Rushing Yards, Receiving Yards, Receptions, Rush+Rec Yards.**
+  Passing Yards and Pass TDs dropped (−2 a game, ~138 a month): ~2 props a game per credit
+  against ~8 for receiving; 21 of 183 picks to date and 3 of 31 taken came from them, and the feed
+  carried an Underdog line on 8 of 93 Pass TDs props. QB rushing stays (Rushing Yards).
+- **Receiving-yards ladders stop** (−69): the σ price test passed with 12 games (see task 3b).
+- **Rushing-yards ladders on two Sundays, Nov 1 and Nov 22** (~23): the next prop type for the
+  spread fit. The Nov 22 one runs only if month-to-date spend through Nov 15 is no more than 20
+  over the plan through Nov 15.
+- **Closing lines unchanged** (CLV is the standing metric). No team picks (+1 a slate if made).
+- **One fetch per slate:** a second fetch of a date is refused without an explicit override.
+- 8:30 am international games (Nov 8, Nov 15) are skipped by a ~10:30 fetch at no cost.
+
+| Slate | Games | Plan |
+|---|---|---|
+| Sun Nov 1 (+ rushing ladders) | 12 | 70 |
+| Sun Nov 8 | 12 | 58 |
+| Sun Nov 15 | 11 | 54 |
+| Sun Nov 22 (+ rushing ladders) | 11 | 65 |
+| Sun Nov 29 | 10 | 50 |
+| 9 single-game nights (Mon 2, Thu 5, Mon 9, Thu 12, Mon 16, Thu 19, Mon 23, Wed 25, Fri 27) | 9 | 9 each |
+| Mon Nov 30 (fetch only; closing → December) | 1 | 4 |
+| Thanksgiving Nov 26 | 3 | 20 |
+| **Total** | **69** | **402** |
+
+Each daily report (`npm run research:clv`) shows month-to-date spend against this plan.
+
 ## Results so far
 
 - **Baseline-v0** (model run walk-forward from nflverse game logs, no context): skill vs market
