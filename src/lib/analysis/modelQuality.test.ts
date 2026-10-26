@@ -5,6 +5,7 @@ import {
   brierSkillScore,
   reliabilityCurve,
   clvSummary,
+  clvDayAndToDate,
   type CalibrationItem,
 } from "./modelQuality";
 
@@ -84,5 +85,34 @@ describe("clv summary", () => {
   it("ignores items missing a closing line", () => {
     const s = clvSummary([{ entryProb: 0.5, closingProb: NaN }]);
     expect(s.count).toBe(0);
+  });
+
+  it("leaves voided picks out: a line that moves on an inactive player isn't market disagreement", () => {
+    const s = clvSummary([
+      { entryProb: 0.5, closingProb: 0.52 },
+      { entryProb: 0.54, closingProb: 0.52, status: "void" },
+    ]);
+    expect(s.count).toBe(1);
+    expect(s.avgClv).toBeCloseTo(2, 2);
+    expect(s.negative).toBe(0);
+    expect(s.voidExcluded).toBe(1);
+  });
+});
+
+describe("clv for a day and to date", () => {
+  const items = [
+    { date: "2026-10-22", entryProb: 0.5, closingProb: 0.51 },
+    { date: "2026-10-25", entryProb: 0.5, closingProb: 0.49 },
+    { date: "2026-10-25", entryProb: 0.5, closingProb: 0.47, status: "void" },
+    { date: "2026-10-26", entryProb: 0.5, closingProb: 0.6 },
+  ];
+
+  it("reports the day next to everything through that day, never after it", () => {
+    const r = clvDayAndToDate(items, "2026-10-25");
+    expect(r.day.count).toBe(1);
+    expect(r.day.avgClv).toBeCloseTo(-1, 2);
+    expect(r.toDate.count).toBe(2); // the 26th is not in it; the void is in neither
+    expect(r.toDate.avgClv).toBeCloseTo(0, 2);
+    expect(r.toDate.beatCloseRate).toBeCloseTo(50, 1);
   });
 });

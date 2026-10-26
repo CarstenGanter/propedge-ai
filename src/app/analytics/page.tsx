@@ -146,12 +146,12 @@ export default async function AnalyticsPage({
   const propClv = clvSummary(
     propModel
       .filter((p) => p.entryProb != null && p.closingProb != null)
-      .map((p) => ({ entryProb: p.entryProb as number, closingProb: p.closingProb as number })),
+      .map((p) => ({ entryProb: p.entryProb as number, closingProb: p.closingProb as number, status: p.status })),
   );
   const teamClv = clvSummary(
     teamModel
       .filter((t) => t.closingWinProb != null)
-      .map((t) => ({ entryProb: t.marketWinProb, closingProb: t.closingWinProb as number })),
+      .map((t) => ({ entryProb: t.marketWinProb, closingProb: t.closingWinProb as number, status: t.status })),
   );
   const teamOverall = computeTeamRecord(teamRecords);
   const teamByLeague = teamRecordByLeague(teamRecords);

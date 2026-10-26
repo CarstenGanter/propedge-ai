@@ -82,6 +82,8 @@ export interface CLVItem {
   entryProb: number;
   closingProb: number;
   won?: boolean; // optional: settled outcome, to correlate CLV with results
+  /** Settlement status; a "void" pick is left out (see clvSummary). */
+  status?: string;
 }
 
 export interface CLVSummary {
@@ -91,17 +93,23 @@ export interface CLVSummary {
   positive: number;
   negative: number;
   neutral: number;
+  /** Voided picks with both probabilities, left out of everything above. */
+  voidExcluded: number;
 }
 
 /**
  * CLV = closing prob − entry prob (in percentage points). Positive means the
  * market moved *toward* your side after you took it — the strongest leading
  * indicator that a pick had genuine edge, independent of the single-game result.
+ * Voided picks are left out: a line that moves because the player was ruled
+ * inactive is news, not the market disagreeing with the pick.
  */
 export function clvSummary(items: CLVItem[]): CLVSummary {
-  const valid = items.filter((it) => Number.isFinite(it.entryProb) && Number.isFinite(it.closingProb));
+  const captured = items.filter((it) => Number.isFinite(it.entryProb) && Number.isFinite(it.closingProb));
+  const valid = captured.filter((it) => it.status !== "void");
+  const voidExcluded = captured.length - valid.length;
   if (valid.length === 0) {
-    return { count: 0, avgClv: 0, beatCloseRate: 0, positive: 0, negative: 0, neutral: 0 };
+    return { count: 0, avgClv: 0, beatCloseRate: 0, positive: 0, negative: 0, neutral: 0, voidExcluded };
   }
   let sum = 0;
   let positive = 0;
@@ -121,6 +129,18 @@ export function clvSummary(items: CLVItem[]): CLVSummary {
     positive,
     negative,
     neutral,
+    voidExcluded,
+  };
+}
+
+/** One slate's CLV next to every pick through that slate (slate dates are "YYYY-MM-DD", so they compare as strings). */
+export function clvDayAndToDate(
+  items: (CLVItem & { date: string })[],
+  day: string,
+): { day: CLVSummary; toDate: CLVSummary } {
+  return {
+    day: clvSummary(items.filter((it) => it.date === day)),
+    toDate: clvSummary(items.filter((it) => it.date <= day)),
   };
 }
 

@@ -23,7 +23,8 @@
     "research:sigma-fit": "node --conditions=react-server --env-file=.env --import tsx src/jobs/research/fitConsensusSigma.ts",
     "research:sigma-validate": "node --conditions=react-server --env-file=.env --import tsx src/jobs/research/validateConsensusSigma.ts",
     "research:redistribution": "node --conditions=react-server --env-file=.env --import tsx src/jobs/research/fitRedistribution.ts",
-    "research:latency": "node --conditions=react-server --env-file=.env --import tsx src/jobs/research/measureNewsLatency.ts",
+    "research:clv": "node --conditions=react-server --env-file=.env --import tsx src/jobs/research/clvReport.ts",
+    "research:latency":"node --conditions=react-server --env-file=.env --import tsx src/jobs/research/measureNewsLatency.ts",
     "research:weekly": "node --disable-warning=ExperimentalWarning --conditions=react-server --env-file=.env --import tsx src/jobs/research/weekly.ts"
   },
   "prisma": {
