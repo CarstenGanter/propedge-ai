@@ -93,9 +93,9 @@ describe("isGreen", () => {
     expect(isGreen({ ...base, books: 0.55, payout: 1.86 })).toBe(true); // 1.023
     expect(isGreen({ ...base, books: 0.533, payout: 1.86 })).toBe(false); // 0.991, Prescott on 2026-10-26
   });
-  it("assumes the standard 1.87x when no payout was entered", () => {
-    expect(isGreen({ ...base, books: 0.546, payout: null })).toBe(true); // 1.021
-    expect(isGreen({ ...base, books: 0.545, payout: null })).toBe(false);
+  it("is never green without Underdog's payout entered — unpriced, not the standard 1.87x", () => {
+    expect(isGreen({ ...base, books: 0.7, payout: null })).toBe(false);
+    expect(isGreen({ ...base, books: 0.546, payout: 1.87 })).toBe(true); // 1.021
   });
   it("is never green on a thin price or without one", () => {
     expect(isGreen({ ...base, books: 0.7, payout: 1.87, reliable: false })).toBe(false);

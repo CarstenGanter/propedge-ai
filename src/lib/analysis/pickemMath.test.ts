@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  boardVerdict,
   breakEvenPerLeg,
   compareSlipSizes,
   entryMultiplier,
@@ -10,6 +11,26 @@ import {
   marginalLegRequirement,
   slipEconomics,
 } from "./pickemMath";
+
+describe("boardVerdict", () => {
+  it("is unpriced, never green, when Underdog's payout wasn't entered", () => {
+    expect(boardVerdict({ books: 0.6, payout: null })).toBe("unpriced");
+    expect(boardVerdict({ books: 0.6, payout: undefined, reliable: true, priced: true })).toBe("unpriced");
+    expect(boardVerdict({ books: 0.6, payout: 0 })).toBe("unpriced");
+  });
+  it("judges an entered payout against the margin", () => {
+    expect(boardVerdict({ books: 0.55, payout: 1.86 })).toBe("edge"); // 1.023
+    expect(boardVerdict({ books: 0.54, payout: 1.86 })).toBe("break-even"); // 1.004
+    expect(boardVerdict({ books: 0.533, payout: 1.86 })).toBe("negative"); // 0.991
+  });
+  it("is thin on too few books or a line beyond theirs", () => {
+    expect(boardVerdict({ books: 0.7, payout: 1.87, reliable: false })).toBe("thin");
+    expect(boardVerdict({ books: 0.7, payout: 1.87, priced: false })).toBe("thin");
+  });
+  it("has no verdict without a books' price", () => {
+    expect(boardVerdict({ books: null, payout: 1.87 })).toBeNull();
+  });
+});
 
 describe("breakEvenPerLeg", () => {
   it("matches the known standard-payout bars", () => {

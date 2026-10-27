@@ -39,6 +39,9 @@ function cand(
     // Books agree with the model unless a test says otherwise, so the older
     // platform-rule tests behave the same on either basis.
     marketProb: conf / 100,
+    // Underdog's payout entered at the standard price unless a test says
+    // otherwise: on the market basis an unpriced pick is never an edge.
+    pickMultiplier: 1.87,
   };
 }
 
@@ -51,9 +54,11 @@ describe("buildSuggestedSlips", () => {
     cand("e", "Echo QB", "Chiefs", "Broncos", 72, "OVER", "KC"),
     cand("f", "Foxtrot WR", "Lions", "Saints", 70, "UNDER", "NO"), // same game as b, opposite direction
   ];
+  // No payouts entered: only the model basis builds from these, at the standard rung.
+  const unpriced = cands.map((c) => ({ ...c, pickMultiplier: undefined }));
 
   it("builds slips by confidence from distinct players in distinct games", () => {
-    const slips = buildSuggestedSlips(cands, [2, 3]);
+    const slips = buildSuggestedSlips(unpriced, [2, 3], { basis: "model" });
     expect(slips.map((s) => s.size)).toEqual([2, 3]);
     expect(slips[0].legs.map((l) => l.pickId)).toEqual(["a", "b"]);
     expect(slips[1].legs.map((l) => l.pickId)).toEqual(["a", "b", "e"]);
@@ -61,7 +66,7 @@ describe("buildSuggestedSlips", () => {
   });
 
   it("never repeats a player and never pairs opposite directions from one game", () => {
-    const [four] = buildSuggestedSlips(cands, [4]);
+    const [four] = buildSuggestedSlips(unpriced, [4], { basis: "model" });
     const ids = four.legs.map((l) => l.pickId);
     expect(ids).not.toContain("d"); // same player as a
     expect(ids).not.toContain("f"); // conflicts with b
@@ -113,8 +118,8 @@ describe("buildSuggestedSlips", () => {
   });
 
   it("attaches pick'em multipliers and a parlay analysis", () => {
-    const [two] = buildSuggestedSlips(cands, [2]);
-    expect(two.multiplier).toBe(3.5); // two standard 1.87x picks
+    const [two] = buildSuggestedSlips(unpriced, [2], { basis: "model" });
+    expect(two.multiplier).toBe(3.5); // the standard 2-pick rung
     expect(two.analysis.legCount).toBe(2);
     expect(two.analysis.combinedHitEstimate).toBeCloseTo(0.8 * 0.78, 5);
   });
@@ -234,7 +239,7 @@ describe("buildSuggestedSlips", () => {
   });
 
   it("leaves an unpriced slip at the standard rung", () => {
-    const [two] = buildSuggestedSlips(cands, [2]);
+    const [two] = buildSuggestedSlips(unpriced, [2], { basis: "model" });
     expect(two.multiplier).toBe(two.baseMultiplier);
     expect(two.flags.some((f) => /pays/.test(f.text))).toBe(false);
   });
@@ -279,6 +284,17 @@ describe("buildSuggestedSlips", () => {
     ];
     const ids = buildSuggestedSlips(pool, [2])[0].legs.map((l) => l.pickId);
     expect(ids).toEqual(["a", "b"]);
+  });
+
+  it("never takes an unpriced pick as a market-basis edge, however good the books' price", () => {
+    // 2026-10-27: a blank payout is unpriced, not the standard 1.87x.
+    expect(buildSuggestedSlips(unpriced, [2])).toEqual([]);
+    const pool = [
+      { ...cand("blank", "Blank Payout", "Bears", "Packers", 70, "OVER", "CHI"), pickMultiplier: undefined },
+      cand("a", "Alpha WR", "Bengals", "Buccaneers", 58, "OVER", "CIN"),
+      cand("b", "Bravo RB", "Lions", "Saints", 57, "OVER", "DET"),
+    ];
+    expect(buildSuggestedSlips(pool, [2])[0].legs.map((l) => l.pickId)).toEqual(["a", "b"]);
   });
 
   it("will not judge a pick with no books' price on the market basis", () => {

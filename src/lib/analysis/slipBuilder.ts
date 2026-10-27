@@ -1,6 +1,6 @@
 import type { SerializedPick } from "@/lib/dto";
 import { analyzeParlay, makeGameKey, type ParlayAnalysis, type ParlayLegInput } from "./parlayCorrelation";
-import { entryMultiplier, pickBreakEven, pickValue, STANDARD_PICK_PAYOUT, VALUE_MARGIN, type CorrelatedPair } from "./pickemMath";
+import { entryMultiplier, isEnteredPayout, pickBreakEven, pickValue, STANDARD_PICK_PAYOUT, VALUE_MARGIN, type CorrelatedPair } from "./pickemMath";
 
 /**
  * Suggested pick'em slips (pure, tested).
@@ -215,7 +215,8 @@ export function buildSuggestedSlips(
   // Unpriced picks stay in at the standard payout.
   //
   // On the market basis a pick needs a books' price to be judged at all, and
-  // qualifies only when that price already beats Underdog's payout.
+  // qualifies only when that price already beats Underdog's entered payout —
+  // an unpriced pick is never an edge (boardVerdict).
   const modelValue = (c: SlipCandidate) => pickValue(c.confidenceScore / 100, c.pickMultiplier);
   const marketValue = (c: SlipCandidate) => (c.marketProb == null ? null : pickValue(c.marketProb, c.pickMultiplier));
   const value = (c: SlipCandidate) => (basis === "market" ? (marketValue(c) ?? 0) : modelValue(c));
@@ -224,7 +225,7 @@ export function buildSuggestedSlips(
     .filter((c) =>
       basis === "market"
         ? // An edge must clear break-even by the margin, on a market deep enough to trust.
-          (marketValue(c) ?? 0) >= VALUE_MARGIN && c.marketReliable !== false
+          isEnteredPayout(c.pickMultiplier) && (marketValue(c) ?? 0) >= VALUE_MARGIN && c.marketReliable !== false
         : c.pickMultiplier == null || modelValue(c) >= 1,
     )
     .sort(

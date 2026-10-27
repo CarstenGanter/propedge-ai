@@ -18,7 +18,7 @@ import { prisma } from "@/lib/db/client";
 import { backupConfiguredDatabase } from "@/lib/db/backup";
 import { creditsByKind } from "@/lib/creditLedger";
 import { parseSummaries } from "@/lib/jobSummary";
-import { liveModelVersions, loadEntriesPlayed, loadGreenPicks, loadSkillItems, overGapRows, overGapSamples, skillSection, type LoadedGreenPick, type SkillSection } from "@/lib/predictionReport";
+import { liveModelVersions, loadBoardPicks, loadEntriesPlayed, loadSkillItems, overGapRows, overGapSamples, skillSection, type LoadedGreenPick, type SkillSection } from "@/lib/predictionReport";
 import { BASELINE_V0 } from "@/lib/predictionLog";
 import { clusterBootstrap, OVER_CONFIRM_WEEKS, overGap, skillScore, type OverGap, type SkillItem } from "@/lib/analysis/marketSkill";
 import { PRICE_MOVE_PTS, type GroupLatency, type VenueChange } from "@/lib/analysis/newsLatency";
@@ -131,9 +131,10 @@ async function main() {
     if (g.pending > 0) out("  (nflverse posts a night's stats the next morning — if Monday night's game is among them, rerun then)");
   }
 
-  out(`\nPICKS (graded NFL picks the board showed green: books' P(our side) × Underdog payout ≥ ${VALUE_MARGIN.toFixed(2)}, standard payout when none entered, price not thin)`);
+  out(`\nPICKS (graded NFL picks the board shows green: books' P(our side) × Underdog's entered payout ≥ ${VALUE_MARGIN.toFixed(2)}, price not thin)`);
   const versions = await liveModelVersions();
-  const green = await loadGreenPicks();
+  const board = await loadBoardPicks();
+  const green = board.green;
   const greenAll = greenSummary(green);
   rec.greenClv = { picks: greenAll.n, withClose: greenAll.clv.n, meanPts: greenAll.clv.meanPts };
   const pickLine = (label: string, xs: LoadedGreenPick[]) => {
@@ -154,14 +155,13 @@ async function main() {
     ...(versions[0] ? [[`live model ${versions[0]} only`, green.filter((x) => x.modelVersion === versions[0])] as const] : []),
   ] as const) {
     pickLine(label, xs);
-    const entered = xs.filter((x) => x.payoutEntered);
-    const assumed = xs.filter((x) => !x.payoutEntered);
-    if (entered.length && assumed.length) {
-      pickLine("  of which Underdog payout entered", entered);
-      pickLine("  of which standard payout assumed", assumed);
-    } else if (xs.length) out(`    all ${xs.length} on ${entered.length ? "an entered Underdog payout" : "the standard payout assumed — none had Underdog's payout entered"}`);
   }
-  out("  (standard assumed = no payout entered, so green only at the 1.87x the board assumes; Underdog pays less on many such picks)");
+  const liveUnpriced = versions[0] ? board.unpriced.filter((x) => x.modelVersion === versions[0]).length : 0;
+  out(
+    `  unpriced (no Underdog payout entered, never green): ${board.unpriced.length} graded` +
+      (versions[0] ? ` (${liveUnpriced} live ${versions[0]})` : "") +
+      `; ${board.unpricedAtStandard.length} of them would have shown green at the 1.87x the board used to assume`,
+  );
   out("  CLV = books' P(our side) at the line played, last stored quote before kickoff − at pick time; 95% game-bootstrap");
   out("  break-even per leg, real-money entries played (at the median multiplier paid):");
   for (const r of breakEvenRows(await loadEntriesPlayed())) {

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { setUnderdogAvailability, setUnderdogLines, type UnderdogLineEntry } from "@/server/actions/picks";
 import { cn } from "@/lib/utils/cn";
 import type { SerializedPick } from "@/lib/dto";
-import { pickBreakEven, STANDARD_PICK_PAYOUT, valueVerdict, VALUE_MARGIN } from "@/lib/analysis/pickemMath";
+import { boardVerdict, isEnteredPayout, pickBreakEven, STANDARD_PICK_PAYOUT, valueVerdict, VALUE_MARGIN } from "@/lib/analysis/pickemMath";
 import { PRIZEPICKS_LEG_BAR } from "@/lib/analysis/venues";
 
 /**
@@ -132,7 +132,7 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                   <th className="pb-2 pr-3 text-right font-medium">Book line</th>
                   <th className="pb-2 pr-3 text-right font-medium">Your line</th>
                   <th className="pb-2 pr-3 text-right font-medium">Edge</th>
-                  <th className="pb-2 pr-3 text-right font-medium" title={`What Underdog pays for the side shown under Pick — Higher and Lower pay differently, so enter the one for that side (e.g. 1.71). Blank = a standard ${STANDARD_PICK_PAYOUT}x pick. Entering it fixes the pick to that side.`}>Payout</th>
+                  <th className="pb-2 pr-3 text-right font-medium" title={`What Underdog pays for the side shown under Pick — Higher and Lower pay differently, so enter the one for that side (e.g. 1.71). Blank = unpriced: never green until it is entered. Entering it fixes the pick to that side.`}>Payout</th>
                   <th className="pb-2 pr-3 text-right font-medium" title="Hit rate this pick needs to be worth its payout: 1 ÷ payout.">Needs</th>
                   <th className="pb-2 pr-3 text-right font-medium" title="The sportsbooks' own no-vig probability for this side at your line. Green when it beats Needs.">Books</th>
                   <th className="pb-2 pr-3 text-right font-medium" title={`PrizePicks' line from the feed, and the books' probability for the side they favour there. PrizePicks pays the same either way, so a stale line pays in full; green when it clears the ${(PRIZEPICKS_LEG_BAR * 100).toFixed(1)}% a leg its 5-pick Power Play needs, by the ${Math.round((VALUE_MARGIN - 1) * 100)}% margin.`}>PrizePicks</th>
@@ -215,7 +215,7 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                           inputMode="decimal"
                           value={tagDraft[p.id] ?? ""}
                           onChange={(e) => { touchedTag.current.add(p.id); setTagDraft((d) => ({ ...d, [p.id]: e.target.value })); }}
-                          placeholder={String(STANDARD_PICK_PAYOUT)}
+                          placeholder="—"
                           aria-label={`Payout multiplier for ${p.prop.playerName}`}
                           className="h-8 w-16 rounded-md border border-elevated-border bg-input shadow-sm px-2 text-right text-sm tabular-nums"
                         />
@@ -255,6 +255,8 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
             is 1 ÷ payout: the hit rate that pick must reach to be worth taking, whatever the slip size.
             <strong className="font-medium text-foreground/80"> Books</strong> is what the sportsbooks say it
             will do at your line — <span className="text-success">green</span> when it already beats Needs.
+            A pick with no payout entered is <em>unpriced</em>: it is never green, because Underdog often pays
+            less than the standard {STANDARD_PICK_PAYOUT}× on exactly the sides the books like.
             Green picks are Underdog mispricing a prop against the sharp books; that edge doesn&apos;t depend
             on the model. Most weeks few or none will be green, and that&apos;s the honest answer.
           </p>
@@ -299,18 +301,18 @@ function marketNote(f: SerializedPick["prop"]["marketFeatures"]): string {
 
 function NeedsCell({ pick, tagRaw }: { pick: SerializedPick; tagRaw: string }) {
   const typed = tagRaw.trim() === "" ? null : Number(tagRaw);
-  const payout = typed != null && Number.isFinite(typed) && typed > 0 ? typed : null;
-  const need = pickBreakEven(payout);
+  const payout = isEnteredPayout(typed) ? typed : null;
+  const need = payout == null ? null : pickBreakEven(payout);
   const books = pick.marketProb;
   const fewBooks = pick.prop.marketReliable === false;
   const beyondBooks = pick.prop.underdogRead?.priced === false;
   const thin = fewBooks || beyondBooks;
   const model = pick.scoringProfile === "distribution" ? pick.confidenceScore / 100 : null;
-  const verdict = books != null ? valueVerdict(books / need) : null;
+  const board = boardVerdict({ books, payout, reliable: pick.prop.marketReliable, priced: pick.prop.underdogRead?.priced });
+  const verdict = board === "unpriced" || board === "thin" ? null : board;
   const tip =
-    (payout == null ? `Assuming a standard ${STANDARD_PICK_PAYOUT}x pick. ` : "") +
-    `Needs ${(need * 100).toFixed(1)}%.` +
-    (books != null ? ` Books: ${(books * 100).toFixed(1)}% (value ${(books / need).toFixed(3)}).` : " No books' price for this line.") +
+    (payout == null ? "Unpriced: enter Underdog's payout for this side to judge it — a blank is never green." : `Needs ${(need! * 100).toFixed(1)}%.`) +
+    (books != null ? ` Books: ${(books * 100).toFixed(1)}%${need != null ? ` (value ${(books / need).toFixed(3)})` : ""}.` : " No books' price for this line.") +
     (fewBooks ? " Fewer than three independent books priced it — too thin to call an edge." : "") +
     (beyondBooks ? " Underdog's line is beyond any line the books posted, so this is the curve extrapolated, not a price — never an edge." : "") +
     (model != null ? ` Model: ${(model * 100).toFixed(0)}%.` : "") +
@@ -319,7 +321,7 @@ function NeedsCell({ pick, tagRaw }: { pick: SerializedPick; tagRaw: string }) {
   return (
     <>
       <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground" title={tip}>
-        {(need * 100).toFixed(1)}%
+        {need == null ? "—" : `${(need * 100).toFixed(1)}%`}
       </td>
       <td
         className={cn(
@@ -335,6 +337,7 @@ function NeedsCell({ pick, tagRaw }: { pick: SerializedPick; tagRaw: string }) {
         title={tip}
       >
         {books == null ? "—" : `${thin ? "~" : ""}${(books * 100).toFixed(1)}%`}
+        {board === "unpriced" && <span className="ml-1 text-2xs uppercase tracking-wide">unpriced</span>}
       </td>
     </>
   );

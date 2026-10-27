@@ -43,7 +43,7 @@ import { computeCalibration, recentTrend } from "@/lib/analysis/calibration";
 import { brierScore, logLoss, brierSkillScore, clvSummary } from "@/lib/analysis/modelQuality";
 import { CaptureClosingLinesButton } from "@/components/CaptureClosingLinesButton";
 import { MarketSkillPanel } from "@/components/MarketSkillPanel";
-import { liveModelVersions, overGapRows, payoutRoi, skillSection } from "@/lib/predictionReport";
+import { liveModelVersions, loadBoardPicks, overGapRows, payoutRoi, skillSection, type BoardPicks } from "@/lib/predictionReport";
 import { BASELINE_V0 } from "@/lib/predictionLog";
 import { confidenceTier, CONFIDENCE_TIERS } from "@/lib/analysis/confidenceModel";
 import { formatPercent, formatSignedCurrency } from "@/lib/utils/format";
@@ -74,7 +74,7 @@ export default async function AnalyticsPage({
   // Model vs market: the backfilled baseline (primary and secondary market
   // methods) and each live model version, scored separately, never pooled.
   const skillReps = { reps: 1000 };
-  const [skillPrimary, skillSecondary, liveVersions, roi] = await Promise.all([
+  const [skillPrimary, skillSecondary, liveVersions, roi, boardPicks] = await Promise.all([
     skillSection(
       `${BASELINE_V0} — consensus market, from 2026-10-01`,
       "Primary result. Model and market at the books' own line; each prop sees only earlier weeks. A baseline, not the live model.",
@@ -89,6 +89,7 @@ export default async function AnalyticsPage({
     ),
     liveModelVersions(),
     payoutRoi(),
+    loadBoardPicks(),
   ]);
   const overGap = await overGapRows(liveVersions, skillReps);
   const skillLive = await Promise.all(
@@ -388,9 +389,10 @@ export default async function AnalyticsPage({
               </div>
               <CaptureClosingLinesButton />
             </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
+            <CardContent className="grid gap-4 sm:grid-cols-3">
               <ClvCard title="Team picks (moneyline)" clv={teamClv} />
               <ClvCard title="Player props" clv={propClv} />
+              <GreenPicksCard board={boardPicks} />
             </CardContent>
           </Card>
 
@@ -611,6 +613,36 @@ function ClvCard({
           <span className="tabular-nums text-muted-foreground">
             {clv.count} ({clv.positive}↑ / {clv.negative}↓)
           </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Green picks under the board's own rule (boardVerdict): an entered Underdog
+ * payout the books' price beats by the margin. A pick with no payout entered
+ * is unpriced and counted apart, never green.
+ */
+function GreenPicksCard({ board }: { board: BoardPicks }) {
+  const hits = board.green.filter((g) => g.hit).length;
+  return (
+    <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+      <p className="text-sm font-medium">Green picks (NFL, graded)</p>
+      <div className="mt-2 space-y-1 text-sm">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Green</span>
+          <span className="font-medium tabular-nums">
+            {board.green.length === 0 ? "none yet" : `${hits}/${board.green.length} hit`}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Unpriced (no payout entered)</span>
+          <span className="tabular-nums text-muted-foreground">{board.unpriced.length}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">…green only at an assumed 1.87×</span>
+          <span className="tabular-nums text-muted-foreground">{board.unpricedAtStandard.length}</span>
         </div>
       </div>
     </div>

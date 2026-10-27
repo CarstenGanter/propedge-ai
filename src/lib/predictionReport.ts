@@ -10,31 +10,42 @@ import { consensusSideProb } from "@/lib/analysis/marketConsensus";
 import { playedLine } from "@/lib/settlement";
 import { pickByName } from "@/lib/utils/playerName";
 import { teamsMatch } from "@/lib/utils/teamName";
-import { isGreen, type EntryPlayed, type GreenPick } from "@/lib/weeklySummary";
+import { type EntryPlayed, type GreenPick } from "@/lib/weeklySummary";
+import { boardVerdict, STANDARD_PICK_PAYOUT, valueVerdict } from "@/lib/analysis/pickemMath";
 import type { Direction } from "@/types";
 
 export interface LoadedGreenPick extends GreenPick {
   modelVersion: string;
-  /** False when green only on the standard payout the board assumes for a blank one. */
-  payoutEntered: boolean;
   /** Where the close came from: the odds store's last quote before kickoff, or the closing capture stored on the pick. */
   closeSource: "store" | "pick" | null;
 }
 
+export interface BoardPicks {
+  /** Green: boardVerdict's edge. */
+  green: LoadedGreenPick[];
+  /** Graded picks with a books' price but no Underdog payout entered. */
+  unpriced: { modelVersion: string }[];
+  /** Of those, the ones that would have shown green at the standard 1.87x the board used to assume. */
+  unpricedAtStandard: { modelVersion: string }[];
+}
+
 /**
- * Every graded NFL pick the board showed green (isGreen), with the books' P(our
+ * Every graded NFL pick the board shows green (boardVerdict), with the books' P(our
  * side) at pick time — the number the rule read — and CLV at the line played.
  * The close is the odds store's last quote per book before kickoff (alternate
  * ladders left out); picks from before the store began (2026-10-22) fall back
  * to the closing capture stored on the pick, itself a pre-kickoff quote. A
  * pick with neither has no close and stays out of CLV.
  */
-export async function loadGreenPicks(): Promise<LoadedGreenPick[]> {
+export async function loadBoardPicks(opts: { graded?: boolean } = {}): Promise<BoardPicks> {
+  const graded = opts.graded ?? true;
   const picks = await prisma.pick.findMany({
-    where: { isDemo: false, status: { in: ["hit", "miss"] }, playerProp: { sport: "NFL" } },
+    where: { isDemo: false, ...(graded ? { status: { in: ["hit", "miss"] } } : {}), playerProp: { sport: "NFL" } },
     include: { playerProp: true },
   });
   const out: LoadedGreenPick[] = [];
+  const unpriced: BoardPicks["unpriced"] = [];
+  const unpricedAtStandard: BoardPicks["unpricedAtStandard"] = [];
   for (const k of picks) {
     const pp = k.playerProp;
     const dir = pp.direction as Direction;
@@ -42,7 +53,14 @@ export async function loadGreenPicks(): Promise<LoadedGreenPick[]> {
     const read = consensus && pp.underdogLine != null ? readVenueLine(consensus, pp.underdogLine, dir) : null;
     // The books' number the board shows (serializePick's marketProb).
     const books = k.marketProb ?? (pp.underdogLine == null || pp.underdogLine === pp.line ? k.entryProb : null);
-    if (!isGreen({ books, payout: pp.underdogPickMultiplier, reliable: consensus ? consensus.reliable : null, priced: read ? read.priced : null })) continue;
+    const reliable = consensus ? consensus.reliable : null;
+    const priced = read ? read.priced : null;
+    const verdict = boardVerdict({ books, payout: pp.underdogPickMultiplier, reliable, priced });
+    if (verdict === "unpriced") {
+      unpriced.push({ modelVersion: k.modelVersion });
+      if (reliable !== false && priced !== false && valueVerdict(books! * STANDARD_PICK_PAYOUT) === "edge") unpricedAtStandard.push({ modelVersion: k.modelVersion });
+    }
+    if (verdict !== "edge") continue;
 
     const line = playedLine(pp.line, pp.underdogLine);
     let close: number | null = null;
@@ -81,10 +99,9 @@ export async function loadGreenPicks(): Promise<LoadedGreenPick[]> {
       close,
       closeSource,
       modelVersion: k.modelVersion,
-      payoutEntered: pp.underdogPickMultiplier != null,
     });
   }
-  return out;
+  return { green: out, unpriced, unpricedAtStandard };
 }
 
 /**

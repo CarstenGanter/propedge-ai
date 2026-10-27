@@ -250,6 +250,34 @@ export function valueVerdict(value: number): ValueVerdict {
   return "negative";
 }
 
+/** Whether Underdog's payout for the pick was entered: a positive, finite number. */
+export function isEnteredPayout(payout: number | null | undefined): payout is number {
+  return payout != null && Number.isFinite(payout) && payout > 0;
+}
+
+export type BoardVerdict = ValueVerdict | "unpriced" | "thin";
+
+/**
+ * The board's call on one pick — the one rule behind green on the board, in
+ * Analytics and in research:weekly. Unpriced when Underdog's payout wasn't
+ * entered: a blank is not the standard 1.87x (decided 2026-10-27 — all 36
+ * graded "green" picks were green only on that default, and Underdog pays less
+ * on many of those sides). Thin when fewer than three independent books priced
+ * it or the Underdog line is beyond any line they posted. Null with no books'
+ * price at all.
+ */
+export function boardVerdict(p: {
+  books: number | null;
+  payout: number | null | undefined;
+  reliable?: boolean | null;
+  priced?: boolean | null;
+}): BoardVerdict | null {
+  if (p.books == null) return null;
+  if (!isEnteredPayout(p.payout)) return "unpriced";
+  if (p.reliable === false || p.priced === false) return "thin";
+  return valueVerdict(p.books * p.payout);
+}
+
 /**
  * Quarter-Kelly stake for an all-or-nothing entry, as a fraction of bankroll.
  * Full Kelly is f = (b·p − q) / b with b = multiplier − 1; a quarter of it

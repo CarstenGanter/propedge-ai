@@ -1,5 +1,5 @@
 import { clusterBootstrap, OVER_CONFIRM_WEEKS, type Interval, type OverGapStatus } from "@/lib/analysis/marketSkill";
-import { breakEvenPerLeg, pickBreakEven, valueVerdict } from "@/lib/analysis/pickemMath";
+import { boardVerdict, breakEvenPerLeg } from "@/lib/analysis/pickemMath";
 
 /**
  * Pure pieces of research:weekly (src/jobs/research/weekly.ts): the NFL
@@ -7,15 +7,9 @@ import { breakEvenPerLeg, pickBreakEven, valueVerdict } from "@/lib/analysis/pic
  * check, and the green-pick summary.
  */
 
-/**
- * The board's green rule (UnderdogLineTable's NeedsCell): the books' P(our
- * side) times Underdog's payout — standard when none was entered — clears
- * VALUE_MARGIN, and the price is not thin (fewer than three independent books,
- * or an Underdog line beyond any line the books posted).
- */
+/** Green on the board: boardVerdict's edge — an entered payout, a price that isn't thin, value ≥ VALUE_MARGIN. */
 export function isGreen(p: { books: number | null; payout: number | null; reliable: boolean | null; priced: boolean | null }): boolean {
-  if (p.books == null || p.reliable === false || p.priced === false) return false;
-  return valueVerdict(p.books / pickBreakEven(p.payout)) === "edge";
+  return boardVerdict(p) === "edge";
 }
 
 export interface GreenPick {
