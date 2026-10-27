@@ -150,11 +150,13 @@ venue moves since the last pre-news quote, venues still moving between the two f
 venue's gap to the books' line at each. The injury watch now looks 96 hours ahead so Friday reaches
 Monday night.
 
-**Measurement (decided 2026-10-21; the trial keeps running as approved).**
-- **Main output:** each venue's change between the trial's +10 and +40 minute fetches — moved props
-  and mean line change per venue group — for the out player's teammates, beside the other team's
-  props from the same two fetches as a comparison group (no extra credits). The move since the last
-  stored pre-news quote, which may be hours old, is secondary and marked exploratory.
+**Measurement (decided 2026-10-21; primary changed 2026-10-27).**
+- **Main output (from 2026-10-27):** each book's change from the last stored quote before the news
+  to the trial's +40 minute fetch, the out RB's teammates split into backup RBs, WR/TE and QB,
+  beside the other team's props as a comparison group; per-book cells under 5 props are warned.
+  The +10 → +40 change and the time to first move are secondary and exploratory; move times are
+  bounded by our fetch schedule, not book reaction times. (Before 2026-10-27 the +10 → +40 change
+  was the main output.)
 - **A move** is a line change, or a price change of at least 3 points on a book's no-vig Over
   (`PRICE_MOVE_PTS`; a one-tick re-price is ~1.1 points, three ticks ~3.2). Set by judgment, not
   fitted — there was no quote-to-quote history to fit it on; revisit once the trial's fetch pairs
@@ -162,6 +164,15 @@ Monday night.
 - **News time is our poll time:** when the injury watch first saw the change (~15-minute
   resolution), not the report's own timestamp. A first sighting and "cleared → out" (a flapping
   report) never count as news.
+
+**Result and next step (2026-10-27).** The trial ended as approved: 8 fetches, 24 of 30 credits.
+Only 2 events reached the primary comparison (Friday news usually lands before any stored quote of
+Sunday's game), and the WR/TE column is empty because the trial bought rushing markets only.
+Adding receiving markets (Receiving Yards, Receptions) for the teammates would cost 5 credits a
+fetch instead of 3: **10 credits an event instead of 6**. At last week's rate (4 trial events)
+that is ~40 credits a week, ~170 in November, which the November plan (402 of 500) has no room
+for. **On hold (decided 2026-10-27):** no trial fetches in November until a budget line is
+approved.
 
 ### Carries alert
 
