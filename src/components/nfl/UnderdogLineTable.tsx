@@ -8,8 +8,7 @@ import { Button } from "@/components/ui/button";
 import { setUnderdogAvailability, setUnderdogLines, type UnderdogLineEntry } from "@/server/actions/picks";
 import { cn } from "@/lib/utils/cn";
 import type { SerializedPick } from "@/lib/dto";
-import { boardVerdict, isEnteredPayout, pickBreakEven, STANDARD_PICK_PAYOUT, valueVerdict, VALUE_MARGIN } from "@/lib/analysis/pickemMath";
-import { PRIZEPICKS_LEG_BAR } from "@/lib/analysis/venues";
+import { boardVerdict, isEnteredPayout, pickBreakEven, PRIZEPICKS_LEG_BAR, STANDARD_PICK_PAYOUT, valueVerdict, VALUE_MARGIN } from "@/lib/analysis/pickemMath";
 
 /**
  * Enter the whole slate's pick'em lines at once. Scoring a pick against the

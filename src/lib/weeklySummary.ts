@@ -1,5 +1,5 @@
 import { clusterBootstrap, OVER_CONFIRM_WEEKS, type Interval, type OverGapStatus } from "@/lib/analysis/marketSkill";
-import { boardVerdict, breakEvenPerLeg } from "@/lib/analysis/pickemMath";
+import { boardVerdict, breakEvenPerLeg, PICKEM_MULTIPLIERS, STANDARD_PICK_PAYOUT } from "@/lib/analysis/pickemMath";
 
 /**
  * Pure pieces of research:weekly (src/jobs/research/weekly.ts): the NFL
@@ -71,9 +71,17 @@ export interface BreakEvenRow {
   medianMultiplier: number;
   /** Per-leg hit rate the median multiplier needs: multiplier^(-1/legs). */
   breakEvenPerLeg: number;
+  /** The standard rung for this size (PICKEM_MULTIPLIERS; one standard pick for a single), and what it needs a leg. */
+  standardMultiplier: number | null;
+  standardBreakEven: number | null;
 }
 
-/** Break-even per leg for each entry size played, at the median multiplier actually paid. */
+/**
+ * Break-even per leg for each entry size played: at the standard rung (the
+ * shared source the board and Analytics use) and at the median multiplier
+ * actually paid, which runs lower when the legs were favourites Underdog
+ * prices short.
+ */
 export function breakEvenRows(entries: EntryPlayed[]): BreakEvenRow[] {
   const bySize = new Map<number, number[]>();
   for (const e of entries) {
@@ -85,7 +93,15 @@ export function breakEvenRows(entries: EntryPlayed[]): BreakEvenRow[] {
     .map(([legs, ms]) => {
       const s = [...ms].sort((a, b) => a - b);
       const median = s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
-      return { label: legs === 1 ? "single" : `${legs}-pick`, entries: s.length, medianMultiplier: median, breakEvenPerLeg: breakEvenPerLeg(median, legs)! };
+      const standard = legs === 1 ? STANDARD_PICK_PAYOUT : (PICKEM_MULTIPLIERS[legs] ?? null);
+      return {
+        label: legs === 1 ? "single" : `${legs}-pick`,
+        entries: s.length,
+        medianMultiplier: median,
+        breakEvenPerLeg: breakEvenPerLeg(median, legs)!,
+        standardMultiplier: standard,
+        standardBreakEven: standard == null ? null : breakEvenPerLeg(standard, legs),
+      };
     });
 }
 

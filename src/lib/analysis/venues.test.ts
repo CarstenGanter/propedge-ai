@@ -4,11 +4,11 @@ import {
   mergeAvailability,
   mergeUnderdogLine,
   prizePicksValue,
-  PRIZEPICKS_LEG_BAR,
   readVenueLine,
   underdogPricesLookReal,
   underdogValue,
 } from "./venues";
+import { PRIZEPICKS_LEG_BAR } from "./pickemMath";
 import { buildConsensus } from "./marketConsensus";
 import { normalizeEvent } from "@/lib/providers/live/theOddsApi";
 import ev from "@/lib/providers/live/__fixtures__/nfl-event-ten-bookmakers.json";

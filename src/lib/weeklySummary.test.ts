@@ -151,6 +151,12 @@ describe("breakEvenRows", () => {
     expect(rows[1].breakEvenPerLeg).toBeCloseTo(Math.sqrt(1 / 3.47));
     expect(rows[2].breakEvenPerLeg).toBeCloseTo(Math.pow(1 / 6.5, 1 / 3));
   });
+  it("sets each size's standard rung beside it, from the shared ladder", () => {
+    const rows = breakEvenRows([{ legs: 1, multiplier: 2 }, { legs: 2, multiplier: 3.47 }, { legs: 3, multiplier: 4.91 }]);
+    expect(rows.map((r) => r.standardMultiplier)).toEqual([1.87, 3.5, 6.5]);
+    expect(rows[2].standardBreakEven).toBeCloseTo(Math.pow(1 / 6.5, 1 / 3)); // 53.6%, the Analytics bar
+    expect(rows[2].breakEvenPerLeg).toBeCloseTo(Math.pow(1 / 4.91, 1 / 3)); // 58.8%, what the 3-picks played needed
+  });
   it("skips entries with no multiplier or legs", () => {
     expect(breakEvenRows([{ legs: 0, multiplier: 3 }, { legs: 2, multiplier: 0 }])).toEqual([]);
   });

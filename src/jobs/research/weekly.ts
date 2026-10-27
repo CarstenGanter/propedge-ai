@@ -163,10 +163,15 @@ async function main() {
       `; ${board.unpricedAtStandard.length} of them would have shown green at the 1.87x the board used to assume`,
   );
   out("  CLV = books' P(our side) at the line played, last stored quote before kickoff − at pick time; 95% game-bootstrap");
-  out("  break-even per leg, real-money entries played (at the median multiplier paid):");
+  out("  break-even per leg, by entry size played: the standard rung (same source as the board and Analytics) vs the median actually paid");
   for (const r of breakEvenRows(await loadEntriesPlayed())) {
-    out(`    ${r.label.padEnd(8)} ${String(r.entries).padStart(2)} entr${r.entries === 1 ? "y" : "ies"}  ${r.medianMultiplier.toFixed(2)}x → ${(r.breakEvenPerLeg * 100).toFixed(1)}% a leg`);
+    const std = r.standardMultiplier == null ? "no standard rung" : `standard ${r.standardMultiplier.toFixed(2)}x → ${(r.standardBreakEven! * 100).toFixed(1)}% a leg`;
+    out(
+      `    ${r.label.padEnd(8)} ${std.padEnd(34)} paid median ${r.medianMultiplier.toFixed(2)}x → ${(r.breakEvenPerLeg * 100).toFixed(1)}% a leg` +
+        ` (${r.entries} real entr${r.entries === 1 ? "y" : "ies"})`,
+    );
   }
+  out("  (paid below standard = favourite legs Underdog prices short; those entries needed more per leg)");
 
   out("\nSKILL VS MARKET (log-loss; + = model beats the de-vigged consensus; 95% game-bootstrap)");
   out("  [exploratory, not corrected] marks secondary intervals: several are looked at every week with no multiple-comparison correction, so one excluding zero is a lead, not a finding.");

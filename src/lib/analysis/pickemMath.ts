@@ -127,6 +127,27 @@ export function entryMultiplier(payouts: (number | null | undefined)[]): number 
 }
 
 /**
+ * The one source for entry multipliers and per-leg break-evens: the board,
+ * slips, Analytics and research:weekly all read these.
+ *
+ * What an Underdog entry of standard picks pays, by leg count: 1.87^n, rounded
+ * as the app shows it. The 2- and 3-leg rungs are confirmed from real entries
+ * (3.5x, 6.5x); 4 and 5 follow the same rule but have not been seen yet. An
+ * entry with its picks' own payouts entered is priced from those instead.
+ */
+export const PICKEM_MULTIPLIERS: Record<number, number> = Object.fromEntries(
+  [2, 3, 4, 5].map((n) => [n, Math.round(STANDARD_PICK_PAYOUT ** n * 10) / 10]),
+);
+
+/**
+ * PrizePicks pays the same multiplier whichever side you pick, so its per-leg
+ * bar is fixed by the entry size. Its 5-pick Power Play (20x) is the cheapest
+ * common size: 20^(-1/5) ≈ 54.9% a leg.
+ */
+export const PRIZEPICKS_POWER_PLAY = { legs: 5, multiplier: 20 } as const;
+export const PRIZEPICKS_LEG_BAR = breakEvenPerLeg(PRIZEPICKS_POWER_PLAY.multiplier, PRIZEPICKS_POWER_PLAY.legs)!;
+
+/**
  * The hit rate a pick needs to be worth its place: one over its payout. A pick
  * paying 1.71x needs 58.5%; a standard 1.87x pick 53.5%; a 1.55x favourite
  * 64.5%. Because the entry pays the product, this holds whatever the slip size —
@@ -194,11 +215,12 @@ export interface SizeEfficiency {
 /**
  * Rank the available slip sizes by the hit rate each demands per leg.
  *
- * Pick'em multipliers do not rise smoothly with leg count, so the bar is not
- * monotonic and the cheapest size is not always the smallest. With the standard
- * Underdog ladder the 4-leg tier (10x, 56.2%) asks more per leg than either the
- * 3-leg (6x, 55.0%) or the 5-leg (20x, 54.9%) tier, making it the worst size on
- * the board despite sitting between two better ones. Derived from the
+ * A fixed-multiplier ladder need not rise smoothly with leg count, so the bar
+ * is not monotonic and the cheapest size is not always the smallest. (Underdog
+ * now prices each pick and pays the product, so its standard rungs in
+ * PICKEM_MULTIPLIERS ask about the same ~53.5% a leg at every size; a flat
+ * ladder such as an older 6x/10x/20x one made the 4-leg tier the worst size on
+ * the board despite sitting between two better ones.) Derived from the
  * multipliers passed in, so a boosted or changed payout re-ranks the sizes
  * instead of leaving a stale rule of thumb in place.
  */
@@ -220,9 +242,9 @@ export function compareSlipSizes(multipliers: Record<number, number>): SizeEffic
 
 /**
  * Probability the added leg must clear for a slip to be worth extending from
- * `fromLegs` to `toLegs`. With standard payouts the fourth leg needs 60% while
- * the fifth needs only 50%, which is why slip size should be chosen from the
- * actual multipliers rather than by habit.
+ * `fromLegs` to `toLegs`. On a flat ladder (e.g. 6x → 10x → 20x) the fourth
+ * leg needs 60% while the fifth needs only 50%, which is why slip size should
+ * be chosen from the actual multipliers rather than by habit.
  */
 export function marginalLegRequirement(
   fromMultiplier: number,

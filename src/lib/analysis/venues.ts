@@ -1,6 +1,6 @@
 import type { Direction } from "@/types";
 import { consensusSideProb, pricedAt, type ConsensusModel } from "./marketConsensus";
-import { STANDARD_PICK_PAYOUT } from "./pickemMath";
+import { PRIZEPICKS_LEG_BAR, STANDARD_PICK_PAYOUT } from "./pickemMath";
 import type { LineSource } from "@/lib/marketSnapshot";
 
 /**
@@ -104,13 +104,9 @@ export function underdogValue(read: VenueRead, payout: number | null | undefined
 
 // ---- PrizePicks: fixed multipliers ----
 
-/**
- * PrizePicks pays the same multiplier whichever side you pick, so its per-leg
- * bar is fixed by the entry size. Its 5-pick Power Play (20x) is the cheapest
- * common size: 20^(-1/5) ≈ 54.9% a leg. That is exactly why a stale line
- * matters there — the favoured side is paid in full.
- */
-export const PRIZEPICKS_LEG_BAR = 20 ** (-1 / 5);
+// PrizePicks' per-leg bar (PRIZEPICKS_LEG_BAR) lives in pickemMath with the
+// other multipliers. A stale line matters there because the favoured side is
+// paid in full.
 
 /** Books' probability over PrizePicks' per-leg bar: above 1, the leg carries positive value. */
 export function prizePicksValue(read: VenueRead): number {

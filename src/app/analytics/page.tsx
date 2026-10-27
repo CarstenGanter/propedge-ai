@@ -34,8 +34,7 @@ import {
   type GroupedRecord,
   type RateAssessment,
 } from "@/lib/analytics";
-import { breakEvenPerLeg } from "@/lib/analysis/pickemMath";
-import { PICKEM_MULTIPLIERS } from "@/lib/analysis/slipBuilder";
+import { breakEvenPerLeg, PICKEM_MULTIPLIERS } from "@/lib/analysis/pickemMath";
 import { AccuracyFilterBar } from "@/components/AccuracyFilterBar";
 import { isVisibleSport } from "@/components/visibleSports";
 import { LEAGUE_LABELS, type League } from "@/lib/teamLeagues";

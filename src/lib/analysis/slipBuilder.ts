@@ -1,6 +1,6 @@
 import type { SerializedPick } from "@/lib/dto";
 import { analyzeParlay, makeGameKey, type ParlayAnalysis, type ParlayLegInput } from "./parlayCorrelation";
-import { entryMultiplier, isEnteredPayout, pickBreakEven, pickValue, STANDARD_PICK_PAYOUT, VALUE_MARGIN, type CorrelatedPair } from "./pickemMath";
+import { entryMultiplier, isEnteredPayout, pickBreakEven, pickValue, PICKEM_MULTIPLIERS, VALUE_MARGIN, type CorrelatedPair } from "./pickemMath";
 
 /**
  * Suggested pick'em slips (pure, tested).
@@ -29,16 +29,6 @@ import { entryMultiplier, isEnteredPayout, pickBreakEven, pickValue, STANDARD_PI
  * apart.
  */
 
-/**
- * What an entry of standard picks pays, by leg count. Underdog prices each pick
- * (see STANDARD_PICK_PAYOUT) and pays the product, so these are 1.87^n. The 2-
- * and 3-leg figures are confirmed from real entries (3.5x, 6.5x); 4 and 5 follow
- * the same rule but have not been seen yet. An entry with its picks' own payouts
- * entered is priced from those instead.
- */
-export const PICKEM_MULTIPLIERS: Record<number, number> = Object.fromEntries(
-  [2, 3, 4, 5].map((n) => [n, Math.round(STANDARD_PICK_PAYOUT ** n * 10) / 10]),
-);
 
 const QB_PASS_PROPS = new Set(["Passing Yards", "Pass TDs", "Completions", "Pass Attempts"]);
 const RECEIVER_PROPS = new Set(["Receiving Yards", "Receptions", "Rush+Rec Yards"]);
