@@ -201,6 +201,33 @@ export function propChangesBetween(first: TimedQuote[], second: TimedQuote[]): P
   return out;
 }
 
+/**
+ * Each book's last fetch of each prop at or before `t` — the stored quote the
+ * news found in place (pure). Every quote of that fetch is kept, so a book
+ * posting alternates there drops out in propChangesBetween as it does there.
+ */
+export function lastQuotesBefore(quotes: TimedQuote[], t: Date): TimedQuote[] {
+  const latest = new Map<string, number>();
+  for (const q of quotes) {
+    const ft = q.fetchedAt.getTime();
+    if (ft > t.getTime()) continue;
+    const k = `${q.book}§${q.key}`;
+    if (ft > (latest.get(k) ?? -Infinity)) latest.set(k, ft);
+  }
+  return quotes.filter((q) => latest.get(`${q.book}§${q.key}`) === q.fetchedAt.getTime());
+}
+
+export type TeammateGroup = "backup RB" | "pass-catchers (WR/TE)" | "QB" | "other";
+
+/** A teammate of an out running back, by roster position. */
+export function teammateGroup(position: string | null | undefined): TeammateGroup {
+  const p = (position ?? "").toUpperCase();
+  if (p === "RB" || p === "FB") return "backup RB";
+  if (p === "WR" || p === "TE") return "pass-catchers (WR/TE)";
+  if (p === "QB") return "QB";
+  return "other";
+}
+
 export interface VenueChange {
   group: string;
   props: number;

@@ -28,6 +28,7 @@ import { prisma } from "@/lib/db/client";
 import { parseCsv } from "@/lib/utils/csv";
 import { nflverseCode } from "@/lib/nfl/teamCodes";
 import { GRADABLE_PROPS, gradeProp, priorGames } from "@/lib/nfl/gradeProps";
+import { aliasFor } from "@/lib/nfl/playerAliases";
 import { BASE, fetchCsv, loadSeason } from "@/lib/nfl/nflverseSeasons";
 import { resolveEspnAthlete } from "@/lib/providers/live/espnPlayerStats";
 import { estimateProbability } from "@/lib/analysis/probabilityModel";
@@ -148,7 +149,7 @@ async function main() {
     idsResolved++;
   }
 
-  const tally = { graded: 0, byId: 0, byName: 0, snapsOnly: 0, void: 0, unmatched: 0, pending: 0, filled: 0, noGames: 0, noMarket: 0 };
+  const tally = { graded: 0, byId: 0, byName: 0, byAlias: 0, snapsOnly: 0, void: 0, unmatched: 0, pending: 0, filled: 0, noGames: 0, noMarket: 0 };
   const mismatches: string[] = [];
   const unmatched: { label: string; reason: string }[] = [];
   const voided: string[] = [];
@@ -167,7 +168,8 @@ async function main() {
       unmatched.push({ label, reason: "team name has no nflverse code" });
       continue;
     }
-    const g = gradeProp({ playerName: p.playerName, espnId: p.espnAthleteId, propType: p.propType, home, away, date: p.date, espnGameId: p.gameId }, current);
+    // Feed names nflverse doesn't know get one more try under an approved alias (playerAliases.ts).
+    const g = gradeProp({ playerName: p.playerName, espnId: p.espnAthleteId, propType: p.propType, home, away, date: p.date, espnGameId: p.gameId }, current, { alias: aliasFor });
     if (g.kind === "pending") { tally.pending++; continue; }
     if (g.kind === "unmatched") {
       tally.unmatched++;
@@ -177,6 +179,7 @@ async function main() {
     if (g.kind === "void") { tally.void++; voided.push(`${label}: ${g.reason} [by ${g.matchedBy}]`); continue; }
     tally.graded++;
     if (g.matchedBy === "id") tally.byId++;
+    else if (g.matchedBy === "alias") tally.byAlias++;
     else tally.byName++;
     if (g.fromSnapsOnly) tally.snapsOnly++;
     if (p.actualResult == null) fills.push({ id: p.id, value: g.value });

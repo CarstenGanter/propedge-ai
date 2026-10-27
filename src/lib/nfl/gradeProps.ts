@@ -234,7 +234,7 @@ export type Grade =
   | { kind: "unmatched"; week: number; reason: string }
   | { kind: "pending" };
 
-export type MatchedBy = "id" | "name";
+export type MatchedBy = "id" | "name" | "alias";
 
 interface Candidate {
   gsisId: string;
@@ -276,10 +276,14 @@ function matchPlayer(playerName: string, candidates: Candidate[], played: Set<st
  * id when the prop has one and that week's roster knows it; otherwise by name
  * among the two teams' players that week, so a common surname elsewhere in
  * the league cannot collide. Pending means the game is not in the data yet.
+ * With `alias` (research grading passes aliasFor from playerAliases.ts), a
+ * name that matches no one is tried once more under its alias before it is
+ * declared unmatched; settlement passes none.
  */
 export function gradeProp(
   prop: { playerName: string; espnId?: string | null; propType: string; home: string; away: string; date?: string; espnGameId?: string | null },
   season: SeasonData,
+  opts: { alias?: (feedName: string) => string | null } = {},
 ): Grade {
   const teams = new Set([prop.home, prop.away]);
   let week: number | null;
@@ -313,7 +317,13 @@ export function gradeProp(
       .filter((r) => teams.has(r.team))
       .flatMap((r) => [{ gsisId: r.gsisId, name: r.name }, ...(r.altName ? [{ gsisId: r.gsisId, name: r.altName }] : [])]);
     const played = new Set([...rows.map((r) => r.gsisId), ...apps.map((a) => a.gsisId)]);
-    gsisId = matchPlayer(prop.playerName, [...rows, ...apps, ...stOnly, ...rosterNames], played);
+    const candidates = [...rows, ...apps, ...stOnly, ...rosterNames];
+    gsisId = matchPlayer(prop.playerName, candidates, played);
+    const alias = gsisId ? null : opts.alias?.(prop.playerName);
+    if (alias) {
+      gsisId = matchPlayer(alias, candidates, played);
+      if (gsisId) matchedBy = "alias";
+    }
   }
   if (!gsisId) return { kind: "unmatched", week, reason: "no player of that name on either team that week" };
 

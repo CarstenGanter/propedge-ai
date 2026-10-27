@@ -1,10 +1,99 @@
-import { OVER_CONFIRM_WEEKS, type Interval, type OverGapStatus } from "@/lib/analysis/marketSkill";
+import { clusterBootstrap, OVER_CONFIRM_WEEKS, type Interval, type OverGapStatus } from "@/lib/analysis/marketSkill";
+import { breakEvenPerLeg, pickBreakEven, valueVerdict } from "@/lib/analysis/pickemMath";
 
 /**
  * Pure pieces of research:weekly (src/jobs/research/weekly.ts): the NFL
- * week's boundary, the σ keep/revert rule, and the credit ledger's
- * consistency check.
+ * week's boundary, the σ keep/revert rule, the credit ledger's consistency
+ * check, and the green-pick summary.
  */
+
+/**
+ * The board's green rule (UnderdogLineTable's NeedsCell): the books' P(our
+ * side) times Underdog's payout — standard when none was entered — clears
+ * VALUE_MARGIN, and the price is not thin (fewer than three independent books,
+ * or an Underdog line beyond any line the books posted).
+ */
+export function isGreen(p: { books: number | null; payout: number | null; reliable: boolean | null; priced: boolean | null }): boolean {
+  if (p.books == null || p.reliable === false || p.priced === false) return false;
+  return valueVerdict(p.books / pickBreakEven(p.payout)) === "edge";
+}
+
+export interface GreenPick {
+  cluster: string;
+  hit: boolean;
+  /** Books' P(our side) at pick time, as the green rule read it. */
+  books: number;
+  /** Entry and close at the line played, for CLV; close null when no pre-kickoff quote is stored. */
+  entry: number | null;
+  close: number | null;
+}
+
+export interface GreenSummary {
+  n: number;
+  hits: number;
+  hitRate: number | null;
+  meanBooks: number | null;
+  clv: {
+    n: number;
+    /** Picks left out because no quote before kickoff is stored. */
+    missing: number;
+    meanPts: number | null;
+    interval: Interval | null;
+    beatPct: number | null;
+  };
+}
+
+/** Same threshold as clvSummary: a change under 0.05 pts is no change. */
+const CLV_EPS = 0.0005;
+
+export function greenSummary(picks: GreenPick[], opts: { reps?: number; seed?: number } = {}): GreenSummary {
+  const hits = picks.filter((p) => p.hit).length;
+  const withClose = picks.filter((p) => p.entry != null && p.close != null).map((p) => ({ cluster: p.cluster, d: p.close! - p.entry! }));
+  const mean = (xs: { d: number }[]) => (xs.length ? (xs.reduce((s, x) => s + x.d, 0) / xs.length) * 100 : null);
+  return {
+    n: picks.length,
+    hits,
+    hitRate: picks.length ? hits / picks.length : null,
+    meanBooks: picks.length ? picks.reduce((s, p) => s + p.books, 0) / picks.length : null,
+    clv: {
+      n: withClose.length,
+      missing: picks.length - withClose.length,
+      meanPts: mean(withClose),
+      interval: withClose.length ? clusterBootstrap(withClose, mean, opts) : null,
+      beatPct: withClose.length ? (withClose.filter((x) => x.d > CLV_EPS).length / withClose.length) * 100 : null,
+    },
+  };
+}
+
+export interface EntryPlayed {
+  /** Picks in the entry; 1 for a single. */
+  legs: number;
+  multiplier: number;
+}
+
+export interface BreakEvenRow {
+  label: string;
+  entries: number;
+  medianMultiplier: number;
+  /** Per-leg hit rate the median multiplier needs: multiplier^(-1/legs). */
+  breakEvenPerLeg: number;
+}
+
+/** Break-even per leg for each entry size played, at the median multiplier actually paid. */
+export function breakEvenRows(entries: EntryPlayed[]): BreakEvenRow[] {
+  const bySize = new Map<number, number[]>();
+  for (const e of entries) {
+    if (!(e.legs >= 1) || !(e.multiplier > 0)) continue;
+    bySize.set(e.legs, [...(bySize.get(e.legs) ?? []), e.multiplier]);
+  }
+  return [...bySize.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([legs, ms]) => {
+      const s = [...ms].sort((a, b) => a - b);
+      const median = s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
+      return { label: legs === 1 ? "single" : `${legs}-pick`, entries: s.length, medianMultiplier: median, breakEvenPerLeg: breakEvenPerLeg(median, legs)! };
+    });
+}
 
 /** One sample of the σ validation (validateConsensusSigma.ts). */
 export interface SigmaSample {
@@ -101,6 +190,16 @@ export function overStatusLine(s: OverGapStatus): string {
   const after = s.after ? `; weeks after alone ${fmtInterval(s.after.gapPts, s.after.interval, 1, " pts")}` : "";
   if (s.state === "confirmed") return `CONFIRMED — ${side}; first crossed week of ${s.crossedWeek}, held over ${s.weeksAfter} later weeks${after}`;
   return `FLAGGED — ${side}, first crossed week of ${s.crossedWeek}; ${s.weeksAfter} of ${OVER_CONFIRM_WEEKS} later weeks needed to confirm${after}`;
+}
+
+/** A per-book cell with fewer props than this gets a warning beside it (set 2026-10-27). */
+export const SMALL_CELL_N = 5;
+
+/** One RB-out table cell: "moved/props mean-line-change", warned when thin. */
+export function changeCell(v: { props: number; moved: number; meanLineChange: number | null } | undefined): string {
+  if (!v) return "—";
+  const mean = v.meanLineChange == null ? "—" : `${v.meanLineChange >= 0 ? "+" : "−"}${Math.abs(v.meanLineChange).toFixed(2)}`;
+  return `${v.moved}/${v.props} ${mean}${v.props < SMALL_CELL_N ? " ⚠" : ""}`;
 }
 
 /** "+0.42 pts [−1.10, +1.95]" with a marker when the interval excludes zero. */

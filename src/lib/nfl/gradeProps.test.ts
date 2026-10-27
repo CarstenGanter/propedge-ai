@@ -193,6 +193,28 @@ describe("gradeProp", () => {
     expect(gradeProp({ playerName: "Nobody Here", propType: "Receptions", home: "DEN", away: "SEA" }, season).kind).toBe("unmatched");
   });
 
+  it("tries an unmatched name's alias before declaring it unmatched", () => {
+    const alias = (n: string) => (n === "Feed Label" ? "Tory Horton" : null);
+    expect(gradeProp({ playerName: "Feed Label", propType: "Receiving Yards", home: "DEN", away: "SEA" }, season, { alias })).toEqual({
+      kind: "graded",
+      value: 13,
+      gsisId: "horton",
+      week: 6,
+      fromSnapsOnly: false,
+      matchedBy: "alias",
+    });
+    expect(gradeProp({ playerName: "Feed Label", propType: "Receiving Yards", home: "DEN", away: "SEA" }, season).kind).toBe("unmatched");
+  });
+
+  it("never lets an alias override a name that matches someone", () => {
+    const alias = () => "Lil'Jordan Humphrey";
+    expect(gradeProp({ playerName: "Tory Horton", propType: "Receiving Yards", home: "DEN", away: "SEA" }, season, { alias })).toMatchObject({ gsisId: "horton", matchedBy: "name" });
+  });
+
+  it("stays unmatched when the alias isn't in the game either", () => {
+    expect(gradeProp({ playerName: "Feed Label", propType: "Receptions", home: "DEN", away: "SEA" }, season, { alias: () => "Nobody Here" }).kind).toBe("unmatched");
+  });
+
   it("is pending when the game is not in the data yet", () => {
     expect(gradeProp({ playerName: "Tory Horton", propType: "Receptions", home: "SF", away: "WAS" }, season)).toEqual({ kind: "pending" });
   });

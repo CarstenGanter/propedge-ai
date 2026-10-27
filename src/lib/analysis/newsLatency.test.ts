@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { bookMoves, isMove, latencyByGroup, propChangesBetween, summarizeChanges, venueGapsAtFetch, type TimedQuote } from "./newsLatency";
+import {
+  bookMoves,
+  isMove,
+  lastQuotesBefore,
+  latencyByGroup,
+  propChangesBetween,
+  summarizeChanges,
+  teammateGroup,
+  venueGapsAtFetch,
+  type TimedQuote,
+} from "./newsLatency";
 
 const at = (min: number) => new Date(Date.UTC(2026, 9, 25, 15, 0) + min * 60_000);
 const q = (book: string, line: number, fetchMin: number, o: Partial<TimedQuote> = {}): TimedQuote => ({
@@ -95,5 +105,33 @@ describe("propChangesBetween + summarizeChanges", () => {
   });
   it("leaves out a book quoting several lines (alternates) in either fetch", () => {
     expect(propChangesBetween([q("fanduel", 44.5, 10), q("fanduel", 54.5, 10)], [q("fanduel", 49.5, 40)])).toEqual([]);
+  });
+});
+
+describe("lastQuotesBefore", () => {
+  it("keeps each book's last fetch at or before the news, not later ones", () => {
+    const quotes = [q("fanduel", 40.5, -120), q("fanduel", 42.5, -30), q("fanduel", 47.5, 40), q("betmgm", 41.5, 0), q("betmgm", 45.5, 10)];
+    expect(lastQuotesBefore(quotes, news).map((x) => [x.book, x.line])).toEqual([["fanduel", 42.5], ["betmgm", 41.5]]);
+  });
+  it("keeps a whole fetch, so alternates there drop out of the comparison", () => {
+    const pre = lastQuotesBefore([q("fanduel", 44.5, -30), q("fanduel", 54.5, -30)], news);
+    expect(pre).toHaveLength(2);
+    expect(propChangesBetween(pre, [q("fanduel", 49.5, 40)])).toEqual([]);
+  });
+  it("pairs with the +40 fetch as the primary comparison", () => {
+    const quotes = [q("fanduel", 44.5, -30), q("fanduel", 49.5, 10), q("fanduel", 51.5, 40)];
+    const changes = propChangesBetween(lastQuotesBefore(quotes, news), quotes.filter((x) => x.fetchedAt.getTime() === at(40).getTime()));
+    expect(changes).toEqual([{ book: "fanduel", group: "fanduel", key: "Teammate|Receiving Yards", moved: true, lineChange: 7 }]);
+  });
+});
+
+describe("teammateGroup", () => {
+  it("splits an out running back's teammates by position", () => {
+    expect(teammateGroup("RB")).toBe("backup RB");
+    expect(teammateGroup("FB")).toBe("backup RB");
+    expect(teammateGroup("WR")).toBe("pass-catchers (WR/TE)");
+    expect(teammateGroup("te")).toBe("pass-catchers (WR/TE)");
+    expect(teammateGroup("QB")).toBe("QB");
+    expect(teammateGroup(undefined)).toBe("other");
   });
 });

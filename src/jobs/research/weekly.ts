@@ -12,19 +12,21 @@
  * the same functions and seeds as the jobs and the analytics page.
  */
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { prisma } from "@/lib/db/client";
 import { backupConfiguredDatabase } from "@/lib/db/backup";
 import { creditsByKind } from "@/lib/creditLedger";
 import { parseSummaries } from "@/lib/jobSummary";
-import { liveModelVersions, loadSkillItems, overGapRows, skillSection, type SkillSection } from "@/lib/predictionReport";
+import { liveModelVersions, loadEntriesPlayed, loadGreenPicks, loadSkillItems, overGapRows, overGapSamples, skillSection, type LoadedGreenPick, type SkillSection } from "@/lib/predictionReport";
 import { BASELINE_V0 } from "@/lib/predictionLog";
-import { clusterBootstrap, OVER_CONFIRM_WEEKS, skillScore } from "@/lib/analysis/marketSkill";
+import { clusterBootstrap, OVER_CONFIRM_WEEKS, overGap, skillScore, type OverGap, type SkillItem } from "@/lib/analysis/marketSkill";
 import { PRICE_MOVE_PTS, type GroupLatency, type VenueChange } from "@/lib/analysis/newsLatency";
 import { NEWS_TRIAL } from "@/lib/nfl/newsFetchTrial";
 import { todayNflSlate } from "@/lib/nfl/slate";
-import { fmtInterval, nflWeekStart, overStatusLine, sigmaVerdict, unaccountedCredits, type SigmaSample } from "@/lib/weeklySummary";
+import { breakEvenRows, changeCell, fmtInterval, greenSummary, nflWeekStart, overStatusLine, sigmaVerdict, SMALL_CELL_N, unaccountedCredits, type SigmaSample } from "@/lib/weeklySummary";
+import { VALUE_MARGIN } from "@/lib/analysis/pickemMath";
+import { previousWeek, topLine, trendTable, upsertWeek, type WeekRecord } from "@/lib/weeklyTrends";
 import type { PriceTest } from "@/lib/analysis/consensusSpread";
 
 const JOBS = [
@@ -93,39 +95,131 @@ async function main() {
   out(`\nPropEdge weekly research — ${now.toISOString().slice(0, 16)}Z; NFL week from ${weekStart.toISOString().slice(0, 16)}Z (Wednesday 00:00 ET)`);
   out(`Full output: ${dir}/`);
   out(backupLine);
+  // The TOP LINE goes here once every section below has been computed.
+  const topAt = lines.length;
+  const rec: WeekRecord = {
+    week: weekStart.toISOString().slice(0, 10),
+    runAt: now.toISOString(),
+    primarySkillPct: null,
+    liveVersion: null,
+    liveSkillPct: null,
+    overGapPts: {},
+    overFlags: {},
+    sigmaPooled: null,
+    heldOutEce: { fitted: null, current: null },
+    sigmaVerdict: null,
+    priceVerdict: null,
+    credits: 0,
+    greenClv: { picks: 0, withClose: 0, meanPts: null },
+    unmatched: null,
+    pending: null,
+    failedJobs: JOBS.filter((j) => failed(j.name)).map((j) => j.name),
+  };
 
   out("\nGRADING (nflverse weekly stats and snap counts)");
   const g = results.get("skill")!.summaries.get("grading") as Record<string, number> | undefined;
   if (failed("skill") || !g) out("  research:skill failed — nothing below is fresh; see skill.log");
   else {
-    out(`  results filled ${g.filled} · disagreements with stored results ${g.mismatches} · voided ${g.voided} · unmatched ${g.unmatched} (names in skill.log)`);
+    out(
+      `  results filled ${g.filled} · disagreements with stored results ${g.mismatches} · voided ${g.voided} · unmatched ${g.unmatched} (names in skill.log)` +
+        ` · matched by an approved alias ${g.byAlias ?? 0} (src/lib/nfl/playerAliases.ts)`,
+    );
+    rec.unmatched = g.unmatched;
+    rec.pending = g.pending;
     const latest = await prisma.playerProp.findFirst({ where: { sport: "NFL", isDemo: false, actualResult: { not: null } }, orderBy: { date: "desc" }, select: { date: true } });
     out(`  latest graded slate ${latest?.date ?? "—"}; props whose game nflverse has not posted yet: ${g.pending}`);
     if (g.pending > 0) out("  (nflverse posts a night's stats the next morning — if Monday night's game is among them, rerun then)");
   }
 
+  out(`\nPICKS (graded NFL picks the board showed green: books' P(our side) × Underdog payout ≥ ${VALUE_MARGIN.toFixed(2)}, standard payout when none entered, price not thin)`);
+  const versions = await liveModelVersions();
+  const green = await loadGreenPicks();
+  const greenAll = greenSummary(green);
+  rec.greenClv = { picks: greenAll.n, withClose: greenAll.clv.n, meanPts: greenAll.clv.meanPts };
+  const pickLine = (label: string, xs: LoadedGreenPick[]) => {
+    const s = greenSummary(xs);
+    if (s.n === 0) return out(`  ${label.padEnd(36)} no green picks graded`);
+    out(`  ${label.padEnd(36)} n=${String(s.n).padStart(3)}  hits ${s.hits} (${(s.hitRate! * 100).toFixed(1)}%)  books' mean P(our side) at pick time ${(s.meanBooks! * 100).toFixed(1)}%`);
+    if (s.clv.n === 0) out(`    CLV: no pick has a quote stored before kickoff (${s.clv.missing} left out)`);
+    else {
+      const fromStore = xs.filter((x) => x.closeSource === "store").length;
+      out(
+        `    CLV ${fmtInterval(s.clv.meanPts!, s.clv.interval, 2, " pts")}  beat the close ${s.clv.beatPct!.toFixed(0)}% of ${s.clv.n}` +
+          `  (close: odds store ${fromStore}, closing capture on the pick ${s.clv.n - fromStore}; no close stored ${s.clv.missing}, left out)`,
+      );
+    }
+  };
+  for (const [label, xs] of [
+    ["all graded (every model version)", green],
+    ...(versions[0] ? [[`live model ${versions[0]} only`, green.filter((x) => x.modelVersion === versions[0])] as const] : []),
+  ] as const) {
+    pickLine(label, xs);
+    const entered = xs.filter((x) => x.payoutEntered);
+    const assumed = xs.filter((x) => !x.payoutEntered);
+    if (entered.length && assumed.length) {
+      pickLine("  of which Underdog payout entered", entered);
+      pickLine("  of which standard payout assumed", assumed);
+    } else if (xs.length) out(`    all ${xs.length} on ${entered.length ? "an entered Underdog payout" : "the standard payout assumed — none had Underdog's payout entered"}`);
+  }
+  out("  (standard assumed = no payout entered, so green only at the 1.87x the board assumes; Underdog pays less on many such picks)");
+  out("  CLV = books' P(our side) at the line played, last stored quote before kickoff − at pick time; 95% game-bootstrap");
+  out("  break-even per leg, real-money entries played (at the median multiplier paid):");
+  for (const r of breakEvenRows(await loadEntriesPlayed())) {
+    out(`    ${r.label.padEnd(8)} ${String(r.entries).padStart(2)} entr${r.entries === 1 ? "y" : "ies"}  ${r.medianMultiplier.toFixed(2)}x → ${(r.breakEvenPerLeg * 100).toFixed(1)}% a leg`);
+  }
+
   out("\nSKILL VS MARKET (log-loss; + = model beats the de-vigged consensus; 95% game-bootstrap)");
   out("  [exploratory, not corrected] marks secondary intervals: several are looked at every week with no multiple-comparison correction, so one excluding zero is a lead, not a finding.");
-  const primary = await skillSection("primary", "", { source: "backfill", marketMethod: "consensus-v2", modelVersion: BASELINE_V0 });
-  skillLine("PRIMARY baseline-v0, consensus-v2 market", primary);
-  const primaryItems = await loadSkillItems({ source: "backfill", marketMethod: "consensus-v2", modelVersion: BASELINE_V0 });
-  const unknownQuoteTime = primaryItems.filter((i) => i.quoteTimeUnknown).length;
-  if (unknownQuoteTime) {
-    out(`    quote time unknown for ${unknownQuoteTime} of ${primaryItems.length} (snapshots stored before 2026-10-20 carry no fetch time; no-lookahead can't be checked for them — live rows are the clean measure)`);
-  }
+  const backfillItems = await loadSkillItems({ source: "backfill", marketMethod: "consensus-v2", modelVersion: BASELINE_V0 });
+  const scored = (xs: typeof backfillItems) => ({ items: xs.length, score: skillScore(xs), interval: clusterBootstrap(xs, (x) => skillScore(x)?.skill ?? null) });
+  // Primary: rows whose quote time is recorded, so no-lookahead is checked for every one.
+  const primaryItems = backfillItems.filter((i) => !i.quoteTimeUnknown);
+  const unknownQuoteTime = backfillItems.length - primaryItems.length;
+  const primaryScored = scored(primaryItems);
+  rec.primarySkillPct = primaryScored.score ? primaryScored.score.skill * 100 : null;
+  skillLine("PRIMARY baseline-v0, consensus-v2, known quote time", primaryScored);
   const weekItems = primaryItems.filter((i) => (i.date ?? "") >= weekStart.toISOString().slice(0, 10));
-  skillLine("  of which this week's slates [exploratory, not corrected]", { items: weekItems.length, score: skillScore(weekItems), interval: clusterBootstrap(weekItems, (x) => skillScore(x)?.skill ?? null) });
-  const versions = await liveModelVersions();
-  for (const v of versions) skillLine(`LIVE model ${v}`, await skillSection(v, "", { source: "live", marketMethod: "consensus-v2", modelVersion: v }));
+  skillLine("  of which this week's slates [exploratory, not corrected]", scored(weekItems));
+  skillLine(`secondary: all rows, includes ${unknownQuoteTime} rows with unknown quote time [exploratory, not corrected]`, scored(backfillItems));
+  out("    (snapshots stored before 2026-10-20 carry no fetch time, so no-lookahead can't be checked for those rows)");
+  for (const v of versions) {
+    const live = await skillSection(v, "", { source: "live", marketMethod: "consensus-v2", modelVersion: v });
+    if (v === versions[0]) {
+      rec.liveVersion = v;
+      rec.liveSkillPct = live.report?.overall ? live.report.overall.skill * 100 : null;
+    }
+    skillLine(`LIVE model ${v}`, live);
+  }
   if (versions.length === 0) out("  LIVE: none yet — logged at scoring time since 2026-10-20; the first section appears once a slate generated since then is graded");
 
   out("\nOVER VS BOOKS (Over hit rate − books' P(over) at the venue's line, pts)");
-  for (const r of await overGapRows(versions, { withStatus: true })) {
-    if (!r.gap) out(`  ${r.label.padEnd(52)} no graded lines`);
-    else out(`  ${r.label.padEnd(52)} n=${String(r.gap.n).padStart(4)} games=${String(r.gap.games).padStart(3)}  ${fmtInterval(r.gap.gapPts, r.gap.interval, 1, " pts")}`);
+  const gapLine = (label: string, gap: OverGap | null, suffix = "") =>
+    out(
+      !gap
+        ? `  ${label.padEnd(52)} no graded lines`
+        : `  ${label.padEnd(52)} n=${String(gap.n).padStart(4)} games=${String(gap.games).padStart(3)}  ${fmtInterval(gap.gapPts, gap.interval, 1, " pts")}${suffix}`,
+    );
+  const gapRows = await overGapRows(versions, { withStatus: true });
+  const samples = overGapSamples(versions);
+  const sampleItems: SkillItem[][] = [];
+  const shortName = (i: number) => (i === 0 ? "Underdog hist" : i === 1 ? "PrizePicks hist" : `Underdog live ${versions[i - 2]}`);
+  for (const [i, r] of gapRows.entries()) {
+    rec.overGapPts[shortName(i)] = r.gap?.gapPts ?? null;
+    if (r.status) rec.overFlags[shortName(i)] = { state: r.status.state, direction: r.status.direction };
+    gapLine(r.label, r.gap);
     if (r.status) out(`    status: ${overStatusLine(r.status)}`);
+    // Stress test: only lines a sportsbook posted exactly, priced from those books alone.
+    gapLine("  exact line only (no spread-curve reading)", overGap(await loadSkillItems({ ...samples[i][1], exactLine: true })));
+    sampleItems.push(await loadSkillItems(samples[i][1]));
   }
-  out(`  (flag on the first week the cumulative interval excludes zero; confirmed only if the weeks after it alone, ≥ ${OVER_CONFIRM_WEEKS}, still exclude zero on the same side)`);
+  out(`  (flag on the first week the cumulative interval excludes zero; confirmed only if the weeks after it alone, ≥ ${OVER_CONFIRM_WEEKS}, still exclude zero on the same side; the rule reads the full rows above, not the exact-line ones)`);
+  out("  by prop type [exploratory, not corrected]:");
+  for (const [i, [label]] of samples.entries()) {
+    out(`    ${label}`);
+    const byType = new Map<string, SkillItem[]>();
+    for (const it of sampleItems[i]) byType.set(it.propType, [...(byType.get(it.propType) ?? []), it]);
+    for (const [type, xs] of [...byType.entries()].sort((a, b) => b[1].length - a[1].length)) gapLine(`    ${type}`, overGap(xs));
+  }
 
   out("\nσ GATE (fitted spread vs current at venue lines; log-loss fitted − current, − favours fitted)");
   const sigma = results.get("sigma")!.summaries.get("sigma") as { types: string[]; samples: SigmaSample[] } | undefined;
@@ -145,8 +239,13 @@ async function main() {
     }
     const v = sigmaVerdict(sigma.samples);
     out(`  verdict: ${v.verdict} — ${v.reason}`);
+    rec.sigmaVerdict = v.verdict;
+    rec.sigmaPooled = sigma.samples.find((s) => s.sample === "pooled")?.diff ?? null;
+    const held = sigma.samples.find((s) => s.sample === "held-out");
+    rec.heldOutEce = { fitted: held?.eceFitted ?? null, current: held?.eceCurrent ?? null };
     const price = results.get("sigma")!.summaries.get("sigmaPrice") as (PriceTest & { fitDay: string }) | undefined;
     if (price) {
+      rec.priceVerdict = price.ladders === 0 ? "no ladders" : price.verdict;
       out(
         price.ladders === 0
           ? `  held-out price test: no ladders after ${price.fitDay} yet (the next slate fetch buys them)`
@@ -159,34 +258,61 @@ async function main() {
     out("  (the revert rule reads the pooled sample only; the others are for information)");
   }
 
-  out("\nRB-OUT NEWS TRIAL (each venue's change between the +10 and +40 minute fetches: teammates vs the other team)");
+  out("\nRB-OUT NEWS TRIAL (each book's change from the last stored quote before the news to the +40 minute fetch: the out RB's teammates by position vs the other team)");
   out(`  news time = our poll's first sighting (~15-min resolution), not the report's own time; a move = a line change or ≥ ${PRICE_MOVE_PTS} pts on a book's no-vig Over`);
+  out("  median move times are bounded by our fetch schedule (news sighting at ~15-min resolution, fetches at +10/+40), so they are not book reaction times");
   const lat = results.get("latency")!.summaries.get("latency") as
     | {
         changes: number;
         trial: { done: number; skipped: number; credits: number };
-        windows: { window: string; events: number; treated: VenueChange[]; control: VenueChange[]; pre: GroupLatency[] }[];
+        windows: {
+          window: string;
+          events: number;
+          withPlus40?: number;
+          withPreQuote?: number;
+          primary?: { group: string; changes: VenueChange[] }[];
+          primaryControl?: VenueChange[];
+          treated: VenueChange[];
+          control: VenueChange[];
+          pre: GroupLatency[];
+        }[];
       }
     | undefined;
   if (failed("latency") || !lat) out("  research:latency failed — see latency.log");
   else {
     out(`  changes to Out: ${lat.changes}; trial fetches ${lat.trial.done} done, ${lat.trial.skipped} skipped, ${lat.trial.credits} of ${NEWS_TRIAL.budgetCredits} credits`);
+    out(`  cells: moved/props, then the mean line change; ⚠ = fewer than ${SMALL_CELL_N} props, too few to read`);
+    out(`  the trial buys ${NEWS_TRIAL.propTypes.join(", ")} only, so WR/TE teammates appear only where a book posts one of those for them;`);
+    out("  Friday news usually lands before any stored quote of Sunday's game (the slate is fetched on game day), so few Friday events reach the primary comparison");
     const names: Record<string, string> = { friday: "Friday's final report", inactives: "Game-day inactives", other: "Other times" };
+    const order = ["backup RB", "pass-catchers (WR/TE)", "QB", "other"];
     for (const w of ["friday", "inactives", "other"]) {
       const b = lat.windows.find((x) => x.window === w);
       if (!b) continue;
-      out(`  ${names[w]} — ${b.events} event(s)`);
+      out(`  ${names[w]} — ${b.events} event(s), ${b.withPlus40 ?? 0} with the trial's +40 fetch, ${b.withPreQuote ?? 0} of those with a teammate quote stored before the news`);
+      const primary = (b.primary ?? []).sort((x, y) => order.indexOf(x.group) - order.indexOf(y.group));
+      if (primary.length) {
+        out("    PRIMARY — last stored quote before the news → +40 fetch");
+        const cols = [...primary.map((p) => p.group), "other team"];
+        out(`      ${"book".padEnd(12)} ${cols.map((c) => c.padEnd(22)).join(" ")}`);
+        const books = [...new Set([...primary.flatMap((p) => p.changes), ...(b.primaryControl ?? [])].map((g) => g.group))].sort();
+        for (const book of books) {
+          const cells = [...primary.map((p) => p.changes.find((g) => g.group === book)), (b.primaryControl ?? []).find((g) => g.group === book)];
+          out(`      ${book.padEnd(12)} ${cells.map((c) => changeCell(c).padEnd(22)).join(" ")}`);
+        }
+      }
       const groups = [...new Set([...b.treated, ...b.control].map((g) => g.group))].sort();
-      const fmtChange = (g: VenueChange | undefined) =>
-        g ? `${g.moved}/${g.props} moved, mean line ${g.meanLineChange == null ? "—" : `${g.meanLineChange >= 0 ? "+" : ""}${g.meanLineChange.toFixed(2)}`}` : "—";
-      for (const group of groups) {
-        out(`    ${group.padEnd(12)} teammates ${fmtChange(b.treated.find((g) => g.group === group)).padEnd(32)} other team ${fmtChange(b.control.find((g) => g.group === group))}`);
+      if (groups.length) {
+        out("    secondary — +10 → +40 fetches, all teammates vs the other team [exploratory, not corrected]:");
+        for (const group of groups) {
+          out(`      ${group.padEnd(12)} teammates ${changeCell(b.treated.find((g) => g.group === group)).padEnd(22)} other team ${changeCell(b.control.find((g) => g.group === group))}`);
+        }
       }
       if (b.pre.length) {
-        out("    secondary — from the last stored quote before the news [exploratory, not corrected]:");
+        out("    secondary — time to the first move after the last stored quote [exploratory, not corrected]:");
         b.pre.forEach((x) => latencyLine(x, "      "));
       }
-      if (!groups.length && !b.pre.length) out("    nothing measurable yet");
+      if (!primary.length && !groups.length && !b.pre.length) out("    nothing measurable yet");
     }
     if (lat.windows.length === 0) out("  nothing measurable yet");
   }
@@ -202,9 +328,26 @@ async function main() {
     );
   }
   const total = byKind.reduce((s, k) => s + k.credits, 0);
+  rec.credits = total;
   out(`  ${"total".padEnd(18)} ${String(total).padStart(4)}${rows.length ? `; balance after the last call ${rows[rows.length - 1].remaining ?? "—"}` : ""}`);
   if (rows.length > 1) out(`  spent between logged calls by something unlogged: ${unaccountedCredits(rows)}`);
   if (!first || first.at > weekStart) out(`  the ledger began ${first ? first.at.toISOString().slice(0, 16) + "Z" : "with no calls yet"}; spends earlier this week are not itemised`);
+
+  // History: this week's headline numbers, replacing an earlier run of the same week.
+  const historyFile = path.join("logs", "weekly", "history.json");
+  let history: WeekRecord[] = [];
+  try {
+    if (existsSync(historyFile)) history = JSON.parse(readFileSync(historyFile, "utf8")) as WeekRecord[];
+  } catch (e) {
+    console.error(`${historyFile} unreadable, starting a new one: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  const prev = previousWeek(history, rec.week);
+  history = upsertWeek(history, rec);
+  writeFileSync(historyFile, JSON.stringify(history, null, 2) + "\n");
+  out("\nTRENDS (last 6 NFL weeks, from logs/weekly/history.json; a rerun replaces its week)");
+  trendTable(history).forEach((l) => out(l));
+
+  lines.splice(topAt, 0, "\nTOP LINE", ...topLine(rec, prev).map((l) => `  ${l}`));
 
   const text = lines.join("\n");
   console.log(text);

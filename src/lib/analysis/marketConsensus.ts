@@ -115,7 +115,7 @@ export const RELIABLE_MIN_GROUPS = 3;
 export const STALE_QUOTE_MS = 6 * 3_600_000;
 
 /** A side priced beyond ~-300 is almost always an alternate or stale line. */
-const JUICE_LIMIT = 0.75;
+export const JUICE_LIMIT = 0.75;
 
 export function americanToProb(price: number): number {
   return price > 0 ? 100 / (price + 100) : -price / (-price + 100);

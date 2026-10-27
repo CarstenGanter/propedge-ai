@@ -270,7 +270,7 @@ async function fetchJson<T>(url: string, timeoutMs = 8000): Promise<T | null> {
 
 const DAY = 24 * 60 * 60 * 1000;
 const teamsCache = new Map<string, { at: number; byName: Map<string, string> }>(); // norm name → teamId
-const rosterCache = new Map<string, { at: number; athletes: { id: string; name: string }[] }>();
+const rosterCache = new Map<string, { at: number; athletes: { id: string; name: string; position?: string }[] }>();
 const gamelogCache = new Map<string, { at: number; parsed: ParsedGamelog }>();
 const resolveCache = new Map<string, EspnAthleteRef | null>();
 
@@ -278,6 +278,8 @@ export interface EspnAthleteRef {
   athleteId: string;
   teamId: string;
   teamName: string;
+  /** Roster position abbreviation (e.g. "WR"), when ESPN lists one. */
+  position?: string;
 }
 
 async function getTeams(family: { sport: string; league: string }): Promise<Map<string, string>> {
@@ -305,21 +307,24 @@ interface RosterAthlete {
   displayName?: string;
   firstName?: string;
   lastName?: string;
+  position?: { abbreviation?: string };
   items?: RosterAthlete[];
 }
 
-async function getRoster(family: { sport: string; league: string }, teamId: string): Promise<{ id: string; name: string }[]> {
+async function getRoster(family: { sport: string; league: string }, teamId: string): Promise<{ id: string; name: string; position?: string }[]> {
   const key = `${family.sport}/${family.league}|${teamId}`;
   const cached = rosterCache.get(key);
   if (cached && Date.now() - cached.at < DAY / 4) return cached.athletes; // 6h
   const data = await fetchJson<{ athletes?: RosterAthlete[] }>(
     `${SITE}/${family.sport}/${family.league}/teams/${teamId}/roster`,
   );
-  const flat: { id: string; name: string }[] = [];
+  const flat: { id: string; name: string; position?: string }[] = [];
   for (const a of data?.athletes ?? []) {
     const list = a.items ?? [a]; // NFL groups athletes by position → flatten items
     for (const p of list) {
-      if (p.id && (p.fullName || p.displayName)) flat.push({ id: String(p.id), name: p.fullName ?? p.displayName ?? "" });
+      if (p.id && (p.fullName || p.displayName)) {
+        flat.push({ id: String(p.id), name: p.fullName ?? p.displayName ?? "", ...(p.position?.abbreviation ? { position: p.position.abbreviation } : {}) });
+      }
     }
   }
   rosterCache.set(key, { at: Date.now(), athletes: flat });
@@ -369,7 +374,7 @@ export async function resolveEspnAthlete(
   const result = await (async (): Promise<EspnAthleteRef | null> => {
     // Exact matches win over fuzzy ones across BOTH rosters before falling back,
     // so an exact hit on the away roster beats a fuzzy hit on the home roster.
-    const candidates: { teamId: string; teamName: string; roster: { id: string; name: string }[] }[] = [];
+    const candidates: { teamId: string; teamName: string; roster: { id: string; name: string; position?: string }[] }[] = [];
     for (const teamName of [team, opponent]) {
       const teamId = lookupTeam(teams, teamName);
       if (!teamId) continue;
@@ -380,14 +385,14 @@ export async function resolveEspnAthlete(
       c.roster.filter((r) => nameParts(r.name).join(" ") === wanted).map((r) => ({ ...c, hit: r })),
     );
     if (exact.length === 1) {
-      return { athleteId: exact[0].hit.id, teamId: exact[0].teamId, teamName: exact[0].teamName };
+      return { athleteId: exact[0].hit.id, teamId: exact[0].teamId, teamName: exact[0].teamName, ...(exact[0].hit.position ? { position: exact[0].hit.position } : {}) };
     }
     if (exact.length > 1) return null; // namesakes in the same game — refuse to guess
     const fuzzy = candidates.flatMap((c) =>
       c.roster.filter((r) => nameMatches(r.name, playerName)).map((r) => ({ ...c, hit: r })),
     );
     if (fuzzy.length === 1) {
-      return { athleteId: fuzzy[0].hit.id, teamId: fuzzy[0].teamId, teamName: fuzzy[0].teamName };
+      return { athleteId: fuzzy[0].hit.id, teamId: fuzzy[0].teamId, teamName: fuzzy[0].teamName, ...(fuzzy[0].hit.position ? { position: fuzzy[0].hit.position } : {}) };
     }
     return null;
   })();
