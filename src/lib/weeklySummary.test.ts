@@ -7,8 +7,10 @@ import {
   greenSummary,
   isGreen,
   nflWeekStart,
+  reportWeekStart,
   sigmaVerdict,
   unaccountedCredits,
+  weekEnd,
   type GreenPick,
   type SigmaSample,
 } from "./weeklySummary";
@@ -159,5 +161,20 @@ describe("breakEvenRows", () => {
   });
   it("skips entries with no multiplier or legs", () => {
     expect(breakEvenRows([{ legs: 0, multiplier: 3 }, { legs: 2, multiplier: 0 }])).toEqual([]);
+  });
+});
+
+describe("reportWeekStart / weekEnd", () => {
+  it("reports the week of the latest graded slate, even when the run falls in the next week", () => {
+    // Run Wednesday 2026-11-04 after Sunday's games were graded: report the week of Oct 28.
+    const start = reportWeekStart("2026-11-01", new Date("2026-11-04T16:23:00Z"));
+    expect(start.toISOString()).toBe("2026-10-28T04:00:00.000Z");
+    expect(reportWeekStart("2026-11-02", new Date("2026-11-03T20:00:00Z")).toISOString()).toBe("2026-10-28T04:00:00.000Z");
+  });
+  it("ends the week at the next Wednesday's midnight Eastern, across the DST change", () => {
+    expect(weekEnd(new Date("2026-10-28T04:00:00Z")).toISOString()).toBe("2026-11-04T05:00:00.000Z");
+  });
+  it("falls back to the run's own week before anything is graded", () => {
+    expect(reportWeekStart(null, new Date("2026-11-04T16:23:00Z")).toISOString()).toBe("2026-11-04T05:00:00.000Z");
   });
 });

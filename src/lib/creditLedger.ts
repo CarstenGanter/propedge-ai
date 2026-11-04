@@ -28,8 +28,8 @@ export async function logOddsApiCall(call: OddsApiCall): Promise<void> {
 }
 
 /** Credits spent since `since`, by kind; `unknownCost` counts timed-out or failed calls that may have been charged. */
-export async function creditsByKind(since: Date): Promise<{ kind: string; credits: number; calls: number; unknownCost: number }[]> {
-  const rows = await prisma.creditSpend.findMany({ where: { at: { gte: since } }, select: { kind: true, credits: true } });
+export async function creditsByKind(since: Date, until?: Date): Promise<{ kind: string; credits: number; calls: number; unknownCost: number }[]> {
+  const rows = await prisma.creditSpend.findMany({ where: { at: { gte: since, ...(until ? { lt: until } : {}) } }, select: { kind: true, credits: true } });
   const byKind = new Map<string, { kind: string; credits: number; calls: number; unknownCost: number }>();
   for (const r of rows) {
     const k = byKind.get(r.kind) ?? byKind.set(r.kind, { kind: r.kind, credits: 0, calls: 0, unknownCost: 0 }).get(r.kind)!;

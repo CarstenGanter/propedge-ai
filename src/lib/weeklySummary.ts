@@ -163,6 +163,24 @@ export function nflWeekStart(now: Date): Date {
   return easternMidnight(wed.toISOString().slice(0, 10));
 }
 
+/**
+ * The NFL week a weekly report covers: the week of the latest graded slate,
+ * not the week the run falls in. A run on Wednesday (a new week from 00:00
+ * ET) used to report the empty new week — 0 credits, no slates — and file
+ * last week's numbers under the new week's date. Before anything is graded,
+ * the week the run falls in.
+ */
+export function reportWeekStart(latestGradedSlate: string | null, now: Date): Date {
+  if (!latestGradedSlate) return nflWeekStart(now);
+  return nflWeekStart(new Date(easternMidnight(latestGradedSlate).getTime() + 12 * 3_600_000));
+}
+
+/** Seven days after a week's start: the exclusive end of that NFL week. */
+export function weekEnd(weekStart: Date): Date {
+  const next = new Date(weekStart.getTime() + 7.5 * 86_400_000).toISOString().slice(0, 10);
+  return easternMidnight(next);
+}
+
 export interface LedgerRow {
   at: Date;
   /** Null: timed out or failed, cost unknown (such a row has no balance either). */

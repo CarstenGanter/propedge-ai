@@ -5,6 +5,8 @@ describe("aliasFor", () => {
   it("maps the approved ESPN BET labels", () => {
     expect(aliasFor("Elijah Dotson")).toBe("Jahan Dotson");
     expect(aliasFor("Elerson G. Smith")).toBe("Geno Smith");
+    expect(aliasFor("Cam Sample")).toBe("Drew Sample");
+    expect(aliasFor("Chris Smith II")).toBe("Geno Smith");
   });
   it("ignores case and a generational suffix", () => {
     expect(aliasFor("elijah dotson Jr.")).toBe("Jahan Dotson");

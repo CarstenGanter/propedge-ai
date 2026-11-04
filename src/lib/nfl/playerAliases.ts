@@ -17,6 +17,16 @@ export const PLAYER_ALIASES: { feedName: string; nflverseName: string; note: str
     nflverseName: "Geno Smith",
     note: "ESPN BET's label for Geno Smith on 2026-10-11 (passing yards 204.5 beside seven books' ~205.5); Elerson Smith is a linebacker. Approved 2026-10-27.",
   },
+  {
+    feedName: "Cam Sample",
+    nflverseName: "Drew Sample",
+    note: "ESPN BET's label for Drew Sample (CIN TE) on 2026-11-01 (receiving yards 9.5 beside the other books' 8.5, absent from Drew's prop); Cameron Sample is a defensive lineman. Approved 2026-11-04.",
+  },
+  {
+    feedName: "Chris Smith II",
+    nflverseName: "Geno Smith",
+    note: "ESPN BET's label for Geno Smith (NYJ) on 2026-11-01 (rushing yards 7.5 beside seven books' 6.5, absent from Geno's prop). nflverse's Chris Smith II is a Jets DB: tried only when the name matches no one, so if he plays, a prop of his name grades as him. Approved 2026-11-04.",
+  },
 ];
 
 /** The nflverse name for a feed name in the table, or null. Suffixes and case don't matter. */

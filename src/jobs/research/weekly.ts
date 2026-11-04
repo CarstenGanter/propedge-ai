@@ -24,7 +24,7 @@ import { clusterBootstrap, OVER_CONFIRM_WEEKS, overGap, skillScore, type OverGap
 import { PRICE_MOVE_PTS, type GroupLatency, type VenueChange } from "@/lib/analysis/newsLatency";
 import { NEWS_TRIAL } from "@/lib/nfl/newsFetchTrial";
 import { todayNflSlate } from "@/lib/nfl/slate";
-import { breakEvenRows, changeCell, fmtInterval, greenSummary, nflWeekStart, overStatusLine, sigmaVerdict, SMALL_CELL_N, unaccountedCredits, type SigmaSample } from "@/lib/weeklySummary";
+import { breakEvenRows, changeCell, fmtInterval, greenSummary, overStatusLine, reportWeekStart, weekEnd, sigmaVerdict, SMALL_CELL_N, unaccountedCredits, type SigmaSample } from "@/lib/weeklySummary";
 import { VALUE_MARGIN } from "@/lib/analysis/pickemMath";
 import { previousWeek, topLine, trendTable, upsertWeek, type WeekRecord } from "@/lib/weeklyTrends";
 import type { PriceTest } from "@/lib/analysis/consensusSpread";
@@ -66,7 +66,6 @@ function latencyLine(g: GroupLatency, indent: string) {
 
 async function main() {
   const now = new Date();
-  const weekStart = nflWeekStart(now);
   const dir = path.join("logs", "weekly", todayNflSlate(now));
   mkdirSync(dir, { recursive: true });
 
@@ -92,7 +91,14 @@ async function main() {
   }
   const failed = (name: string) => results.get(name)!.code !== 0;
 
-  out(`\nPropEdge weekly research — ${now.toISOString().slice(0, 16)}Z; NFL week from ${weekStart.toISOString().slice(0, 16)}Z (Wednesday 00:00 ET)`);
+  // The week reported is the one the latest graded slate belongs to, whatever day the run falls on.
+  const latest = await prisma.playerProp.findFirst({ where: { sport: "NFL", isDemo: false, actualResult: { not: null } }, orderBy: { date: "desc" }, select: { date: true } });
+  const weekStart = reportWeekStart(latest?.date ?? null, now);
+  const weekStop = weekEnd(weekStart);
+  out(
+    `\nPropEdge weekly research — run ${now.toISOString().slice(0, 16)}Z; NFL week ${weekStart.toISOString().slice(0, 16)}Z → ${weekStop.toISOString().slice(0, 16)}Z` +
+      ` (Wednesday 00:00 ET; the week of the latest graded slate, ${latest?.date ?? "none yet"})`,
+  );
   out(`Full output: ${dir}/`);
   out(backupLine);
   // The TOP LINE goes here once every section below has been computed.
@@ -126,7 +132,6 @@ async function main() {
     );
     rec.unmatched = g.unmatched;
     rec.pending = g.pending;
-    const latest = await prisma.playerProp.findFirst({ where: { sport: "NFL", isDemo: false, actualResult: { not: null } }, orderBy: { date: "desc" }, select: { date: true } });
     out(`  latest graded slate ${latest?.date ?? "—"}; props whose game nflverse has not posted yet: ${g.pending}`);
     if (g.pending > 0) out("  (nflverse posts a night's stats the next morning — if Monday night's game is among them, rerun then)");
   }
@@ -183,7 +188,9 @@ async function main() {
   const primaryScored = scored(primaryItems);
   rec.primarySkillPct = primaryScored.score ? primaryScored.score.skill * 100 : null;
   skillLine("PRIMARY baseline-v0, consensus-v2, known quote time", primaryScored);
-  const weekItems = primaryItems.filter((i) => (i.date ?? "") >= weekStart.toISOString().slice(0, 10));
+  const weekItems = primaryItems.filter(
+    (i) => (i.date ?? "") >= weekStart.toISOString().slice(0, 10) && (i.date ?? "") < weekStop.toISOString().slice(0, 10),
+  );
   skillLine("  of which this week's slates [exploratory, not corrected]", scored(weekItems));
   skillLine(`secondary: all rows, includes ${unknownQuoteTime} rows with unknown quote time [exploratory, not corrected]`, scored(backfillItems));
   out("    (snapshots stored before 2026-10-20 carry no fetch time, so no-lookahead can't be checked for those rows)");
@@ -322,9 +329,9 @@ async function main() {
     if (lat.windows.length === 0) out("  nothing measurable yet");
   }
 
-  out("\nCREDITS THIS WEEK (Odds API, from the credit ledger)");
-  const byKind = await creditsByKind(weekStart);
-  const rows = await prisma.creditSpend.findMany({ where: { at: { gte: weekStart } }, orderBy: { at: "asc" }, select: { at: true, credits: true, remaining: true } });
+  out("\nCREDITS IN THE REPORTED WEEK (Odds API, from the credit ledger)");
+  const byKind = await creditsByKind(weekStart, weekStop);
+  const rows = await prisma.creditSpend.findMany({ where: { at: { gte: weekStart, lt: weekStop } }, orderBy: { at: "asc" }, select: { at: true, credits: true, remaining: true } });
   const first = await prisma.creditSpend.findFirst({ orderBy: { at: "asc" }, select: { at: true } });
   for (const k of byKind) {
     out(
