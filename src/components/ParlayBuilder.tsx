@@ -18,6 +18,7 @@ import { createParlay } from "@/server/actions/parlays";
 import { formatCurrency, formatSignedCurrency } from "@/lib/utils/format";
 import type { SerializedPick } from "@/lib/dto";
 import { cn } from "@/lib/utils/cn";
+import { pickLineLabel } from "@/lib/settlement";
 
 export function ParlayBuilder({
   picks,
@@ -125,7 +126,7 @@ export function ParlayBuilder({
                       <span className="truncate text-sm font-medium">{p.prop.playerName}</span>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {p.prop.direction} {p.prop.line} {p.prop.propType} · {p.prop.team} vs {p.prop.opponent}
+                      {p.prop.direction} {pickLineLabel(p.prop).played}{pickLineLabel(p.prop).books != null && <span className="text-faint"> (books {pickLineLabel(p.prop).books})</span>} {p.prop.propType} · {p.prop.team} vs {p.prop.opponent}
                     </p>
                   </div>
                   <ConfidenceBadge score={p.confidenceScore} />

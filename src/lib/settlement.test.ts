@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  pickLineLabel,
   moneylinePayout,
   playedLine,
   settleParlay,
@@ -103,5 +104,17 @@ describe("playedLine", () => {
   it("falls back to the books' line when none was entered", () => {
     expect(playedLine(89, null)).toBe(89);
     expect(playedLine(89, undefined)).toBe(89);
+  });
+});
+
+describe("pickLineLabel", () => {
+  it("shows the line played, with the books' line beside it when they differ — Kimani Vidal 2026-11-01", () => {
+    const vidal = { line: 22.5, underdogLine: 24.5 };
+    expect(pickLineLabel(vidal)).toEqual({ played: 24.5, books: 22.5 });
+    expect(settleProp(pickLineLabel(vidal).played, "UNDER", 23)).toBe("hit");
+  });
+  it("shows only the books' line when no Underdog line is known, or they match", () => {
+    expect(pickLineLabel({ line: 22.5, underdogLine: null })).toEqual({ played: 22.5, books: null });
+    expect(pickLineLabel({ line: 22.5, underdogLine: 22.5 })).toEqual({ played: 22.5, books: null });
   });
 });

@@ -20,6 +20,7 @@ import { computeRecord, computeTeamRecord, type PickRecord } from "@/lib/analyti
 import { formatPercent, formatSignedCurrency } from "@/lib/utils/format";
 import { formatSlate, todaySlate } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
+import { pickLineLabel } from "@/lib/settlement";
 
 export const dynamic = "force-dynamic";
 
@@ -134,7 +135,7 @@ export default async function ResultsPage({
                 {biggestWin ? (
                   <div className="text-sm">
                     <p className="font-medium">{biggestWin.prop.playerName}</p>
-                    <p className="text-muted-foreground">{biggestWin.prop.direction} {biggestWin.prop.line} {biggestWin.prop.propType}</p>
+                    <p className="text-muted-foreground">{biggestWin.prop.direction} {pickLineLabel(biggestWin.prop).played}{pickLineLabel(biggestWin.prop).books != null && <span className="text-faint"> (books {pickLineLabel(biggestWin.prop).books})</span>} {biggestWin.prop.propType}</p>
                     {plByPick.has(biggestWin.id) && (
                       <p className="mt-1 text-success">{formatSignedCurrency(plByPick.get(biggestWin.id)!)}</p>
                     )}
@@ -150,7 +151,7 @@ export default async function ResultsPage({
                 {worstMiss ? (
                   <div className="text-sm">
                     <p className="font-medium">{worstMiss.prop.playerName}</p>
-                    <p className="text-muted-foreground">{worstMiss.prop.direction} {worstMiss.prop.line} {worstMiss.prop.propType}</p>
+                    <p className="text-muted-foreground">{worstMiss.prop.direction} {pickLineLabel(worstMiss.prop).played}{pickLineLabel(worstMiss.prop).books != null && <span className="text-faint"> (books {pickLineLabel(worstMiss.prop).books})</span>} {worstMiss.prop.propType}</p>
                     {plByPick.has(worstMiss.id) && (
                       <p className="mt-1 text-danger">{formatSignedCurrency(plByPick.get(worstMiss.id)!)}</p>
                     )}
@@ -203,7 +204,7 @@ export default async function ResultsPage({
                           </div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {p.prop.direction} {p.prop.line} {p.prop.propType}
+                          {p.prop.direction} {pickLineLabel(p.prop).played}{pickLineLabel(p.prop).books != null && <span className="text-faint"> (books {pickLineLabel(p.prop).books})</span>} {p.prop.propType}
                         </TableCell>
                         <TableCell><ConfidenceBadge score={p.confidenceScore} /></TableCell>
                         <TableCell className="tabular-nums">{p.prop.actualResult ?? "—"}</TableCell>

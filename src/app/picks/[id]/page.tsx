@@ -21,6 +21,7 @@ import {
 import { getSettings } from "@/lib/settings";
 import { formatSignedNumber } from "@/lib/utils/format";
 import { formatGameDateTime } from "@/lib/utils/dates";
+import { pickLineLabel } from "@/lib/settlement";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,7 @@ export default async function PickDetailPage({ params }: { params: Promise<{ id:
             {p.team} vs {p.opponent} · {formatGameDateTime(p.gameStartTime, p.date)}
           </p>
           <p className="text-lg font-semibold">
-            {p.direction} <span className="text-primary">{p.line}</span> {p.propType}
+            {p.direction} <span className="text-primary">{pickLineLabel(p).played}</span>{pickLineLabel(p).books != null && <span className="text-sm font-normal text-faint"> (books {pickLineLabel(p).books})</span>} {p.propType}
             {p.actualResult != null && (
               <span className="ml-3 text-sm font-normal text-muted-foreground">
                 actual: <span className="text-foreground">{p.actualResult}</span>

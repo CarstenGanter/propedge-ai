@@ -15,7 +15,7 @@ import {
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { StatusBadge } from "@/components/badges";
 import { settlePickManually } from "@/server/actions/results";
-import { settleProp } from "@/lib/settlement";
+import { pickLineLabel, settleProp } from "@/lib/settlement";
 import type { SerializedPick } from "@/lib/dto";
 import type { SettlementStatus } from "@/types";
 
@@ -36,7 +36,7 @@ export function ResultSettlementModal({
   const predicted: SettlementStatus =
     parsed == null || Number.isNaN(parsed)
       ? "pending"
-      : settleProp(pick.prop.line, pick.prop.direction, parsed);
+      : settleProp(pickLineLabel(pick.prop).played, pick.prop.direction, parsed);
 
   function submit(status?: SettlementStatus) {
     startTransition(async () => {
@@ -63,7 +63,7 @@ export function ResultSettlementModal({
         <DialogHeader>
           <DialogTitle>Settle pick</DialogTitle>
           <DialogDescription>
-            {pick.prop.playerName} · {pick.prop.direction} {pick.prop.line} {pick.prop.propType}
+            {pick.prop.playerName} · {pick.prop.direction} {pickLineLabel(pick.prop).played}{pickLineLabel(pick.prop).books != null && <span className="text-faint"> (books {pickLineLabel(pick.prop).books})</span>} {pick.prop.propType}
           </DialogDescription>
         </DialogHeader>
 
@@ -75,7 +75,7 @@ export function ResultSettlementModal({
               step="0.1"
               value={actual}
               onChange={(e) => setActual(e.target.value)}
-              placeholder={`Line is ${pick.prop.line}`}
+              placeholder={`Line played is ${pickLineLabel(pick.prop).played}`}
               autoFocus
             />
             {parsed != null && !Number.isNaN(parsed) && (

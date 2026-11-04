@@ -14,6 +14,16 @@ export function playedLine(line: number, underdogLine: number | null | undefined
   return underdogLine != null && Number.isFinite(underdogLine) ? underdogLine : line;
 }
 
+/**
+ * A pick's line as it should be shown: the line played (Underdog's, once it is
+ * known), and the books' line beside it when the two differ. Showing the books'
+ * line alone made a correct "UNDER 24.5 → 23, hit" read as "UNDER 22.5 → 23".
+ */
+export function pickLineLabel(p: { line: number; underdogLine?: number | null }): { played: number; books: number | null } {
+  const played = playedLine(p.line, p.underdogLine);
+  return { played, books: played !== p.line ? p.line : null };
+}
+
 export function settleProp(
   line: number,
   direction: Direction,

@@ -22,6 +22,7 @@ import { formatGameDateTime } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
 import type { SerializedPick } from "@/lib/dto";
 import type { ScoringProfile } from "@/types";
+import { pickLineLabel } from "@/lib/settlement";
 
 export function PickCard({
   pick,
@@ -49,7 +50,7 @@ export function PickCard({
               {pick.isDemo && <DemoDataBadge />}
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {p.team} vs {p.opponent} · <span className="font-medium text-foreground/80">{p.direction} {p.line} {p.propType}</span>
+              {p.team} vs {p.opponent} · <span className="font-medium text-foreground/80">{p.direction} {pickLineLabel(p).played}{pickLineLabel(p).books != null && <span className="text-faint"> (books {pickLineLabel(p).books})</span>} {p.propType}</span>
             </p>
             <div className="mt-1 flex items-center gap-2 text-2xs text-muted-foreground">
               <Clock className="h-3 w-3" /> {formatGameDateTime(p.gameStartTime, p.date)}
