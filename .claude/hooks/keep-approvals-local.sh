@@ -1,9 +1,12 @@
 #!/bin/sh
-# ConfigChange (project_settings) and SessionStart: move permission approvals
+# PostToolUse, ConfigChange (project_settings) and SessionStart: move permission approvals
 # out of the committed .claude/settings.json into the gitignored
 # .claude/settings.local.json. The VS Code approval card can save a "don't ask
 # again" approval to the project's shared file; approvals belong to this
 # machine. Only permissions.allow moves — deny/ask rules stay where they are.
+# ConfigChange doesn't fire for Claude Code's own write of an approval (seen
+# 2026-11-04), so PostToolUse is the trigger that catches it: an approval is
+# saved just before its tool runs.
 # Never blocks: a failure is reported on stderr and the change goes ahead.
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 node -e '
