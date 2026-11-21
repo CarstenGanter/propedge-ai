@@ -302,12 +302,14 @@ export interface BoardTier {
 }
 
 /**
- * The v2.0.0 board's three tiers (decided 2026-11-20). Pass on a line tougher
- * than the books' (those picks hit 38%), on a thin price, or with no Underdog
- * line to judge. Playable only when boardVerdict calls an edge at the entered
- * payout. Before a payout is entered, a pick is a candidate when the books
- * already clear the standard pick's break-even (1/1.87 = 53.5%) — typing the
- * payout then makes it playable or a pass; a nerfed payout raises the bar.
+ * The v2.0.0 board's three tiers (decided 2026-11-20). Pass on a thin price or
+ * with no Underdog line to judge. Playable only when boardVerdict calls an edge
+ * at the entered payout — the price decides, even on a line tougher than the
+ * books' (a boosted payout can pay for it). Before a payout is entered, a pick
+ * is a candidate when its line is no tougher than the books' (tougher lines hit
+ * 38%) and the books already clear the standard pick's break-even (1/1.87 =
+ * 53.5%); typing the payout then makes it playable or a pass, and a nerfed
+ * payout raises the bar.
  */
 export function boardTier(p: {
   books: number | null;
@@ -321,11 +323,11 @@ export function boardTier(p: {
   const pass = (passWhy: string, reason = passWhy): BoardTier => ({ tier: "pass", reason, passWhy });
   if (p.books == null) return pass("no books' price");
   if (p.underdogLine == null || p.booksLine == null) return pass("no Underdog line to judge");
-  if (lineRelation(p.direction, p.underdogLine, p.booksLine) === "tougher") return pass("Underdog's line is tougher than the books'");
   if (p.reliable === false || p.priced === false) return pass("thin price (too few books, or beyond the lines they posted)");
   const verdict = boardVerdict(p);
   if (verdict === "edge") return { tier: "playable", reason: `+EV: books ${(p.books * 100).toFixed(1)}% × ${p.payout}x = ${(p.books * p.payout!).toFixed(3)}` };
   if (verdict === "unpriced") {
+    if (lineRelation(p.direction, p.underdogLine, p.booksLine) === "tougher") return pass("Underdog's line is tougher than the books'");
     const bar = pickBreakEven(null);
     return p.books >= bar
       ? { tier: "candidate", reason: `enter Underdog's payout: books ${(p.books * 100).toFixed(1)}% vs ${(bar * 100).toFixed(1)}% standard break-even` }

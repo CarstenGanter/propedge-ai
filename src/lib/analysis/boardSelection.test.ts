@@ -27,7 +27,7 @@ describe("compareRank with boardTier/boardRank", () => {
   it("puts playable picks first by expected value, then candidates by edge, then passes", () => {
     const picks = [
       pick("candidate 58%", 0.58, null),
-      pick("pass tougher", 0.7, 1.87, 42.5),
+      pick("pass tougher", 0.7, null, 42.5), // a tougher line is never a candidate
       pick("playable 1.05", 0.56, 1.875), // 1.050
       pick("candidate 55%", 0.55, null),
       pick("playable 1.12", 0.6, 1.87), // 1.122

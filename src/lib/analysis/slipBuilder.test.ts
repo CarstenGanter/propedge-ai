@@ -297,13 +297,13 @@ describe("buildSuggestedSlips", () => {
     expect(buildSuggestedSlips(pool, [2])[0].legs.map((l) => l.pickId)).toEqual(["a", "b"]);
   });
 
-  it("never takes a leg on a line tougher than the books', even at a +EV price", () => {
-    const pool = [
-      { ...cand("tough", "Tough Line", "Bears", "Packers", 70, "OVER", "CHI"), marketProb: 0.7, booksLine: 58.5 }, // line 60.5 > 58.5
-      cand("a", "Alpha WR", "Bengals", "Buccaneers", 58, "OVER", "CIN"),
-      cand("b", "Bravo RB", "Lions", "Saints", 57, "OVER", "DET"),
-    ];
-    expect(buildSuggestedSlips(pool, [2])[0].legs.map((l) => l.pickId)).toEqual(["a", "b"]);
+  it("takes a leg on a tougher line only when its entered payout clears the margin", () => {
+    const tough = { ...cand("tough", "Tough Line", "Bears", "Packers", 52, "OVER", "CHI"), booksLine: 58.5 }; // line 60.5 > 58.5
+    const others = [cand("a", "Alpha WR", "Bengals", "Buccaneers", 58, "OVER", "CIN"), cand("b", "Bravo RB", "Lions", "Saints", 57, "OVER", "DET")];
+    // 0.52 × 2.0 = 1.04: a boosted payout pays for the tougher line.
+    expect(buildSuggestedSlips([{ ...tough, pickMultiplier: 2.0 }, ...others], [3])[0].legs.map((l) => l.pickId)).toContain("tough");
+    // 0.52 × 1.87 = 0.97: not at the standard price.
+    expect(buildSuggestedSlips([tough, ...others], [3])).toEqual([]);
   });
 
   it("will not judge a pick with no books' price on the market basis", () => {

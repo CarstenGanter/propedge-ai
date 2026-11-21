@@ -231,6 +231,11 @@ Each daily report (`npm run research:clv`) shows month-to-date spend against thi
 
 ## v2.0.0: market-first, strict +EV board (decided 2026-11-20)
 
+**σ reverted (2026-11-20).** The outcome rule's pooled interval rose above zero (log-loss +0.0016,
+95% +0.0001 to +0.0034, n = 1,064), so production is back on the CV-prior spread with LINE_SHIFT_TRUST
+damping for every prop type, though the ladder fit matched the books' alternate prices far better.
+The fit is kept as LADDER_FIT_PARAMS and research:sigma-validate still compares it, for information.
+
 Live v1.7.0 scored −0.16% log-loss skill vs the market on 1,327 props: blending game logs and context
 on top of the consensus added noise. From v2.0.0:
 - **Probability:** with a reliable consensus (3+ independent book groups, the played line within what
@@ -239,9 +244,10 @@ on top of the consensus added noise. From v2.0.0:
   clip stays. A v2.0.0 pick's skill vs market is ~0 by construction; it is measured by CLV and the
   venue line's gap to the books.
 - **Board (`boardTier`, pickemMath.ts):** *playable* = an entered Underdog payout the books' price
-  beats by 2%; *candidate* = no payout yet, a line no tougher than the books', a real price, and books
-  ≥ the standard break-even (53.5%); everything else is a *pass* (tougher line, thin price, no Underdog
-  line, below break-even, no edge at the payout). Only playable and candidate picks make the board,
+  beats by 2% — the price decides, even on a line tougher than the books' (amended 2026-11-20: a
+  boosted payout can pay for it); *candidate* = no payout yet, a line no tougher than the books', a
+  real price, and books ≥ the standard break-even (53.5%); everything else is a *pass* (tougher line
+  before a payout is entered, thin price, no Underdog line, below break-even, no edge at the payout). Only playable and candidate picks make the board,
   ranked by EV at the payout, then the books' edge over break-even; the slip builder takes playable
   legs only. Payouts are absolute per pick and must be above 1.0.
 - Applied to 2026-11-15 it would have left one candidate (Tommy Tremble, which hit) and kept the

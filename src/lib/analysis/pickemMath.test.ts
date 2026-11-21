@@ -298,10 +298,17 @@ describe("boardTier", () => {
     expect(below.passWhy).toBe("books below the standard break-even");
   });
 
-  it("passes on a tougher line even when the price looks +EV", () => {
-    const t = boardTier({ ...base, underdogLine: 42.5, books: 0.6, payout: 1.87 });
+  it("never makes a tougher line a candidate before its payout is entered", () => {
+    const t = boardTier({ ...base, underdogLine: 42.5, books: 0.6, payout: null });
     expect(t.tier).toBe("pass");
     expect(t.passWhy).toBe("Underdog's line is tougher than the books'");
+  });
+
+  it("lets the price decide a tougher line once a payout is entered", () => {
+    // A boosted 2.0x on a tougher line still clears the margin: 0.52 × 2.0 = 1.04.
+    expect(boardTier({ ...base, underdogLine: 42.5, books: 0.52, payout: 2.0 }).tier).toBe("playable");
+    // At the standard price it doesn't: 0.52 × 1.87 = 0.97.
+    expect(boardTier({ ...base, underdogLine: 42.5, books: 0.52, payout: 1.87 }).passWhy).toBe("no edge at the entered payout");
   });
 
   it("passes on a thin price and with no Underdog line", () => {
