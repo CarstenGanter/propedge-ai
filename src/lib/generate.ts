@@ -2,7 +2,7 @@ import "server-only";
 import type { PlayerProp, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/client";
 import { getSettings } from "@/lib/settings";
-import { analyzeProp, SCORING_MODEL_VERSION, versionAtLeast } from "@/lib/analysis/scoringEngine";
+import { analyzeProp, SCORING_MODEL_VERSION } from "@/lib/analysis/scoringEngine";
 import { recommendedStake } from "@/lib/analysis/confidenceModel";
 import { buildResearchBundle, resolveProviderContext } from "@/lib/providers";
 import { prewarmMlb } from "@/lib/providers/live/mlbStats";
@@ -11,15 +11,8 @@ import type { Direction, ScorablePropInput } from "@/types";
 import { consensusOf, parseSnapshot } from "@/lib/marketSnapshot";
 import { buildLivePrediction, type PreviousForecast } from "@/lib/predictionLog";
 import { favouredSide } from "@/lib/analysis/marketConsensus";
-import {
-  boardValue,
-  expectedValueAtUnderdog,
-  onePerPlayer,
-  fitUnderdogPricing,
-  MIN_POINTS_TO_LEARN,
-  selectWithTypeCap,
-  type PricePoint,
-} from "@/lib/analysis/boardSelection";
+import { compareRank, onePerPlayer } from "@/lib/analysis/boardSelection";
+import { boardRank, boardTier, type BoardTier } from "@/lib/analysis/pickemMath";
 
 const ESPN_STAT_SPORTS = new Set(["NBA", "WNBA", "NCAAB", "NFL", "NHL"]);
 
@@ -203,7 +196,7 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
     prop: PlayerProp;
     analysis: ReturnType<typeof analyzeProp>;
     entryProb: number | null;
-    /** At least three independent books priced it. */
+    /** At least three independent books priced it, at a line within what they posted. */
     reliable: boolean;
   }
   const candidates: Candidate[] = [];
@@ -331,25 +324,33 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
 
   let selected: Candidate[];
   if (probabilityBoard) {
-    // Rank by what Underdog is expected to leave you, learned from the payouts
-    // entered so far, then cap each prop type so yardage makes the board.
-    const pricing = fitUnderdogPricing(await enteredPricePoints());
-    const value = (c: Candidate) =>
-      boardValue({
-        marketProb: c.analysis.marketProbability ?? null,
-        underdogLine: c.prop.underdogLine,
-        underdogPayout: c.prop.underdogPickMultiplier,
-        reliable: c.reliable,
-        predicted: (p) => expectedValueAtUnderdog(p, pricing),
-      });
-    candidates.sort(
-      (a, b) => value(b) - value(a) || b.analysis.confidenceScore - a.analysis.confidenceScore,
-    );
-    selected = selectWithTypeCap(
-      onePerPlayer(candidates, (c) => c.prop.playerName),
-      (c) => c.prop.propType,
-      settings.maxDailyPicks,
-    );
+    // v2.0.0: a strict +EV shortlist (boardSelection.ts). Playable and candidate
+    // picks only, by expected value then the books' edge over break-even;
+    // passes are counted by reason and left off the board.
+    const tiers = new Map<Candidate, BoardTier>();
+    for (const c of candidates) {
+      tiers.set(
+        c,
+        boardTier({
+          books: c.analysis.marketProbability ?? null,
+          payout: c.prop.underdogPickMultiplier,
+          reliable: c.reliable,
+          direction: c.prop.direction as Direction,
+          underdogLine: c.prop.underdogLine,
+          booksLine: c.prop.line,
+        }),
+      );
+    }
+    const key = (c: Candidate) => boardRank(tiers.get(c)!, c.analysis.marketProbability ?? null, c.prop.underdogPickMultiplier);
+    const kept = candidates.filter((c) => {
+      const t = tiers.get(c)!;
+      if (t.tier !== "pass") return true;
+      const why = `Pass / no edge: ${t.passWhy ?? t.reason}`;
+      filters[why] = (filters[why] ?? 0) + 1;
+      return false;
+    });
+    kept.sort((a, b) => compareRank(key(a), key(b)) || b.analysis.confidenceScore - a.analysis.confidenceScore);
+    selected = onePerPlayer(kept, (c) => c.prop.playerName).slice(0, settings.maxDailyPicks);
   } else {
     candidates.sort(
       (a, b) =>
@@ -436,29 +437,6 @@ export async function generatePicksForDate(date: string): Promise<GenerationSumm
       .filter(([, count]) => count > 0)
       .map(([reason, count]) => ({ reason, count })),
   };
-}
-
-/**
- * Every (books' probability, Underdog payout) pair entered so far, where the
- * line played matched the books' — the evidence for how Underdog prices picks.
- */
-async function enteredPricePoints(): Promise<PricePoint[]> {
-  const all = await prisma.pick.findMany({
-    where: { playerProp: { underdogPickMultiplier: { not: null } } },
-    select: {
-      modelVersion: true,
-      marketProb: true,
-      entryProb: true,
-      playerProp: { select: { underdogPickMultiplier: true, underdogLine: true, line: true } },
-    },
-  });
-  // Books' probabilities changed method at v1.6.0; once there are enough
-  // points priced the new way, learn only from those.
-  const current = all.filter((r) => versionAtLeast(r.modelVersion, "v1.6.0"));
-  const rows = current.length >= MIN_POINTS_TO_LEARN ? current : all;
-  return rows
-    .filter((r) => r.playerProp.underdogLine == null || r.playerProp.underdogLine === r.playerProp.line)
-    .map((r) => ({ books: r.marketProb ?? r.entryProb ?? Number.NaN, payout: r.playerProp.underdogPickMultiplier ?? Number.NaN }));
 }
 
 export function inferOut(raw?: string | null): "out" | undefined {

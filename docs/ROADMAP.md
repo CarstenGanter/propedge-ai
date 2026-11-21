@@ -229,6 +229,24 @@ would cost ~586 (69 fetchable games: 6 markets + 1 ladder a game, plus closing l
 
 Each daily report (`npm run research:clv`) shows month-to-date spend against this plan.
 
+## v2.0.0: market-first, strict +EV board (decided 2026-11-20)
+
+Live v1.7.0 scored −0.16% log-loss skill vs the market on 1,327 props: blending game logs and context
+on top of the consensus added noise. From v2.0.0:
+- **Probability:** with a reliable consensus (3+ independent book groups, the played line within what
+  they posted) the probability is the books' price at the played line (k = 1). Game logs, matchup and
+  context are evidence only, and set the estimate only without a reliable consensus. The 0.33–0.70
+  clip stays. A v2.0.0 pick's skill vs market is ~0 by construction; it is measured by CLV and the
+  venue line's gap to the books.
+- **Board (`boardTier`, pickemMath.ts):** *playable* = an entered Underdog payout the books' price
+  beats by 2%; *candidate* = no payout yet, a line no tougher than the books', a real price, and books
+  ≥ the standard break-even (53.5%); everything else is a *pass* (tougher line, thin price, no Underdog
+  line, below break-even, no edge at the payout). Only playable and candidate picks make the board,
+  ranked by EV at the payout, then the books' edge over break-even; the slip builder takes playable
+  legs only. Payouts are absolute per pick and must be above 1.0.
+- Applied to 2026-11-15 it would have left one candidate (Tommy Tremble, which hit) and kept the
+  Herbert/Moreau 2-pick off the board.
+
 ## Results so far
 
 - **Baseline-v0** (model run walk-forward from nflverse game logs, no context): skill vs market

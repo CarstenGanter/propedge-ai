@@ -1,6 +1,6 @@
 import type { SerializedPick } from "@/lib/dto";
 import { analyzeParlay, makeGameKey, type ParlayAnalysis, type ParlayLegInput } from "./parlayCorrelation";
-import { entryMultiplier, isEnteredPayout, pickBreakEven, pickValue, PICKEM_MULTIPLIERS, VALUE_MARGIN, type CorrelatedPair } from "./pickemMath";
+import { boardTier, entryMultiplier, pickBreakEven, pickValue, PICKEM_MULTIPLIERS, type CorrelatedPair } from "./pickemMath";
 
 /**
  * Suggested pick'em slips (pure, tested).
@@ -90,6 +90,8 @@ export interface SlipCandidate extends ParlayLegInput {
   marketProb?: number | null;
   /** False when fewer than three independent books priced it, or the line is beyond what they posted — no edge can be called. */
   marketReliable?: boolean | null;
+  /** The books' own line, to tell a softer Underdog line from a tougher one. Missing means the same as `line`. */
+  booksLine?: number | null;
 }
 
 /**
@@ -148,6 +150,7 @@ export function pickToSlipCandidate(p: SerializedPick): SlipCandidate {
     marketProb: p.marketProb,
     // An Underdog line beyond what the books posted has no books' price, only an extrapolation.
     marketReliable: p.prop.underdogRead?.priced === false ? false : p.prop.marketReliable,
+    booksLine: p.prop.marketLine ?? p.prop.line,
   };
 }
 
@@ -204,9 +207,9 @@ export function buildSuggestedSlips(
   // 1) is left out entirely: it lowers the expected value of any slip it joins.
   // Unpriced picks stay in at the standard payout.
   //
-  // On the market basis a pick needs a books' price to be judged at all, and
-  // qualifies only when that price already beats Underdog's entered payout —
-  // an unpriced pick is never an edge (boardVerdict).
+  // On the market basis a leg must be playable on the board (boardTier): a
+  // books' price that beats Underdog's entered payout by the margin, on a line
+  // no tougher than the books' — an unpriced pick is never an edge.
   const modelValue = (c: SlipCandidate) => pickValue(c.confidenceScore / 100, c.pickMultiplier);
   const marketValue = (c: SlipCandidate) => (c.marketProb == null ? null : pickValue(c.marketProb, c.pickMultiplier));
   const value = (c: SlipCandidate) => (basis === "market" ? (marketValue(c) ?? 0) : modelValue(c));
@@ -214,8 +217,14 @@ export function buildSuggestedSlips(
     .filter((c) => c.available !== false)
     .filter((c) =>
       basis === "market"
-        ? // An edge must clear break-even by the margin, on a market deep enough to trust.
-          isEnteredPayout(c.pickMultiplier) && (marketValue(c) ?? 0) >= VALUE_MARGIN && c.marketReliable !== false
+        ? boardTier({
+            books: c.marketProb ?? null,
+            payout: c.pickMultiplier,
+            reliable: c.marketReliable,
+            direction: c.direction,
+            underdogLine: c.line,
+            booksLine: c.booksLine ?? c.line,
+          }).tier === "playable"
         : c.pickMultiplier == null || modelValue(c) >= 1,
     )
     .sort(

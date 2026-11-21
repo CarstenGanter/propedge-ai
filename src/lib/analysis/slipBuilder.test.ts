@@ -297,6 +297,15 @@ describe("buildSuggestedSlips", () => {
     expect(buildSuggestedSlips(pool, [2])[0].legs.map((l) => l.pickId)).toEqual(["a", "b"]);
   });
 
+  it("never takes a leg on a line tougher than the books', even at a +EV price", () => {
+    const pool = [
+      { ...cand("tough", "Tough Line", "Bears", "Packers", 70, "OVER", "CHI"), marketProb: 0.7, booksLine: 58.5 }, // line 60.5 > 58.5
+      cand("a", "Alpha WR", "Bengals", "Buccaneers", 58, "OVER", "CIN"),
+      cand("b", "Bravo RB", "Lions", "Saints", 57, "OVER", "DET"),
+    ];
+    expect(buildSuggestedSlips(pool, [2])[0].legs.map((l) => l.pickId)).toEqual(["a", "b"]);
+  });
+
   it("will not judge a pick with no books' price on the market basis", () => {
     const pool = [
       { ...cand("manual", "Manual Entry", "Bears", "Packers", 60, "OVER", "CHI"), marketProb: null },

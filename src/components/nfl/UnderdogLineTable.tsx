@@ -8,7 +8,27 @@ import { Button } from "@/components/ui/button";
 import { setUnderdogAvailability, setUnderdogLines, type UnderdogLineEntry } from "@/server/actions/picks";
 import { cn } from "@/lib/utils/cn";
 import type { SerializedPick } from "@/lib/dto";
-import { boardVerdict, isEnteredPayout, pickBreakEven, PRIZEPICKS_LEG_BAR, STANDARD_PICK_PAYOUT, valueVerdict, VALUE_MARGIN } from "@/lib/analysis/pickemMath";
+import { boardTier, boardVerdict, isEnteredPayout, pickBreakEven, PRIZEPICKS_LEG_BAR, STANDARD_PICK_PAYOUT, valueVerdict, VALUE_MARGIN, type BoardTier } from "@/lib/analysis/pickemMath";
+
+const TIER_ORDER: Record<BoardTier["tier"], number> = { playable: 0, candidate: 1, pass: 2 };
+const TIER_TITLE: Record<BoardTier["tier"], string> = {
+  playable: "Playable — +EV at the payout entered",
+  candidate: "Candidates — enter Underdog's payout to judge them",
+  pass: "Pass / no edge",
+};
+
+/** The board's tier for a pick, from its saved line and payout (boardTier). */
+function tierOf(p: SerializedPick): BoardTier {
+  return boardTier({
+    books: p.marketProb,
+    payout: p.prop.underdogPickMultiplier,
+    reliable: p.prop.marketReliable,
+    priced: p.prop.underdogRead?.priced,
+    direction: p.prop.direction,
+    underdogLine: p.prop.underdogLine,
+    booksLine: p.prop.marketLine ?? p.prop.line,
+  });
+}
 
 /**
  * Enter the whole slate's pick'em lines at once. Scoring a pick against the
@@ -49,6 +69,10 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
   }, [picks]);
 
   const entered = picks.filter((p) => p.prop.underdogLine != null).length;
+  // Grouped by the saved line and payout, so a row doesn't jump while you type.
+  const tiered = picks.map((p) => ({ p, t: tierOf(p) })).sort((a, b) => TIER_ORDER[a.t.tier] - TIER_ORDER[b.t.tier]);
+  const tierCount = (tier: BoardTier["tier"]) => tiered.filter((x) => x.t.tier === tier).length;
+  const [showPass, setShowPass] = React.useState(false);
   const absent = picks.filter((p) => p.prop.underdogAvailable === false).length;
 
   function markAvailability(pickId: string, available: boolean | null) {
@@ -68,7 +92,8 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
       if ((raw === "" || Number.isFinite(line)) && line !== (p.prop.underdogLine ?? null)) entry.line = line;
       const rawTag = (tagDraft[p.id] ?? "").trim();
       const tag = rawTag === "" ? null : Number(rawTag);
-      const tagValid = rawTag === "" || (Number.isFinite(tag) && (tag as number) > 0);
+      // Absolute per-pick payouts only: 1.0x or less can't win money (isEnteredPayout).
+      const tagValid = rawTag === "" || isEnteredPayout(tag);
       if (tagValid && tag !== (p.prop.underdogPickMultiplier ?? null)) entry.pickMultiplier = tag;
       if (entry.line !== undefined || entry.pickMultiplier !== undefined) entries.push(entry);
     }
@@ -139,7 +164,21 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                 </tr>
               </thead>
               <tbody>
-                {picks.map((p) => {
+                {tiered.map(({ p, t }, i) => {
+                  const header =
+                    i === 0 || tiered[i - 1].t.tier !== t.tier ? (
+                      <tr className="border-b border-border/60">
+                        <td colSpan={10} className="pb-1 pt-3 text-xs font-medium text-foreground/80">
+                          {TIER_TITLE[t.tier]} ({tierCount(t.tier)})
+                          {t.tier === "pass" && (
+                            <button type="button" onClick={() => setShowPass((v) => !v)} className="ml-2 cursor-pointer text-muted-foreground underline underline-offset-2 hover:text-foreground">
+                              {showPass ? "hide" : "show"}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ) : null;
+                  if (t.tier === "pass" && !showPass) return <React.Fragment key={p.id}>{header}</React.Fragment>;
                   const raw = (draft[p.id] ?? "").trim();
                   const typed = raw === "" ? null : Number(raw);
                   const reference = p.prop.marketLine ?? p.prop.line;
@@ -149,8 +188,10 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                       : null;
                   const missing = p.prop.underdogAvailable === false;
                   return (
+                    <React.Fragment key={p.id}>
+                    {header}
                     <tr
-                      key={p.id}
+                      title={t.reason}
                       className={cn("border-b border-border/40 last:border-0", missing && "opacity-45")}
                     >
                       <td className="py-2 pr-3 font-medium">
@@ -210,7 +251,7 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                         <input
                           type="number"
                           step="0.05"
-                          min="0.05"
+                          min="1.01"
                           inputMode="decimal"
                           value={tagDraft[p.id] ?? ""}
                           onChange={(e) => { touchedTag.current.add(p.id); setTagDraft((d) => ({ ...d, [p.id]: e.target.value })); }}
@@ -242,6 +283,7 @@ export function UnderdogLineTable({ picks }: { picks: SerializedPick[] }) {
                         </button>
                       </td>
                     </tr>
+                    </React.Fragment>
                   );
                 })}
               </tbody>

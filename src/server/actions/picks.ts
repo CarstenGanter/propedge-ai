@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/client";
 import { generatePicksForDate, type GenerationSummary } from "@/lib/generate";
 import { applyUnderdogLine } from "@/lib/applyUnderdogLine";
 import { todaySlate } from "@/lib/utils/dates";
+import { isEnteredPayout } from "@/lib/analysis/pickemMath";
 
 function revalidateAll() {
   for (const p of ["/", "/picks", "/research", "/results", "/analytics", "/parlays"]) {
@@ -86,6 +87,8 @@ export async function setUnderdogLines(
       const r = await applyUnderdogLine(e.pickId, e.line).catch(() => ({ ok: false }));
       ok = r.ok;
     }
+    // A payout is absolute per pick and above 1 (isEnteredPayout); anything else is refused, not stored.
+    if (e.pickMultiplier != null && !isEnteredPayout(e.pickMultiplier)) ok = false;
     if (ok && e.pickMultiplier !== undefined) {
       const pick = await prisma.pick.findUnique({ where: { id: e.pickId }, select: { playerPropId: true } });
       if (pick) {

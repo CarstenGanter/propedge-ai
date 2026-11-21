@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  boardRank,
+  boardTier,
   boardVerdict,
+  isEnteredPayout,
+  lineRelation,
   breakEvenPerLeg,
   compareSlipSizes,
   entryMultiplier,
@@ -248,5 +252,72 @@ describe("value margin and staking", () => {
     expect(quarterKelly(6.5, 0.56 ** 3)).toBeCloseTo(0.0065, 3);
     expect(quarterKelly(6.5, 0.5 ** 3)).toBe(0);
     expect(quarterKelly(1, 0.9)).toBe(0);
+  });
+});
+
+describe("isEnteredPayout", () => {
+  it("takes absolute per-pick payouts above 1, including real favourites", () => {
+    expect(isEnteredPayout(1.08)).toBe(true); // Holani U39.5, 2026-10-15
+    expect(isEnteredPayout(7.85)).toBe(true);
+  });
+  it("rejects 1.0 or less — a relative multiplier typed into the absolute field", () => {
+    expect(isEnteredPayout(1)).toBe(false); // Jordan Love, 2026-10-29
+    expect(isEnteredPayout(0.85)).toBe(false);
+    expect(isEnteredPayout(null)).toBe(false);
+  });
+});
+
+describe("lineRelation", () => {
+  it("reads softer and tougher for the side being played", () => {
+    expect(lineRelation("OVER", 39.5, 40.5)).toBe("softer");
+    expect(lineRelation("OVER", 41.5, 40.5)).toBe("tougher");
+    expect(lineRelation("UNDER", 41.5, 40.5)).toBe("softer");
+    expect(lineRelation("UNDER", 39.5, 40.5)).toBe("tougher");
+    expect(lineRelation("UNDER", 40.5, 40.5)).toBe("same");
+  });
+});
+
+describe("boardTier", () => {
+  const base = { reliable: true, priced: true, direction: "OVER" as const, booksLine: 40.5, underdogLine: 40.5 };
+
+  it("is playable only at an entered payout the books beat by the margin", () => {
+    expect(boardTier({ ...base, books: 0.56, payout: 1.87 }).tier).toBe("playable"); // 1.047
+  });
+
+  it("lets a nerfed payout turn the same price into a pass", () => {
+    // 0.85x of a standard pick: 0.85 × 1.87 = 1.59; 0.56 × 1.59 = 0.89.
+    const t = boardTier({ ...base, books: 0.56, payout: 1.59 });
+    expect(t.tier).toBe("pass");
+    expect(t.passWhy).toBe("no edge at the entered payout");
+  });
+
+  it("makes an unpriced pick a candidate only when the books clear the standard break-even", () => {
+    expect(boardTier({ ...base, books: 0.55, payout: null }).tier).toBe("candidate"); // ≥ 53.5%
+    const below = boardTier({ ...base, books: 0.52, payout: null });
+    expect(below.tier).toBe("pass");
+    expect(below.passWhy).toBe("books below the standard break-even");
+  });
+
+  it("passes on a tougher line even when the price looks +EV", () => {
+    const t = boardTier({ ...base, underdogLine: 42.5, books: 0.6, payout: 1.87 });
+    expect(t.tier).toBe("pass");
+    expect(t.passWhy).toBe("Underdog's line is tougher than the books'");
+  });
+
+  it("passes on a thin price and with no Underdog line", () => {
+    expect(boardTier({ ...base, priced: false, books: 0.164, payout: 7.85 }).tier).toBe("pass"); // Herbert O44.5, 2026-11-15
+    expect(boardTier({ ...base, reliable: false, books: 0.6, payout: 1.87 }).tier).toBe("pass");
+    expect(boardTier({ ...base, underdogLine: null, books: 0.6, payout: 1.87 }).passWhy).toBe("no Underdog line to judge");
+  });
+});
+
+describe("boardRank", () => {
+  it("ranks playable by expected value, ahead of every candidate", () => {
+    const base = { reliable: true, priced: true, direction: "OVER" as const, booksLine: 40.5, underdogLine: 39.5 };
+    const play = boardTier({ ...base, books: 0.56, payout: 1.87 });
+    const cand = boardTier({ ...base, books: 0.65, payout: null });
+    expect(boardRank(play, 0.56, 1.87)[0]).toBeGreaterThan(boardRank(cand, 0.65, null)[0]);
+    expect(boardRank(play, 0.56, 1.87)[1]).toBeCloseTo(0.56 * 1.87 - 1, 9);
+    expect(boardRank(cand, 0.65, null)[1]).toBeCloseTo(0.65 - 1 / 1.87, 9);
   });
 });

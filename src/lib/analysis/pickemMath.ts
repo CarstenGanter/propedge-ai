@@ -107,9 +107,9 @@ export function breakEvenPerLeg(multiplier: number, legs: number): number | null
  */
 export const STANDARD_PICK_PAYOUT = 1.87;
 
-/** A payout is usable when it is a positive finite number; anything else means standard. */
+/** A payout is usable when it is a finite number above 1; anything else means standard. */
 function price(payout: number | null | undefined): number {
-  return payout != null && Number.isFinite(payout) && payout > 0 ? payout : STANDARD_PICK_PAYOUT;
+  return isEnteredPayout(payout) ? payout : STANDARD_PICK_PAYOUT;
 }
 
 /**
@@ -272,12 +272,79 @@ export function valueVerdict(value: number): ValueVerdict {
   return "negative";
 }
 
-/** Whether Underdog's payout for the pick was entered: a positive, finite number. */
+/**
+ * Whether Underdog's payout for the pick was entered. Payouts are absolute per
+ * pick (1.87 standard; real favourites have paid 1.08-1.48), so one must be
+ * above 1: a pick paying 1.0x or less can't win money, and the 1.0 entered on
+ * 2026-10-29 was a relative "1.0x" typed into the absolute field.
+ */
 export function isEnteredPayout(payout: number | null | undefined): payout is number {
-  return payout != null && Number.isFinite(payout) && payout > 0;
+  return payout != null && Number.isFinite(payout) && payout > 1;
 }
 
 export type BoardVerdict = ValueVerdict | "unpriced" | "thin";
+
+export type LineRelation = "softer" | "same" | "tougher";
+
+/** The pick'em line against the books' line, for the side being played: an Over is softer on a lower line. */
+export function lineRelation(direction: "OVER" | "UNDER", venueLine: number, booksLine: number): LineRelation {
+  if (venueLine === booksLine) return "same";
+  const easierForOver = venueLine < booksLine;
+  return (direction === "OVER") === easierForOver ? "softer" : "tougher";
+}
+
+export interface BoardTier {
+  /** playable: priced and +EV. candidate: worth entering a payout for. pass: no edge. */
+  tier: "playable" | "candidate" | "pass";
+  reason: string;
+  /** For a pass: a fixed label, for counting passes by cause. */
+  passWhy?: string;
+}
+
+/**
+ * The v2.0.0 board's three tiers (decided 2026-11-20). Pass on a line tougher
+ * than the books' (those picks hit 38%), on a thin price, or with no Underdog
+ * line to judge. Playable only when boardVerdict calls an edge at the entered
+ * payout. Before a payout is entered, a pick is a candidate when the books
+ * already clear the standard pick's break-even (1/1.87 = 53.5%) — typing the
+ * payout then makes it playable or a pass; a nerfed payout raises the bar.
+ */
+export function boardTier(p: {
+  books: number | null;
+  payout: number | null | undefined;
+  reliable?: boolean | null;
+  priced?: boolean | null;
+  direction: "OVER" | "UNDER";
+  underdogLine: number | null;
+  booksLine: number | null;
+}): BoardTier {
+  const pass = (passWhy: string, reason = passWhy): BoardTier => ({ tier: "pass", reason, passWhy });
+  if (p.books == null) return pass("no books' price");
+  if (p.underdogLine == null || p.booksLine == null) return pass("no Underdog line to judge");
+  if (lineRelation(p.direction, p.underdogLine, p.booksLine) === "tougher") return pass("Underdog's line is tougher than the books'");
+  if (p.reliable === false || p.priced === false) return pass("thin price (too few books, or beyond the lines they posted)");
+  const verdict = boardVerdict(p);
+  if (verdict === "edge") return { tier: "playable", reason: `+EV: books ${(p.books * 100).toFixed(1)}% × ${p.payout}x = ${(p.books * p.payout!).toFixed(3)}` };
+  if (verdict === "unpriced") {
+    const bar = pickBreakEven(null);
+    return p.books >= bar
+      ? { tier: "candidate", reason: `enter Underdog's payout: books ${(p.books * 100).toFixed(1)}% vs ${(bar * 100).toFixed(1)}% standard break-even` }
+      : pass("books below the standard break-even", `books ${(p.books * 100).toFixed(1)}% is below the ${(bar * 100).toFixed(1)}% standard break-even`);
+  }
+  return pass("no edge at the entered payout", `no edge at ${p.payout}x: value ${(p.books * p.payout!).toFixed(3)} is below ${VALUE_MARGIN.toFixed(2)}`);
+}
+
+/**
+ * Board order: playable picks first, by expected value at the entered payout
+ * (books × payout − 1); then candidates, by the books' edge over the standard
+ * pick's break-even; then passes. Higher ranks first.
+ */
+export function boardRank(t: BoardTier, books: number | null, payout: number | null | undefined): [number, number] {
+  const order = t.tier === "playable" ? 2 : t.tier === "candidate" ? 1 : 0;
+  if (books == null) return [order, -Infinity];
+  const edge = t.tier === "playable" && isEnteredPayout(payout) ? books * payout - 1 : books - pickBreakEven(null);
+  return [order, edge];
+}
 
 /**
  * The board's call on one pick — the one rule behind green on the board, in
