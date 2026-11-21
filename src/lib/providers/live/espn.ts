@@ -291,25 +291,28 @@ export function parseBoxNumber(raw: string | null | undefined, part?: "first" | 
 }
 
 /**
- * Find a player's row in one stat group, preferring an exact full-name match.
- * A box score spans both teams, so a fuzzy-only hit may be a namesake on the
- * other sideline; we take a fuzzy match only when it is unambiguous, and say
- * so when it isn't.
+ * Which box-score name is this player, decided once across the whole box score
+ * (exported for tests). Each team has its own stat groups, so matching group
+ * by group let a namesake on the other sideline count: on 2026-11-15 Trevor
+ * Etienne (CAR) matched exactly in Carolina's rushing group (1 yard) and, by
+ * surname and initial, Travis Etienne Jr. in New Orleans' (14) — settled as
+ * 15 and a false hit. An exact full-name match anywhere wins; a fuzzy match is
+ * taken only when it is the only one. Null when nobody matches.
  */
-function matchAthlete(group: EspnStatGroup, playerName: string): { row: EspnBoxAthlete } | { ambiguous: true } | null {
-  const rows = (group.athletes ?? []).filter((a) => a.athlete?.displayName);
+export function resolveBoxPlayer(groups: EspnStatGroup[], playerName: string): { name: string } | "ambiguous" | null {
+  const names = [...new Set(groups.flatMap((g) => (g.athletes ?? []).map((a) => a.athlete?.displayName).filter((n): n is string => !!n)))];
   const wanted = nameParts(playerName).join(" ");
-  const exact = rows.filter((a) => nameParts(a.athlete!.displayName!).join(" ") === wanted);
-  if (exact.length === 1) return { row: exact[0] };
-  if (exact.length > 1) return { ambiguous: true };
-  const fuzzy = rows.filter((a) => nameMatches(a.athlete!.displayName!, playerName));
-  if (fuzzy.length > 1) return { ambiguous: true };
-  return fuzzy.length === 1 ? { row: fuzzy[0] } : null;
+  const exact = names.filter((n) => nameParts(n).join(" ") === wanted);
+  if (exact.length === 1) return { name: exact[0] };
+  if (exact.length > 1) return "ambiguous";
+  const fuzzy = names.filter((n) => nameMatches(n, playerName));
+  if (fuzzy.length > 1) return "ambiguous";
+  return fuzzy.length === 1 ? { name: fuzzy[0] } : null;
 }
 
-function findAthleteRow(group: EspnStatGroup, playerName: string): EspnBoxAthlete | null {
-  const m = matchAthlete(group, playerName);
-  return m && "row" in m ? m.row : null;
+/** The resolved player's rows in these groups; more than one means two players share the name. */
+function rowsOf(groups: EspnStatGroup[], name: string): EspnBoxAthlete[] {
+  return groups.flatMap((g) => (g.athletes ?? []).filter((a) => a.athlete?.displayName === name));
 }
 
 /**
@@ -333,7 +336,8 @@ const valueOf = (b: BoxStat): number | null => (b.kind === "stat" ? b.value : nu
 
 /** Did this player record a stat in any group of the final box score? */
 export function appearsInBoxScore(groups: EspnStatGroup[], playerName: string): boolean {
-  return groups.some((g) => findAthleteRow(g, playerName) != null);
+  const who = resolveBoxPlayer(groups, playerName);
+  return who != null && who !== "ambiguous";
 }
 
 /**
@@ -349,29 +353,26 @@ export function appearsInBoxScore(groups: EspnStatGroup[], playerName: string): 
 export function footballBoxStat(groups: EspnStatGroup[], playerName: string, propType: string): BoxStat {
   const spec = FOOTBALL_BOX_KEYS[propType.toLowerCase()];
   if (!spec) return { kind: "unreadable", reason: `no box-score key for ${propType}` };
+  const who = resolveBoxPlayer(groups, playerName);
+  if (who === "ambiguous") return { kind: "ambiguous" };
+  if (!who) return { kind: "absent" };
   let total = 0;
-  let found = false;
   for (const { group, key, part } of spec) {
-    for (const g of groups) {
-      if ((g.name ?? "").toLowerCase() !== group) continue;
-      const m = matchAthlete(g, playerName);
-      if (m && "ambiguous" in m) return { kind: "ambiguous" };
-      if (!m) continue;
-      // The player is in this group but the stat can't be read (ESPN renamed
-      // the key, or the cell is a placeholder): unknown, not a confident 0.
-      const idx = (g.keys ?? []).indexOf(key);
-      if (idx < 0) return { kind: "unreadable", reason: `ESPN's ${group} stats no longer list "${key}"` };
-      const raw = m.row.stats?.[idx];
-      const n = parseBoxNumber(raw, part);
-      if (n == null) return { kind: "unreadable", reason: `${group} "${key}" reads "${raw ?? ""}"` };
-      total += n;
-      found = true;
-    }
+    const named = groups.filter((g) => (g.name ?? "").toLowerCase() === group);
+    const hits = named.flatMap((g) => rowsOf([g], who.name).map((row) => ({ g, row })));
+    if (hits.length > 1) return { kind: "ambiguous" };
+    if (hits.length === 0) continue; // played (listed elsewhere) but nothing in this group: 0
+    const { g, row } = hits[0];
+    // The player is in this group but the stat can't be read (ESPN renamed
+    // the key, or the cell is a placeholder): unknown, not a confident 0.
+    const idx = (g.keys ?? []).indexOf(key);
+    if (idx < 0) return { kind: "unreadable", reason: `ESPN's ${group} stats no longer list "${key}"` };
+    const raw = row.stats?.[idx];
+    const n = parseBoxNumber(raw, part);
+    if (n == null) return { kind: "unreadable", reason: `${group} "${key}" reads "${raw ?? ""}"` };
+    total += n;
   }
-  if (found) return { kind: "stat", value: total };
-  const matches = groups.map((g) => matchAthlete(g, playerName));
-  if (matches.some((m) => m && "ambiguous" in m)) return { kind: "ambiguous" };
-  return matches.some((m) => m && "row" in m) ? { kind: "stat", value: 0 } : { kind: "absent" };
+  return { kind: "stat", value: total };
 }
 
 /** footballBoxStat as a number, null for anything but a stat. */
@@ -403,13 +404,16 @@ const BASKETBALL_BOX_KEYS: Record<string, { key: string; part?: "first" }[]> = {
 export function basketballBoxStat(groups: EspnStatGroup[], playerName: string, propType: string): BoxStat {
   const spec = BASKETBALL_BOX_KEYS[propType.toLowerCase()];
   if (!spec) return { kind: "unreadable", reason: `no box-score key for ${propType}` };
-  for (const g of groups) {
+  const who = resolveBoxPlayer(groups, playerName);
+  if (who === "ambiguous") return { kind: "ambiguous" };
+  if (!who) return { kind: "absent" };
+  const hits = groups
+    .filter((g) => spec.every(({ key }) => (g.keys ?? []).includes(key)))
+    .flatMap((g) => rowsOf([g], who.name).map((row) => ({ g, row })));
+  if (hits.length > 1) return { kind: "ambiguous" };
+  for (const { g, row } of hits) {
     const keys = g.keys ?? [];
-    if (!spec.every(({ key }) => keys.includes(key))) continue;
-    const m = matchAthlete(g, playerName);
-    if (m && "ambiguous" in m) return { kind: "ambiguous" };
-    if (!m) continue;
-    const stats = m.row.stats ?? [];
+    const stats = row.stats ?? [];
     if (stats.length === 0 || stats.every((c) => c.trim() === "--" || c.trim() === "")) return { kind: "absent" };
     let total = 0;
     for (const { key } of spec) {

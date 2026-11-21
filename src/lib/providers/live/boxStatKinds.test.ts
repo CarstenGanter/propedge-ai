@@ -22,6 +22,21 @@ describe("footballBoxStat", () => {
     expect(footballBoxStat(groups, "J. Williams", "Receiving Yards")).toEqual({ kind: "ambiguous" });
   });
 
+  it("never adds a namesake from the other team's group — Trevor Etienne, 2026-11-15", () => {
+    // Each team has its own rushing group. Trevor (CAR) ran for 1; Travis Etienne Jr. (NO) for 14.
+    const rush = (name: string, yds: string): EspnStatGroup => ({ name: "rushing", keys: ["rushingAttempts", "rushingYards"], athletes: [{ athlete: { displayName: name }, stats: ["3", yds] }] });
+    const groups = [rush("Travis Etienne Jr.", "14"), rush("Trevor Etienne", "1")];
+    expect(footballBoxStat(groups, "Trevor Etienne", "Rushing Yards")).toEqual({ kind: "stat", value: 1 });
+    expect(footballBoxStat(groups, "Travis Etienne Jr.", "Rushing Yards")).toEqual({ kind: "stat", value: 14 });
+    // A bare surname-and-initial name that fits both is ambiguous, never a sum.
+    expect(footballBoxStat(groups, "T. Etienne", "Rushing Yards")).toEqual({ kind: "ambiguous" });
+  });
+
+  it("still takes a lone fuzzy match, e.g. a suffix the feed dropped", () => {
+    const groups = [{ name: "rushing", keys: ["rushingAttempts", "rushingYards"], athletes: [{ athlete: { displayName: "Travis Etienne Jr." }, stats: ["8", "14"] }] }];
+    expect(footballBoxStat(groups, "Travis Etienne", "Rushing Yards")).toEqual({ kind: "stat", value: 14 });
+  });
+
   it("says unreadable when the player is there but the stat isn't", () => {
     expect(footballBoxStat([receiving([{ name: "Emeka Egbuka", stats: ["4", "67"] }], ["receptions", "recYds"])], "Emeka Egbuka", "Receiving Yards")).toMatchObject({ kind: "unreadable" });
     expect(footballBoxStat([receiving([{ name: "Emeka Egbuka", stats: ["4", "--"] }])], "Emeka Egbuka", "Receiving Yards")).toMatchObject({ kind: "unreadable" });
