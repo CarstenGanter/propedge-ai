@@ -337,6 +337,9 @@ function NeedsCell({ pick, tagRaw }: { pick: SerializedPick; tagRaw: string }) {
       >
         {books == null ? "—" : `${thin ? "~" : ""}${(books * 100).toFixed(1)}%`}
         {board === "unpriced" && <span className="ml-1 text-2xs uppercase tracking-wide">unpriced</span>}
+        {/* A thin price read beside a short Needs looks like an edge (Herbert O44.5, 2026-11-15: Needs 12.7%, books ~16.4% — extrapolated 27 yards past the books). Say what it is. */}
+        {books != null && beyondBooks && <span className="ml-1 text-2xs uppercase tracking-wide text-warning">beyond books — no price</span>}
+        {books != null && !beyondBooks && fewBooks && <span className="ml-1 text-2xs uppercase tracking-wide text-warning">too few books</span>}
       </td>
     </>
   );
