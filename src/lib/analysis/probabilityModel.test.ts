@@ -290,3 +290,38 @@ describe("right-skewed yardage", () => {
     }
   });
 });
+
+describe("estimateProbability — market-first (v2.0.0)", () => {
+  const base: ProbabilityInputs = { line: 45.5, direction: "OVER", propType: "Receiving Yards", games: games(10, 70), marketProbOver: 0.52, marketLine: 45.5 };
+
+  it("is the books' price at the played line, whatever the game log and context say", () => {
+    // A hot sample (70 a game on a 45.5 line) and every adjustment maxed out move nothing.
+    const est = estimateProbability({ ...base, adjustments: [0.15], marketFirst: true })!;
+    expect(est.probability).toBeCloseTo(0.52, 6);
+    expect(est.rawProbability).toBeCloseTo(0.52, 6);
+    expect(estimateProbability({ ...base, direction: "UNDER", marketFirst: true })!.probability).toBeCloseTo(0.48, 6);
+  });
+
+  it("still blends the player's sample when the consensus isn't reliable (no market-first)", () => {
+    const blended = estimateProbability({ ...base, adjustments: [0.15] })!;
+    expect(blended.probability).toBeGreaterThan(0.52 + 0.005);
+  });
+
+  it("needs no game log when market-first", () => {
+    const est = estimateProbability({ ...base, games: [], marketFirst: true })!;
+    expect(est.probability).toBeCloseTo(0.52, 6);
+    expect(estimateProbability({ ...base, games: [] })).toBeNull();
+  });
+
+  it("keeps the 0.33-0.70 guardrail on the books' price", () => {
+    const est = estimateProbability({ ...base, marketProbOver: 0.8, marketFirst: true })!;
+    expect(est.probability).toBe(MAX_PROB);
+    expect(est.clipped).toBe(true);
+    expect(est.rawProbability).toBeCloseTo(0.8, 6);
+  });
+
+  it("falls back to the blend when there is no market price at all", () => {
+    const est = estimateProbability({ ...base, marketProbOver: null, marketFirst: true })!;
+    expect(est.usedMarket).toBe(false);
+  });
+});

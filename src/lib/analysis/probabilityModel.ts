@@ -123,6 +123,15 @@ export interface ProbabilityInputs {
   marketLine?: number | null;
   /** Bounded multiplicative adjustments to the projection, e.g. +0.04 for a soft matchup. */
   adjustments?: number[];
+  /**
+   * Market-first (v2.0.0): a reliable consensus — three or more independent
+   * book groups, read within the lines they posted — priced at the played
+   * line is the probability, with no weight on the player's own sample or the
+   * context adjustments (k = 1). Those stay as evidence on the pick; they set
+   * the estimate only when no reliable consensus exists. Live v1.7.0 blended
+   * them in and scored −0.16% vs the market on 1,327 props (2026-11-20).
+   */
+  marketFirst?: boolean;
 }
 
 /** Total adjustment is capped so context can sharpen a projection, never invent one. */
@@ -195,9 +204,14 @@ export function estimateProbability(input: ProbabilityInputs): ProbabilityEstima
   const games = input.games.filter((g) => Number.isFinite(g));
   const n = games.length;
   const line = input.line;
-  if (n === 0 || !Number.isFinite(line) || line <= 0) return null;
+  const marketLine = input.marketLine ?? line;
+  const pOver = input.marketProbOver;
+  const hasMarket = pOver != null && pOver > 0.01 && pOver < 0.99 && Number.isFinite(marketLine);
+  // Market-first needs no game log: the books' price at the played line is the answer.
+  const marketFirst = !!input.marketFirst && hasMarket;
+  if ((n === 0 && !marketFirst) || !Number.isFinite(line) || line <= 0) return null;
 
-  const sampleMean = avg(games);
+  const sampleMean = n > 0 ? avg(games) : line;
   const sampleSd = n >= 2 ? stdDev(games) : 0;
 
   // --- dispersion: shrink the sample sd toward a structural prior ---
@@ -227,12 +241,11 @@ export function estimateProbability(input: ProbabilityInputs): ProbabilityEstima
   let projection = adjustedSample;
   let usedMarket = false;
   let marketMean: number | null = null;
-  const marketLine = input.marketLine ?? line;
-  const pOver = input.marketProbOver;
-  if (pOver != null && pOver > 0.01 && pOver < 0.99 && Number.isFinite(marketLine)) {
-    marketMean = solveProjectionForMarket(marketLine, pOver, sigma, input.propType, df);
+  if (hasMarket) {
+    marketMean = solveProjectionForMarket(marketLine, pOver!, sigma, input.propType, df);
     const tau = TAU_FRACTION * Math.max(line, 1);
-    const k = sigma * sigma / n / (sigma * sigma / n + tau * tau); // weight on the market
+    // Weight on the market: all of it when market-first; else the sample's share by its precision.
+    const k = marketFirst ? 1 : (sigma * sigma) / n / ((sigma * sigma) / n + tau * tau);
     projection = k * marketMean + (1 - k) * adjustedSample;
     usedMarket = true;
   }
@@ -251,9 +264,11 @@ export function estimateProbability(input: ProbabilityInputs): ProbabilityEstima
   }
 
   const note =
-    `Projection ${projection.toFixed(1)} vs line ${line} with spread ${sigma.toFixed(1)}` +
-    ` over ${n} game${n === 1 ? "" : "s"}` +
-    (usedMarket ? ", anchored to the market's implied mean" : "") +
+    (marketFirst
+      ? `Market-first: the books' consensus at line ${line} is the probability; the player's ${n} game${n === 1 ? "" : "s"} and context are evidence only`
+      : `Projection ${projection.toFixed(1)} vs line ${line} with spread ${sigma.toFixed(1)}` +
+        ` over ${n} game${n === 1 ? "" : "s"}` +
+        (usedMarket ? ", anchored to the market's implied mean" : "")) +
     (clipped ? ". Clipped — the raw estimate exceeded what prop markets plausibly allow" : "") +
     ".";
 

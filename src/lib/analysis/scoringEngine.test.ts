@@ -107,3 +107,25 @@ describe("scoring engine", () => {
     expect(nba.warnings.join(" ")).not.toMatch(/NFL season/);
   });
 });
+
+describe("scoring engine — v2.0.0 market-first", () => {
+  const nfl: ScorablePropInput = { ...baseProp, sport: "NFL", league: "NFL", propType: "Receiving Yards", line: 45.5 };
+  const bundle = (reliable: boolean): ResearchBundle => ({
+    ...strongOverBundle,
+    playerStats: { ...strongOverBundle.playerStats!, recentGames: [70, 68, 75, 72, 66, 71, 69, 74, 70, 73] },
+    market: { source: "test", noVigProbOver: 0.5, marketLine: 45.5, probOverAtLine: 0.51, atLine: 45.5, reliable },
+  });
+
+  it("takes the books' price at the played line when the consensus is reliable", () => {
+    const a = analyzeProp(nfl, bundle(true), { profile: "distribution" });
+    expect(a.modelProbability).toBeCloseTo(0.51, 6);
+    expect(a.confidenceScore).toBe(51);
+    // Game log and context stay as evidence.
+    expect(a.evidence.some((e) => /Market-first/.test(e.summary))).toBe(true);
+  });
+
+  it("blends the player's form only when the consensus isn't reliable", () => {
+    const a = analyzeProp(nfl, bundle(false), { profile: "distribution" });
+    expect(a.modelProbability!).toBeGreaterThan(0.515);
+  });
+});

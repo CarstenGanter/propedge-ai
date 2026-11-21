@@ -39,7 +39,14 @@ import { adjustmentsFrom, estimateProbability } from "./probabilityModel";
 // v1.7.0: receiving, rushing and rush+rec yards use a right-skewed gamma
 // instead of a symmetric Student-t (walk-forward: the t put only ~39-41% of
 // outcomes above its median, overrating Overs). Passing yards unchanged.
-export const SCORING_MODEL_VERSION = "v1.7.0";
+// v2.0.0: market-first. With a reliable consensus (3+ independent book groups,
+// the played line within what they posted) the probability is the books' price
+// at the played line, k = 1: game logs, matchup and context are evidence only
+// and set the estimate only when no reliable consensus exists. v1.7.0's blend
+// scored −0.16% log-loss skill vs the market on 1,327 live props. A v2.0.0
+// pick's "skill vs market" is therefore ~0 by construction; its measures are
+// CLV and the venue line's gap to the books.
+export const SCORING_MODEL_VERSION = "v2.0.0";
 
 /** Compare "v1.6.0"-style versions numerically. */
 export function versionAtLeast(version: string | null | undefined, min: string): boolean {
@@ -719,6 +726,8 @@ export function analyzeProp(
       marketProbOver: bundle.market?.probOverAtLine ?? bundle.market?.noVigProbOver,
       marketLine: bundle.market?.atLine ?? bundle.market?.marketLine ?? prop.marketLine,
       adjustments: adjustmentsFrom(prop, bundle),
+      // A reliable consensus read at the played line is the probability (v2.0.0).
+      marketFirst: bundle.market?.reliable === true && bundle.market?.probOverAtLine != null,
     });
     if (est) {
       probability = est.probability;
