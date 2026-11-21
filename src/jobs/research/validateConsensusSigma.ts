@@ -27,7 +27,7 @@ import { parseSnapshot } from "@/lib/marketSnapshot";
 import { buildConsensus, consensusSideProb, pricedAt, type RawQuote } from "@/lib/analysis/marketConsensus";
 import { CV_PRIOR_SPREAD, FITTED_SPREAD, heldOutPriceTest } from "@/lib/analysis/consensusSpread";
 import { FIT_LADDER_DAY, loadLadders } from "./ladders";
-import { FITTED_SPREAD_PARAMS } from "@/lib/analysis/marketConsensus";
+import { LADDER_FIT_PARAMS } from "@/lib/analysis/marketConsensus";
 import { clusterBootstrap } from "@/lib/analysis/marketSkill";
 import { calibrationSummary, excessByVenueGap, reliabilityTable, type BucketRow, type VenueItem } from "@/lib/analysis/venueCalibration";
 import { emitSummary } from "@/lib/jobSummary";
@@ -101,7 +101,7 @@ function report(sample: SigmaSample["sample"], title: string, pairs: Pair[], gat
 }
 
 async function main() {
-  const types = Object.keys(FITTED_SPREAD_PARAMS);
+  const types = Object.keys(LADDER_FIT_PARAMS);
   const props = await prisma.playerProp.findMany({
     where: { sport: "NFL", isDemo: false, propType: { in: types }, actualResult: { not: null }, date: { gte: "2026-10-01" } },
   });
@@ -151,7 +151,7 @@ async function main() {
   const { ladders } = await loadLadders();
   // Only prop types the shipped spread was fitted on: rushing-yards ladders
   // (from 2026-11-01) are for their own fit, and would read as a tie here.
-  const heldOut = ladders.filter((l) => l.day > FIT_LADDER_DAY && l.propType in FITTED_SPREAD_PARAMS);
+  const heldOut = ladders.filter((l) => l.day > FIT_LADDER_DAY && l.propType in LADDER_FIT_PARAMS);
   const price = heldOutPriceTest(heldOut, FITTED_SPREAD, CV_PRIOR_SPREAD);
   console.log(`\n=== HELD-OUT PRICE TEST — ladders fetched after ${FIT_LADDER_DAY} (the fit's own day) ===`);
   if (price.ladders === 0) console.log("  no held-out ladders yet: the next slate fetch buys them (receiving yards, ~13 credits)");

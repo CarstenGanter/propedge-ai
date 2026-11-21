@@ -4,10 +4,10 @@ import {
   americanToProb,
   buildConsensus,
   consensusProbOver,
+  type ConsensusSpread,
+  LADDER_FIT_PARAMS,
   LINE_SHIFT_TRUST,
   powerDevigExponent,
-  FITTED_SPREAD_PARAMS,
-  type ConsensusSpread,
   type RawQuote,
 } from "./marketConsensus";
 import { profileFor } from "./bookProfiles";
@@ -137,8 +137,11 @@ export function fitAffineSigma(
 }
 
 
-/** The production spread: FITTED_SPREAD_PARAMS where fitted (see marketConsensus.ts), the CV prior elsewhere. */
-export const FITTED_SPREAD = affineSpread(FITTED_SPREAD_PARAMS, "ladder-fit-2026-10-18");
+/**
+ * The ladder-fitted spread (LADDER_FIT_PARAMS, see marketConsensus.ts): in
+ * production 2026-10-20 → 2026-11-20, now compared for information only.
+ */
+export const FITTED_SPREAD = affineSpread(LADDER_FIT_PARAMS, "ladder-fit-2026-10-18");
 
 /**
  * The held-out price test for the fitted spread (decided 2026-10-21): on

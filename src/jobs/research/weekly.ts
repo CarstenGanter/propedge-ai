@@ -28,6 +28,7 @@ import { breakEvenRows, changeCell, fmtInterval, greenSummary, overStatusLine, r
 import { VALUE_MARGIN } from "@/lib/analysis/pickemMath";
 import { previousWeek, topLine, trendTable, upsertWeek, type WeekRecord } from "@/lib/weeklyTrends";
 import type { PriceTest } from "@/lib/analysis/consensusSpread";
+import { FITTED_SPREAD_PARAMS } from "@/lib/analysis/marketConsensus";
 
 const JOBS = [
   { name: "skill", script: "src/jobs/research/scoreVsMarket.ts", label: "grading + research:skill" },
@@ -250,8 +251,14 @@ async function main() {
       );
     }
     const v = sigmaVerdict(sigma.samples);
-    out(`  verdict: ${v.verdict} — ${v.reason}`);
-    rec.sigmaVerdict = v.verdict;
+    if (Object.keys(FITTED_SPREAD_PARAMS).length === 0) {
+      // Reverted 2026-11-20 under this rule: production runs the CV prior with LINE_SHIFT_TRUST.
+      out(`  verdict: reverted 2026-11-20 — production uses the CV-prior spread with line-shift damping; the ladder fit above is compared for information (${v.reason})`);
+      rec.sigmaVerdict = "reverted";
+    } else {
+      out(`  verdict: ${v.verdict} — ${v.reason}`);
+      rec.sigmaVerdict = v.verdict;
+    }
     rec.sigmaPooled = sigma.samples.find((s) => s.sample === "pooled")?.diff ?? null;
     const held = sigma.samples.find((s) => s.sample === "held-out");
     rec.heldOutEce = { fitted: held?.eceFitted ?? null, current: held?.eceCurrent ?? null };

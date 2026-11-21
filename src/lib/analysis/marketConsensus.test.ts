@@ -188,19 +188,23 @@ describe("line-shift trust", () => {
     expect(consensusProbOver(m, 10.5)).toBeCloseTo(m.pOverAtReference, 9);
   });
 
-  it("reads a ladder-fitted prop type undamped, with the fitted σ", async () => {
-    const { FITTED_SPREAD_PARAMS, consensusProbOver } = await import("./marketConsensus");
+  it("damps receiving yards again since the σ revert, and reads the ladder fit undamped only on request", async () => {
+    const { FITTED_SPREAD_PARAMS, LADDER_FIT_PARAMS, LINE_SHIFT_TRUST, consensusProbOver } = await import("./marketConsensus");
+    const { FITTED_SPREAD } = await import("./consensusSpread");
     const { probOver } = await import("./propDistribution");
-    const { model } = buildConsensus("Receiving Yards", [
+    const quotes = [
       { book: "fanduel", line: 10.5, over: -105, under: -125 },
       { book: "draftkings", line: 10.5, over: -108, under: -122 },
-    ]);
-    const m = model!;
-    const { a, b } = FITTED_SPREAD_PARAMS["Receiving Yards"];
-    expect(m.sigma).toBeCloseTo(a + b * 10.5, 9);
-    expect(m.lineShiftTrust).toBeNull();
-    const spec = { propType: m.propType, sigma: m.sigma, df: m.df };
-    expect(consensusProbOver(m, 20.5)).toBeCloseTo(probOver(spec, m.mean, 20.5), 12);
+    ];
+    expect(FITTED_SPREAD_PARAMS).toEqual({});
+    const prod = buildConsensus("Receiving Yards", quotes).model!;
+    const spec = { propType: prod.propType, sigma: prod.sigma, df: prod.df };
+    const raw = probOver(spec, prod.mean, 20.5) - probOver(spec, prod.mean, 10.5);
+    expect(consensusProbOver(prod, 20.5) - consensusProbOver(prod, 10.5)).toBeCloseTo(LINE_SHIFT_TRUST["Receiving Yards"] * raw, 9);
+    const fit = buildConsensus("Receiving Yards", quotes, { spread: FITTED_SPREAD }).model!;
+    const { a, b } = LADDER_FIT_PARAMS["Receiving Yards"];
+    expect(fit.sigma).toBeCloseTo(a + b * 10.5, 9);
+    expect(fit.lineShiftTrust).toBeNull();
   });
 
   it("leaves count props alone", async () => {

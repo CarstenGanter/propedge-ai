@@ -14,12 +14,12 @@ function syntheticLadder(mainLine: number, spread: ReturnType<typeof affineSprea
 }
 
 describe("the spread is pluggable without changing the default", () => {
-  it("uses the fitted spread in production for receiving yards and the CV prior elsewhere", () => {
+  it("uses the CV prior in production for every prop type since the 2026-11-20 revert", () => {
     const rec: RawQuote[] = [{ book: "fanduel", line: 30.5, over: -110, under: -110 }];
     const prodRec = buildConsensus("Receiving Yards", rec).model!;
-    const fitRec = buildConsensus("Receiving Yards", rec, { spread: FITTED_SPREAD }).model!;
-    expect(prodRec.sigma).toBeCloseTo(fitRec.sigma, 12);
-    expect(consensusProbOver(prodRec, 40.5)).toBeCloseTo(consensusProbOver(fitRec, 40.5), 12);
+    const cvRec = buildConsensus("Receiving Yards", rec, { spread: CV_PRIOR_SPREAD }).model!;
+    expect(prodRec.sigma).toBeCloseTo(cvRec.sigma, 12);
+    expect(consensusProbOver(prodRec, 40.5)).toBeCloseTo(consensusProbOver(cvRec, 40.5), 12);
     const rush: RawQuote[] = [{ book: "fanduel", line: 30.5, over: -110, under: -110 }];
     const prodRush = buildConsensus("Rushing Yards", rush).model!;
     const cvRush = buildConsensus("Rushing Yards", rush, { spread: CV_PRIOR_SPREAD }).model!;
@@ -27,13 +27,13 @@ describe("the spread is pluggable without changing the default", () => {
     expect(consensusProbOver(prodRush, 40.5)).toBeCloseTo(consensusProbOver(cvRush, 40.5), 12);
   });
 
-  it("keeps the old receiving-yards reading available for comparison", () => {
+  it("keeps the ladder-fitted receiving-yards reading available for comparison", () => {
     const rec: RawQuote[] = [{ book: "fanduel", line: 3.5, over: -110, under: -110 }];
-    const old = buildConsensus("Receiving Yards", rec, { spread: CV_PRIOR_SPREAD }).model!;
+    const fit = buildConsensus("Receiving Yards", rec, { spread: FITTED_SPREAD }).model!;
     const prod = buildConsensus("Receiving Yards", rec).model!;
-    // The 85% Under 14.5 off a 3.5 line was the old reading; the fitted spread is far less extreme.
-    expect(1 - consensusProbOver(old, 14.5)).toBeGreaterThan(0.84);
-    expect(1 - consensusProbOver(prod, 14.5)).toBeLessThan(0.8);
+    // Production is the CV prior again: the 85% Under 14.5 off a 3.5 line; the fit is far less extreme.
+    expect(1 - consensusProbOver(prod, 14.5)).toBeGreaterThan(0.84);
+    expect(1 - consensusProbOver(fit, 14.5)).toBeLessThan(0.8);
   });
 
   it("drops the line-shift damping for a fitted prop type only", () => {

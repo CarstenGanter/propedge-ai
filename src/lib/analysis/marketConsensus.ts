@@ -81,16 +81,24 @@ export interface ConsensusModel {
  *                    within 5 yards of the main line 3.35 → 3.04,
  *                    over 20 yards away 11.64 → 3.02.
  *
- * In production since 2026-10-20: passes on prices; the outcome gate is
- * underpowered (log-loss +0.0002, 95% −0.0014 to +0.0020, n = 361 held-out
- * venue lines). Re-run research:sigma-validate as off-line props accumulate
- * and revert if that interval ends up clearly above zero. A fitted prop type
- * reads the distribution undamped (no LINE_SHIFT_TRUST). Others keep the CV
- * prior × the line.
+ * In production 2026-10-20 → 2026-11-20 (FITTED_SPREAD_PARAMS), reverted
+ * when the pooled outcome interval rose above zero. A fitted prop type read
+ * the distribution undamped (no LINE_SHIFT_TRUST).
  */
-export const FITTED_SPREAD_PARAMS: Record<string, { a: number; b: number }> = {
+export const LADDER_FIT_PARAMS: Record<string, { a: number; b: number }> = {
   "Receiving Yards": { a: 13.5, b: 0.27 },
 };
+
+/**
+ * The spreads production uses: none fitted. Reverted 2026-11-20 under the
+ * outcome rule — on held-out and later weeks pooled, the fitted spread read
+ * outcomes worse (log-loss +0.0016, 95% +0.0001 to +0.0034, n = 1,064), though
+ * it matched the books' alternate prices far better. Every prop type is back
+ * on the CV prior × the line with LINE_SHIFT_TRUST damping, the conservative
+ * reading at lines the books didn't post. LADDER_FIT_PARAMS stays for
+ * research:sigma-validate, which keeps comparing it for information.
+ */
+export const FITTED_SPREAD_PARAMS: Record<string, { a: number; b: number }> = {};
 
 /**
  * How wide the consensus distribution is, and how much of a line move to
@@ -337,8 +345,8 @@ function specOf(m: ConsensusModel): DistSpec {
  * Applied to all yardage: where the model was already accurate (higher lines)
  * this under-claims slightly, which is the safe direction for an edge.
  */
-// Applies to prop types without a ladder-fitted spread (FITTED_SPREAD_PARAMS);
-// receiving yards' entry is kept for the CV-prior comparison spread only.
+// Applies to every prop type without a production-fitted spread
+// (FITTED_SPREAD_PARAMS, empty since the 2026-11-20 revert).
 export const LINE_SHIFT_TRUST: Record<string, number> = {
   "Receiving Yards": 0.7,
   "Rushing Yards": 0.7,
